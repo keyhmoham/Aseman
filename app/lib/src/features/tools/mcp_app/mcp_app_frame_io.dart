@@ -34,7 +34,7 @@ const _shim = '''
   if (window.parent !== parent) {
     try { Object.defineProperty(window, 'parent', { get: function(){ return parent; } }); } catch (e) {}
   }
-  window.__asemanMcpDeliver = function(json){
+  window.__decillionMcpDeliver = function(json){
     var e = new Event('message');
     Object.defineProperty(e, 'data', { value: JSON.parse(json) });
     Object.defineProperty(e, 'source', { value: parent });
@@ -96,7 +96,7 @@ class _McpAppWebViewState extends State<_McpAppWebView> {
     widget.onReady((message) {
       final json = jsonEncode(jsonEncode(message));
       controller.runJavaScript(
-          'window.__asemanMcpDeliver && window.__asemanMcpDeliver($json)');
+          'window.__decillionMcpDeliver && window.__decillionMcpDeliver($json)');
     });
   }
 

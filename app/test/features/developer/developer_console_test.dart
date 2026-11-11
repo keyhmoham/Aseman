@@ -127,14 +127,14 @@ class _Service extends FakeAsemanService {
       case 'workflow_validate':
         final doc = '${body['workflow']}';
         return {
-          'valid': doc.contains('aseman_workflow'),
+          'valid': doc.contains('decillion_workflow'),
           'name': 'my-product',
           'steps': 4,
           'assets': 0,
-          'issues': doc.contains('aseman_workflow')
+          'issues': doc.contains('decillion_workflow')
               ? <dynamic>[]
               : [
-                  {'severity': 'error', 'path': 'aseman_workflow', 'message': 'must be "1"'}
+                  {'severity': 'error', 'path': 'decillion_workflow', 'message': 'must be "1"'}
                 ],
           'secrets': [
             {'name': 'API_TOKEN', 'required': true}

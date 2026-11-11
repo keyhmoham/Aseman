@@ -39,7 +39,7 @@ class Bot {
 
   /// Built-in Aseman assistant or lead — personal Aseman chat, not a New-chat peer.
   bool get isBuiltin =>
-      imageRef == 'aseman-chat' || imageRef == 'aseman.wasm';
+      imageRef == 'decillion-chat' || imageRef == 'decillion.wasm';
 
   /// The space's own computer (its sandbox), shown as the space's files
   /// rather than as an app. Matches the backend [Bot.IsSandbox] rule.

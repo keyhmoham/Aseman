@@ -17,7 +17,7 @@ import '../tools/elpian_app/elpian_app_view.dart';
 /// workspace; the menu reaches the workspace and signs out either way.
 ///
 /// Opening it (and bringing the client back to the foreground) wakes the
-/// platform's computer first, through the frontend's `_aseman/wake`: it may
+/// platform's computer first, through the frontend's `_decillion/wake`: it may
 /// be asleep, and waking it is for whoever opens the platform, anywhere.
 class PlatformHome extends StatefulWidget {
   const PlatformHome({super.key, required this.dependencies});

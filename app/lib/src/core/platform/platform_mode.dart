@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 /// Which product environment this client is for.
 ///
 /// Empty is main Aseman. A platform's own client is built with
-/// `--dart-define=ASEMAN_PLATFORM=<slug>`; a web build can also be opened as
+/// `--dart-define=DECILLION_PLATFORM=<slug>`; a web build can also be opened as
 /// one with `?platform=<slug>`. In a platform's client people sign in to (and
 /// up on) that platform's own accounts, and home is the frontend the
 /// platform's organization published (an app the agents of a space built).
 abstract final class PlatformMode {
-  static const String _built = String.fromEnvironment('ASEMAN_PLATFORM');
+  static const String _built = String.fromEnvironment('DECILLION_PLATFORM');
 
   static final RegExp _slug = RegExp(r'^[a-z][a-z0-9-]{1,47}$');
 

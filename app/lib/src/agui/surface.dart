@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-/// Aseman AG-UI surface for in-chat generative UI (aseman.surface/v1).
+/// Aseman AG-UI surface for in-chat generative UI (decillion.surface/v1).
 class AgUiSurface {
   const AgUiSurface({
     this.surfaceId = '',
-    this.version = 'aseman.surface/v1',
+    this.version = 'decillion.surface/v1',
     this.layout = 'chat',
     this.title = '',
     this.root,
@@ -24,7 +24,7 @@ class AgUiSurface {
     final root = json['root'];
     return AgUiSurface(
       surfaceId: '${json['surfaceId'] ?? ''}',
-      version: '${json['version'] ?? 'aseman.surface/v1'}',
+      version: '${json['version'] ?? 'decillion.surface/v1'}',
       layout: '${json['layout'] ?? 'chat'}',
       title: '${json['title'] ?? ''}',
       root: root is Map<String, dynamic>

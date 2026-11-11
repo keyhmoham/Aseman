@@ -69,7 +69,7 @@ class _FrontendViewState extends State<FrontendView> {
     final encoded = jsonEncode(_env);
     if (_code != null && _envSent.isNotEmpty && encoded != _envSent) {
       _envSent = encoded;
-      _vm.callFunction('__asemanEnv', input: encoded);
+      _vm.callFunction('__decillionEnv', input: encoded);
     }
   }
 
@@ -107,7 +107,7 @@ class _FrontendViewState extends State<FrontendView> {
       page: _page,
       headers: widget.api.authHeaders,
       env: () => _env,
-      settle: (result) => _vm.callFunction('__asemanSettle', input: jsonEncode(result)),
+      settle: (result) => _vm.callFunction('__decillionSettle', input: jsonEncode(result)),
       onAsleep: () => widget.wake.ensureAwake(force: true),
       client: _HostClient(widget.api.httpClient),
     );

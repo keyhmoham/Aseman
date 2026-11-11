@@ -4,9 +4,17 @@ import '../../../app_dependencies.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../computer/preview_view.dart';
 import '../../desk/presentation/desk_controller.dart';
+import '../../../core/deferred/deferred_loader.dart';
 import '../../tools/elpian_app/elpian_app_view.dart' deferred as elpian_app;
+
 import '../data/gadgets_api.dart';
 import 'gadgets_controller.dart';
+
+/// The App UI view library, loaded on first use (once).
+final _elpianApp = DeferredLoader(() => elpian_app.loadLibrary());
+
+/// Loads the App UI view library gadgets show.
+Future<void> loadGadgetViews() async => _elpianApp.ensure();
 
 /// A gadget's screen: the same App UI host as a desk app (Elpian natively, or
 /// web in the sandboxed frame), without window chrome.
@@ -99,9 +107,12 @@ class _DeferredElpianAppViewState extends State<_DeferredElpianAppView> {
   @override
   void initState() {
     super.initState();
-    elpian_app.loadLibrary().then((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+    _ready = _elpianApp.isLoaded;
+    if (!_ready) {
+      _elpianApp.ensure()?.then((_) {
+        if (mounted) setState(() => _ready = true);
+      }).ignore();
+    }
   }
 
   @override

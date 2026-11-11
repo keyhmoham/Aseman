@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Aseman web app (Flutter web build) served by nginx. nginx also proxies the
-# aseman API on the same origin, so the app is built with
+# node's API on the same origin, so the app is built with
 # API_BASE_URL=same-origin.
 ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
 FROM ${FLUTTER_IMAGE} AS build
@@ -23,7 +23,7 @@ COPY . .
 ARG DEVELOPER_API_BASE=""
 # A platform's own client: its slug. People sign in to that platform's
 # accounts and open its published frontend. Empty: main Aseman.
-ARG ASEMAN_PLATFORM=""
+ARG DECILLION_PLATFORM=""
 # Release web: tree-shake unused icons, self-host CanvasKit (paired with
 # long-cache nginx rules), and keep dart-defines for same-origin API.
 # Optional Wasm build (smaller/faster start when plugins allow) via
@@ -34,16 +34,20 @@ RUN if [ "$WEB_RENDERER" = "wasm" ]; then \
         --tree-shake-icons \
         --dart-define=API_BASE_URL=same-origin \
         --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE} \
-        --dart-define=ASEMAN_PLATFORM=${ASEMAN_PLATFORM}; \
+        --dart-define=DECILLION_PLATFORM=${DECILLION_PLATFORM}; \
     else \
       flutter build web --release --no-web-resources-cdn \
         --tree-shake-icons \
         --dart-define=API_BASE_URL=same-origin \
         --dart-define=DEVELOPER_API_BASE=${DEVELOPER_API_BASE} \
-        --dart-define=ASEMAN_PLATFORM=${ASEMAN_PLATFORM}; \
+        --dart-define=DECILLION_PLATFORM=${DECILLION_PLATFORM}; \
     fi
 
 FROM nginx:1.29-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# The API the app's origin forwards to: the stack's node. `./aseman.sh up
+# --decillion` mounts deploy/api.decillion.conf.template, which the image's
+# entrypoint renders over this file (a Decillion node elsewhere).
+COPY deploy/api.local.conf /etc/nginx/aseman-api.conf
 COPY --from=build /src/build/web /usr/share/nginx/html
 EXPOSE 80

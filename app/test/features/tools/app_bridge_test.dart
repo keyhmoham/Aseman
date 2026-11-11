@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/core/network/api_client.dart';
 import 'package:aseman/src/core/theme/app_colors.dart';
 import 'package:aseman/src/data/services/aseman_service.dart';
+import 'package:aseman/src/elpian/vm/web_runtime_assets.dart';
 import 'package:aseman/src/features/tools/elpian/app_bridge.dart';
 import 'package:aseman/src/features/tools/presentation/app_frontend_theme.dart';
 
@@ -91,18 +92,15 @@ void main() {
     expect(bridge.buildHostHandlers().containsKey('server.call'), isTrue);
   });
 
-  test('web index.html includes the Elpian VM and QuickJS web runtimes', () {
-    // Without these the browser throws "QuickJS web runtime not loaded" and
-    // apps (Sandbox Explorer included) cannot boot on the web target.
-    final index = File('web/index.html').readAsStringSync();
-    for (final runtime in const [
-      'elpian/web_runtime/quickjs_web_runtime.js',
-      'elpian/web_runtime/elpian_wasm_loader.js',
-    ]) {
-      expect(index, contains('assets/assets/$runtime'));
-      // Served from the app's own assets (lib/src/elpian is part of the app).
-      expect(File('assets/$runtime').existsSync(), isTrue, reason: runtime);
+  test('the Elpian VM and QuickJS web runtimes ship as app assets', () {
+    // The browser imports them on first use (web_runtime_loader_web.dart);
+    // without them it throws "QuickJS web runtime not loaded" and apps
+    // (Sandbox Explorer included) cannot boot on the web target.
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    for (final asset in ElpianWebRuntimeAssets.all) {
+      expect(File(asset).existsSync(), isTrue, reason: asset);
+      expect(pubspec, contains('- $asset'), reason: 'bundled: $asset');
+      expect(ElpianWebRuntimeAssets.url(asset), 'assets/$asset');
     }
-    expect(index, contains('script type="module"'));
   });
 }

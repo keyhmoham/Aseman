@@ -719,6 +719,8 @@ void main() {
         ),
       ),
     );
+    // The Elpian panel is a deferred library: it shows once it has loaded.
+    await tester.pumpAndSettle();
     expect(find.text('theme-chrome'), findsOneWidget);
     expect(find.text('built-in-you'), findsOneWidget);
   });

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
@@ -1536,94 +1537,209 @@ class _RoomChatState extends State<RoomChat> {
     final deps = widget.dependencies;
     final count = widget.messages.where((m) => m.kind != 'log').length;
     return Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        child: Row(children: [
-          if (widget.leading != null) ...[
-            widget.leading!,
-            const SizedBox(width: 4),
-          ],
-          widget.avatar ??
-              Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            if (widget.leading != null) ...[
+              widget.leading!,
+              const SizedBox(width: 4),
+            ],
+            widget.avatar ??
+                Container(
                   width: 42,
                   height: 42,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                      color: ThemeRoles.wellFill(context),
-                      borderRadius: BorderRadius.circular(AppShape.controlOf(context))),
+                    color: ThemeRoles.wellFill(context),
+                    borderRadius: BorderRadius.circular(
+                      AppShape.controlOf(context),
+                    ),
+                  ),
                   child: Text(
-                      widget.room.isEmpty ? 'R' : widget.room[0].toUpperCase(),
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: ThemeRoles.selectedInk(context)))),
-          const SizedBox(width: 12),
-          Expanded(
+                    widget.room.isEmpty ? 'R' : widget.room[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: ThemeRoles.selectedInk(context),
+                    ),
+                  ),
+                ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(widget.room,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.room,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                if (widget.threadTitle.isNotEmpty)
-                  Text('Thread · ${widget.threadTitle}',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  if (widget.threadTitle.isNotEmpty)
+                    Text(
+                      'Thread · ${widget.threadTitle}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: scheme.primary))
-                else
-                  Text(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.primary,
+                      ),
+                    )
+                  else
+                    Text(
                       widget.subtitle ??
                           (count == 0 ? 'Live room' : '$count messages'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontSize: 12, color: scheme.onSurfaceVariant)),
-              ])),
-          if (widget.threadRoomId.isNotEmpty &&
-              widget.onThread != null &&
-              deps != null) ...[
-            IconButton.filledTonal(
-                tooltip: widget.threadTitle.isEmpty
-                    ? 'Threads'
-                    : 'Threads (in “${widget.threadTitle}”)',
-                visualDensity: VisualDensity.compact,
-                isSelected: widget.threadTitle.isNotEmpty,
-                onPressed: () async {
-                  final picked = await showRoomThreads(context,
-                      service: deps.service,
-                      spaceId: widget.spaceId,
-                      roomId: widget.threadRoomId,
-                      currentId: widget.roomId);
-                  if (picked != null && mounted) widget.onThread?.call(picked);
-                },
-                icon: const Icon(Icons.forum_outlined, size: 18),
-                selectedIcon: const Icon(Icons.forum_rounded, size: 18)),
-            const SizedBox(width: 4),
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            ..._roomTools(
+              deps,
+              compact: !_roomToolsFit(deps, constraints.maxWidth),
+            ),
+            ...widget.headerActions,
           ],
-          IconButton.filledTonal(
-              tooltip: 'Work',
-              visualDensity: VisualDensity.compact,
-              onPressed: _work == null
-                  ? null
-                  : () => showRoomWork(context, _work!,
-                      onRunAgain: widget.onSend == null ? null : _runAgain),
-              icon: const Icon(Icons.history_rounded, size: 18)),
-          const SizedBox(width: 4),
-          IconButton.filledTonal(
-              tooltip: 'Routines',
-              visualDensity: VisualDensity.compact,
-              onPressed: deps == null
-                  ? null
-                  : () => showRoutinesSheet(context, deps, widget.spaceId,
-                      widget.roomId, widget.room),
-              icon: const Icon(Icons.schedule_rounded, size: 18)),
-          ...widget.headerActions,
-        ]));
+        ),
+      ),
+    );
+  }
+
+  /// Whether the header's [width] holds its avatar, a readable title, the
+  /// room tools as buttons and the host's actions; when not, the tools fold
+  /// into one menu.
+  bool _roomToolsFit(AppDependencies? deps, double width) {
+    const avatar = 42 + 12, title = 110, tool = 44.0, action = 40.0;
+    final threads =
+        widget.threadRoomId.isNotEmpty &&
+        widget.onThread != null &&
+        deps != null;
+    final needed =
+        avatar +
+        title +
+        (widget.leading != null ? 44 : 0) +
+        tool * (threads ? 3 : 2) +
+        action * widget.headerActions.length;
+    return width >= needed;
+  }
+
+  /// The room's own header tools: its threads, the agents' work and its
+  /// routines. A narrow header (a phone) folds them into one menu, so the
+  /// title keeps its room and nothing runs past the edge.
+  List<Widget> _roomTools(AppDependencies? deps, {required bool compact}) {
+    final threads =
+        widget.threadRoomId.isNotEmpty &&
+        widget.onThread != null &&
+        deps != null;
+    final threadsLabel = widget.threadTitle.isEmpty
+        ? 'Threads'
+        : 'Threads (in “${widget.threadTitle}”)';
+    Future<void> openThreads() async {
+      final picked = await showRoomThreads(
+        context,
+        service: deps!.service,
+        spaceId: widget.spaceId,
+        roomId: widget.threadRoomId,
+        currentId: widget.roomId,
+      );
+      if (picked != null && mounted) widget.onThread?.call(picked);
+    }
+
+    final openWork = _work == null
+        ? null
+        : () => showRoomWork(
+            context,
+            _work!,
+            onRunAgain: widget.onSend == null ? null : _runAgain,
+          );
+    final openRoutines = deps == null
+        ? null
+        : () => showRoutinesSheet(
+            context,
+            deps,
+            widget.spaceId,
+            widget.roomId,
+            widget.room,
+          );
+
+    if (compact) {
+      return [
+        PopupMenuButton<VoidCallback>(
+          tooltip: 'Room actions',
+          icon: const Icon(Icons.more_horiz_rounded, size: 20),
+          onSelected: (run) => run(),
+          itemBuilder: (_) => [
+            if (threads)
+              PopupMenuItem(
+                value: () => unawaited(openThreads()),
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.forum_outlined, size: 18),
+                  title: Text(threadsLabel),
+                ),
+              ),
+            PopupMenuItem(
+              value: openWork ?? () {},
+              enabled: openWork != null,
+              child: const ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.history_rounded, size: 18),
+                title: Text('Work'),
+              ),
+            ),
+            PopupMenuItem(
+              value: openRoutines ?? () {},
+              enabled: openRoutines != null,
+              child: const ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.schedule_rounded, size: 18),
+                title: Text('Routines'),
+              ),
+            ),
+          ],
+        ),
+      ];
+    }
+    return [
+      if (threads) ...[
+        IconButton.filledTonal(
+          tooltip: threadsLabel,
+          visualDensity: VisualDensity.compact,
+          isSelected: widget.threadTitle.isNotEmpty,
+          onPressed: openThreads,
+          icon: const Icon(Icons.forum_outlined, size: 18),
+          selectedIcon: const Icon(Icons.forum_rounded, size: 18),
+        ),
+        const SizedBox(width: 4),
+      ],
+      IconButton.filledTonal(
+        tooltip: 'Work',
+        visualDensity: VisualDensity.compact,
+        onPressed: openWork,
+        icon: const Icon(Icons.history_rounded, size: 18),
+      ),
+      const SizedBox(width: 4),
+      IconButton.filledTonal(
+        tooltip: 'Routines',
+        visualDensity: VisualDensity.compact,
+        onPressed: openRoutines,
+        icon: const Icon(Icons.schedule_rounded, size: 18),
+      ),
+    ];
   }
 
   Widget _composer() {

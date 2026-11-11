@@ -1,14 +1,26 @@
 import 'package:aseman/src/core/theme/app_surfaces.dart';
 import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/core/theme/aseman_tokens.dart';
 import 'package:aseman/src/shared/widgets/glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Color _fill(WidgetTester tester) => tester
+    .widget<Material>(
+      find.descendant(
+        of: find.byType(GlassSurface),
+        matching: find.byType(Material),
+      ),
+    )
+    .color!;
+
 void main() {
-  testWidgets('light glass fill stays translucent', (tester) async {
+  testWidgets('an in-page card follows the pack card recipe: Sky keeps it '
+      'quiet and opaque', (tester) async {
+    final theme = AppTheme.light;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: theme,
         home: const GlassSurface(
           border: false,
           borderRadius: BorderRadius.zero,
@@ -16,21 +28,15 @@ void main() {
         ),
       ),
     );
-
-    final material = tester.widget<Material>(
-      find.descendant(
-        of: find.byType(GlassSurface),
-        matching: find.byType(Material),
-      ),
-    );
-    expect(material.color!.a, AppSurfaces.cardAlpha);
-    expect(material.color!.a, lessThan(.75));
+    expect(_fill(tester), theme.colorScheme.surface);
   });
 
   testWidgets('light modal glass stays translucent', (tester) async {
+    final theme = AppTheme.light;
+    final tokens = theme.extension<AsemanTokens>()!;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light,
+        theme: theme,
         home: const GlassSurface(
           alpha: AppSurfaces.overlayAlpha,
           border: false,
@@ -38,14 +44,8 @@ void main() {
         ),
       ),
     );
-
-    final material = tester.widget<Material>(
-      find.descendant(
-        of: find.byType(GlassSurface),
-        matching: find.byType(Material),
-      ),
-    );
-    expect(material.color!.a, AppSurfaces.overlayAlpha);
-    expect(material.color!.a, lessThan(.85));
+    // Modal chrome follows the sheet recipe (glass) at the pack's opacity.
+    expect(_fill(tester).a, tokens.overlayAlpha);
+    expect(_fill(tester).a, lessThan(1));
   });
 }

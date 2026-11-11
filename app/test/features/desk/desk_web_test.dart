@@ -57,21 +57,40 @@ void main() {
     controller.dispose();
   });
 
+  String hex(Color c) =>
+      '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
   test('the page loads signed in, in the app theme', () async {
     final service = FakeAsemanService();
     const accent = Color(0xFF8B7BFF);
     final theme = webPageTheme(AppTheme.darkWith(accent), accent: accent);
     expect(theme['mode'], 'dark');
     expect(theme['accent'], '#8b7bff');
-    expect((theme['scheme'] as Map)['primary'], '#c7bfff');
+    // The page gets the app's own scheme: its primary is the accent itself.
+    expect(
+      (theme['scheme'] as Map)['primary'],
+      hex(AppTheme.darkWith(accent).colorScheme.primary),
+    );
     final url = Uri.parse(webPageUrl(service, _page, theme));
     expect(url.path, _page);
-    expect(url.queryParameters['aseman_theme'], 'dark');
-    expect(url.queryParameters['aseman_embed'], 'desk');
-    expect(url.queryParameters['aseman_accent'], '#8b7bff');
-    final scheme = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(url.queryParameters['aseman_scheme']!))));
-    expect(scheme['surface'], '#111119');
-    expect(() => webPageUrl(service, 'https://evil.example/', theme), throwsFormatException);
+    expect(url.queryParameters['decillion_theme'], 'dark');
+    expect(url.queryParameters['decillion_embed'], 'desk');
+    expect(url.queryParameters['decillion_accent'], '#8b7bff');
+    final scheme = jsonDecode(
+      utf8.decode(
+        base64Url.decode(
+          base64Url.normalize(url.queryParameters['decillion_scheme']!),
+        ),
+      ),
+    );
+    expect(
+      scheme['surface'],
+      hex(AppTheme.darkWith(accent).colorScheme.surface),
+    );
+    expect(
+      () => webPageUrl(service, 'https://evil.example/', theme),
+      throwsFormatException,
+    );
   });
 
   testWidgets('where pages cannot show in the app, they open in the browser', (tester) async {

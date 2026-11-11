@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/services/aseman_service.dart';
 import '../auth/federated_sign_in.dart';
+import '../network/api_client.dart';
 import '../network/session_store.dart';
 import '../notifications/push_notification_service.dart';
 
 /// Holds the current signed-in session and notifies listeners on auth changes.
 class SessionController extends ChangeNotifier {
   SessionController(this.service)
-      : notifications = PushNotificationService(service) {
+    : notifications = PushNotificationService(service) {
     _init();
   }
 
@@ -62,19 +63,38 @@ class SessionController extends ChangeNotifier {
       return true;
     } catch (e) {
       _busy = false;
-      _error = e.toString();
+      _error = _describe(e);
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> register(String handle, String email, String password) async {
+  /// Makes the account. With [verifyFirst] (a node that signs a new account
+  /// in only once its email is verified) it is not signed in: the caller has
+  /// the email verified and [adopt]s the session `verify_email` returns.
+  Future<bool> register(
+    String handle,
+    String email,
+    String password, {
+    String inviteCode = '',
+    bool verifyFirst = false,
+  }) async {
     _busy = true;
     _error = null;
     notifyListeners();
     try {
       final s = await service.register(
-          handle: handle, email: email, password: password);
+        handle: handle,
+        email: email,
+        password: password,
+        inviteCode: inviteCode,
+      );
+      if (verifyFirst) {
+        service.client.session = null;
+        _busy = false;
+        notifyListeners();
+        return true;
+      }
       await SessionStore.save(s);
       _session = s;
       await _refreshRole();
@@ -84,18 +104,26 @@ class SessionController extends ChangeNotifier {
       return true;
     } catch (e) {
       _busy = false;
-      _error = e.toString();
+      _error = _describe(e);
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> oauth(String provider, String identityToken) async {
+  Future<bool> oauth(
+    String provider,
+    String identityToken, {
+    String inviteCode = '',
+  }) async {
     _busy = true;
     _error = null;
     notifyListeners();
     try {
-      final s = await service.oauth(provider, identityToken);
+      final s = await service.oauth(
+        provider,
+        identityToken,
+        inviteCode: inviteCode,
+      );
       await SessionStore.save(s);
       _session = s;
       await _refreshRole();
@@ -105,7 +133,7 @@ class SessionController extends ChangeNotifier {
       return true;
     } catch (e) {
       _busy = false;
-      _error = e.toString();
+      _error = _describe(e);
       notifyListeners();
       return false;
     }
@@ -167,5 +195,15 @@ class SessionController extends ChangeNotifier {
     _session = session;
     notifyListeners();
     _refreshRole().then((_) => notifyListeners());
+  }
+
+  /// What a failed sign-in says to the person: the node's own words, without
+  /// the error code it leads with (`PERMISSION_DENIED: …`).
+  static String _describe(Object e) {
+    if (e is ApiException) {
+      final message = e.message.replaceFirst(RegExp(r'^[A-Z_]+:\s*'), '');
+      return message.isEmpty ? e.toString() : message;
+    }
+    return e.toString();
   }
 }

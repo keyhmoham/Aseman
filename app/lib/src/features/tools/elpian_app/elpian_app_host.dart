@@ -10,20 +10,20 @@ import '../elpian/host_values.dart';
 /// Elpian program (deploy/sandbox-computer/appui/elpian), served from the
 /// space's sandbox through its preview gateway ([page], `/v1/proxy/<id>/`).
 ///
-/// The program's SDK (`aseman-elpian.js`) speaks this protocol:
+/// The program's SDK (`decillion-elpian.js`) speaks this protocol:
 ///
-///   * `aseman.env` → `{display, theme: {mode, accent, colors}, user, space,
+///   * `decillion.env` → `{display, theme: {mode, accent, colors}, user, space,
 ///     room, title, appUrl}` (`appUrl`: the app's own address as this client
 ///     reaches it)
-///   * `aseman.request` `{id, target, op | path, method, query, body,
+///   * `decillion.request` `{id, target, op | path, method, query, body,
 ///     headers, timeoutMs}` → `{accepted}` at once; the answer comes later
-///     through [settle] (the program's `__asemanSettle`) as `{id, ok, status,
+///     through [settle] (the program's `__decillionSettle`) as `{id, ok, status,
 ///     data, error}`:
-///       - target `aseman`: the space's page API, `<page>_aseman/api/<op>`
+///       - target `decillion`: the space's page API, `<page>_decillion/api/<op>`
 ///         (agents, apps), as the person using the app;
 ///       - target `app`: the app's own server, `<page><path>`, which sees
 ///         that person too (the gateway adds their token).
-///   * `aseman.compact` summary / `aseman.expand`: the phone widget.
+///   * `decillion.compact` summary / `decillion.expand`: the phone widget.
 ///
 /// Requests are asynchronous because a QuickJS host call cannot wait: the
 /// program keeps drawing while an agent works.
@@ -79,10 +79,10 @@ class ElpianAppHost {
   };
 
   Map<String, HostCallHandler> handlers() => {
-        'aseman.env': (_, __) => HostValues.reply('object', {...env(), 'appUrl': appUrl}),
-        'aseman.request': _request,
-        'aseman.compact': _compact,
-        'aseman.expand': (_, __) {
+        'decillion.env': (_, __) => HostValues.reply('object', {...env(), 'appUrl': appUrl}),
+        'decillion.request': _request,
+        'decillion.compact': _compact,
+        'decillion.expand': (_, __) {
           onExpand?.call();
           return HostValues.reply('bool', onExpand != null);
         },
@@ -98,7 +98,7 @@ class ElpianAppHost {
     final req = decodeRequest(payload);
     final id = '${req?['id'] ?? ''}';
     if (req == null || id.isEmpty) {
-      return HostValues.reply('object', {'error': 'aseman.request needs {id, target, op or path}'});
+      return HostValues.reply('object', {'error': 'decillion.request needs {id, target, op or path}'});
     }
     final Uri url;
     try {
@@ -116,7 +116,7 @@ class ElpianAppHost {
   FutureOr<String> _compact(String apiName, String payload) {
     final summary = decodeRequest(payload);
     if (summary == null) {
-      return HostValues.error('invalid_argument', 'aseman.compact takes a summary object');
+      return HostValues.error('invalid_argument', 'decillion.compact takes a summary object');
     }
     onCompact?.call(summary);
     return HostValues.reply('bool', true);
@@ -146,23 +146,23 @@ class ElpianAppHost {
     final root = '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}$page';
     String rest;
     switch ('${req['target'] ?? ''}') {
-      case 'aseman':
+      case 'decillion':
         final op = '${req['op'] ?? ''}';
         if (!ops.contains(op)) {
-          throw FormatException('unknown Aseman op "$op"');
+          throw FormatException('unknown Decillion op "$op"');
         }
-        rest = '_aseman/api/$op';
+        rest = '_decillion/api/$op';
       case 'app':
         rest = '${req['path'] ?? ''}'.replaceFirst(RegExp(r'^/+'), '');
         final segments = rest.split('?').first.split('/');
         if (rest.contains('://') ||
             rest.contains('\\') ||
             segments.any((s) => s == '..' || s == '.') ||
-            rest.startsWith('_aseman/')) {
+            rest.startsWith('_decillion/')) {
           throw FormatException('"$rest" is not a path of this app');
         }
       default:
-        throw const FormatException('target is "aseman" or "app"');
+        throw const FormatException('target is "decillion" or "app"');
     }
     final url = Uri.parse(root + rest);
     final query = req['query'];
@@ -241,7 +241,7 @@ class ElpianAppHost {
 
   static bool _reserved(String name) {
     final n = name.toLowerCase();
-    return n == 'authorization' || n == 'cookie' || n.startsWith('x-aseman-');
+    return n == 'authorization' || n == 'cookie' || n.startsWith('x-decillion-');
   }
 
   static dynamic _json(String text) {

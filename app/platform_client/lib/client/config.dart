@@ -21,8 +21,8 @@ import 'package:flutter/services.dart';
 ///
 /// `frontend` is the address of the frontend (the platform's door to the
 /// Elpian app's proxy); `node` and `platform` follow from it when left out.
-/// `--dart-define=ASEMAN_FRONTEND_URL=…` (or `ASEMAN_NODE_URL` and
-/// `ASEMAN_PLATFORM`) override the file, for development.
+/// `--dart-define=DECILLION_FRONTEND_URL=…` (or `DECILLION_NODE_URL` and
+/// `DECILLION_PLATFORM`) override the file, for development.
 @immutable
 class ClientConfig {
   const ClientConfig({
@@ -105,10 +105,10 @@ class ClientConfig {
     return v.length == 6 ? 0xFF000000 | n : n;
   }
 
-  static const _frontendDefine = String.fromEnvironment('ASEMAN_FRONTEND_URL');
-  static const _nodeDefine = String.fromEnvironment('ASEMAN_NODE_URL');
-  static const _platformDefine = String.fromEnvironment('ASEMAN_PLATFORM');
-  static const _godotDefine = bool.fromEnvironment('ASEMAN_GODOT');
+  static const _frontendDefine = String.fromEnvironment('DECILLION_FRONTEND_URL');
+  static const _nodeDefine = String.fromEnvironment('DECILLION_NODE_URL');
+  static const _platformDefine = String.fromEnvironment('DECILLION_PLATFORM');
+  static const _godotDefine = bool.fromEnvironment('DECILLION_GODOT');
 
   /// The config this build carries.
   static Future<ClientConfig> load([AssetBundle? bundle]) async {

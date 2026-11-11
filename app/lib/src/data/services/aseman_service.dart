@@ -90,15 +90,19 @@ class AsemanService implements BackendService {
 
   // ── auth ──────────────────────────────────────────────────────────────────
 
+  /// [inviteCode]: needed while the node takes new people by invitation only
+  /// (`auth.config` `signup: invite`).
   Future<Session> register({
     required String handle,
     required String email,
     required String password,
+    String inviteCode = '',
   }) async {
     final resp = await client.call('auth', 'register', body: {
       'handle': handle,
       'email': email,
       'password': password,
+      if (inviteCode.trim().isNotEmpty) 'invite_code': inviteCode.trim(),
       ...PlatformMode.authField,
     });
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
@@ -116,13 +120,17 @@ class AsemanService implements BackendService {
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
   }
 
-  Future<Session> oauth(String provider, String identityToken) async {
+  /// [inviteCode] lets a first Google or Apple sign-in make an account while
+  /// the node is by invitation.
+  Future<Session> oauth(String provider, String identityToken,
+      {String inviteCode = ''}) async {
     if (provider != 'google' && provider != 'apple') {
       throw ArgumentError.value(provider, 'provider');
     }
     final response = await client.call('auth', 'oauth_$provider', body: {
       if (provider == 'google') 'id_token': identityToken,
       if (provider == 'apple') 'identity_token': identityToken,
+      if (inviteCode.trim().isNotEmpty) 'invite_code': inviteCode.trim(),
       ...PlatformMode.authField,
     });
     return _adopt(_sessionFrom((response.body as Map).cast<String, dynamic>()));
@@ -194,7 +202,7 @@ class AsemanService implements BackendService {
     final base = client.baseUrl.replaceFirst(RegExp(r'/+$'), '');
     final res = await http
         .post(Uri.parse(
-            '$base/v1/platforms/$slug/app/_aseman/wake?wait=${wait.inSeconds}'))
+            '$base/v1/platforms/$slug/app/_decillion/wake?wait=${wait.inSeconds}'))
         .timeout(wait + const Duration(seconds: 30));
     final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
     final map =
@@ -243,6 +251,7 @@ class AsemanService implements BackendService {
 
   Future<List<Workspace>> fetchSpaces({int limit = 100, int offset = 0}) async {
     final resp = await client.call('spaces', 'space_list', body: {
+      'kind': 'workspace',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
@@ -1906,6 +1915,18 @@ class AsemanService implements BackendService {
     return ((resp.body as Map?)?['amount'] as num?)?.toInt() ?? 0;
   }
 
+  /// How the node takes new people and signs them in (`auth.config`).
+  Future<AuthConfig> authConfig() async =>
+      AuthConfig.fromJson(await actionMap('auth', 'config'));
+
+  /// Emails a one-time code that verifies [email]; returns how the node
+  /// delivers it (`email`, or `log` on a node without mail).
+  Future<String> sendVerification(String email) async {
+    final out = await actionMap('auth', 'send_verification',
+        body: {'email': email, ...PlatformMode.authField});
+    return '${out['delivery'] ?? ''}';
+  }
+
   /// Ledger entries (ordered newest first).
   Future<List<Map<String, dynamic>>> fetchLedger(
       {int limit = 50, int offset = 0}) async {
@@ -1917,11 +1938,6 @@ class AsemanService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Transfer credits to another account.
-  Future<void> transferCredits(String toId, int amount) async {
-    await client
-        .call('finance', 'transfer', body: {'to': toId, 'amount': amount});
-  }
 
   // ── accounts ──────────────────────────────────────────────────────────────
 
@@ -2488,4 +2504,39 @@ class AsemanService implements BackendService {
       return const [];
     }
   }
+}
+
+/// How a node takes new people and signs them in (`auth.config`).
+class AuthConfig {
+  const AuthConfig({
+    this.signup = 'open',
+    this.emailVerify = false,
+    this.google = false,
+    this.googleClientId = '',
+    this.apple = false,
+  });
+
+  factory AuthConfig.fromJson(Map<String, dynamic> json) => AuthConfig(
+        signup: switch ('${json['signup'] ?? ''}'.trim().toLowerCase()) {
+          'invite' => 'invite',
+          'closed' => 'closed',
+          _ => 'open',
+        },
+        emailVerify: json['email_verify'] == true,
+        google: json['google'] == true,
+        googleClientId: '${json['google_client_id'] ?? ''}'.trim(),
+        apple: json['apple'] == true,
+      );
+
+  /// `open` (anyone), `invite` (only with an invite code) or `closed`.
+  final String signup;
+
+  /// A new account signs in only after its email is verified.
+  final bool emailVerify;
+  final bool google;
+  final String googleClientId;
+  final bool apple;
+
+  bool get inviteOnly => signup == 'invite';
+  bool get signupClosed => signup == 'closed';
 }

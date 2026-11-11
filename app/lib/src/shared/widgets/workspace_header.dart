@@ -88,6 +88,9 @@ ButtonStyle _barIconStyle(BuildContext context) =>
 /// [FloatingAppBarLayout.contentInset] so content starts clear of it.
 /// Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
+  /// The account button's label (its tooltip and what a screen reader says).
+  static const profileTooltip = 'Your profile';
+
   const WorkspaceHeader({
     super.key,
     required this.compact,
@@ -250,17 +253,20 @@ class WorkspaceHeader extends StatelessWidget {
                             ),
                           ),
                         );
-                        return InkWell(
-                          onTap: onOpenProfile,
-                          customBorder: circular
-                              ? const CircleBorder()
-                              : RoundedRectangleBorder(
-                                  borderRadius: corners),
-                          child: HaloRing(
-                            pad: 1.8,
-                            identity: HaloRingCache.person(accountId),
-                            borderRadius: corners,
-                            child: face,
+                        return Tooltip(
+                          message: profileTooltip,
+                          child: InkWell(
+                            onTap: onOpenProfile,
+                            customBorder: circular
+                                ? const CircleBorder()
+                                : RoundedRectangleBorder(
+                                    borderRadius: corners),
+                            child: HaloRing(
+                              pad: 1.8,
+                              identity: HaloRingCache.person(accountId),
+                              borderRadius: corners,
+                              child: face,
+                            ),
                           ),
                         );
                       }),

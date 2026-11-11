@@ -10,8 +10,8 @@ import '../../../shared/widgets/glass_surface.dart';
 
 /// The app's theme as desk App UIs take it: brightness, accent seed, Material
 /// color-scheme roles, and where the page is shown. Passed on the preview URL
-/// (`aseman_theme`, `aseman_accent`, `aseman_scheme`) and live via
-/// `aseman:theme` / `__asemanSetTheme` when Settings change.
+/// (`decillion_theme`, `decillion_accent`, `decillion_scheme`) and live via
+/// `decillion:theme` / `__decillionSetTheme` when Settings change.
 Map<String, dynamic> webPageTheme(
   ThemeData theme, {
   String embed = 'desk',
@@ -74,10 +74,10 @@ String webPageUrl(
       .replace(
         queryParameters: {
           ...base.queryParameters,
-          'aseman_theme': '${theme['mode']}',
-          'aseman_embed': '${theme['embed']}',
-          'aseman_accent': '${theme['accent']}',
-          'aseman_scheme': scheme,
+          'decillion_theme': '${theme['mode']}',
+          'decillion_embed': '${theme['embed']}',
+          'decillion_accent': '${theme['accent']}',
+          'decillion_scheme': scheme,
         },
       )
       .toString();

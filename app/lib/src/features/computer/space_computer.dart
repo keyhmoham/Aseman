@@ -110,7 +110,7 @@ class ComputerDesktop {
   /// to a server): [view] for a live preview that takes no input.
   String viewer({bool view = false}) {
     // noVNC's own page reads the same fragment under its own names.
-    final novnc = !page.contains('aseman-view');
+    final novnc = !page.contains('decillion-view');
     final fragment = Uri(
       queryParameters: {
         'password': password,

@@ -10,7 +10,7 @@ enum WakePhase { idle, waking, ready, failed }
 /// Wakes the platform's computer whenever this client needs it: when it is
 /// opened, when it comes back to the foreground, and when the frontend
 /// answers 503 (its computer fell asleep). Waking is the node's: any device
-/// with the internet asks `_aseman/wake`, signed in or not, and the computer
+/// with the internet asks `_decillion/wake`, signed in or not, and the computer
 /// starts as the person who published the frontend. One wake runs at a time.
 class WakeController extends ChangeNotifier {
   WakeController(this._wake, {this.giveUpAfter = const Duration(minutes: 6), DateTime Function()? now})

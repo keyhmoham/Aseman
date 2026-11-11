@@ -452,6 +452,16 @@ class _AppScreenState extends State<AdminScreen> {
         ],
       ),
       _Page(
+        'Settings · Agentic engine',
+        'What every agent on this node runs on',
+        Icons.memory_outlined,
+        Icons.memory_rounded,
+        calls: [_Call('settings', 'get')],
+        actions: [
+          _Call('settings', 'update', {'agentic_engine': ''}),
+        ],
+      ),
+      _Page(
         'Settings · Agent instructions',
         'Universal system instructions',
         Icons.description_outlined,

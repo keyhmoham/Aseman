@@ -1,0 +1,31 @@
+# A Decillion node elsewhere (`./aseman.sh up --decillion`; by default
+# https://preview.decillionai.com) as the app's API, still on the app's own
+# origin, so the app runs as it does beside its own node: same-origin calls,
+# project pages in frames, desktop and dev-server websockets. The nginx image
+# renders this file at start (envsubst: DECILLION_API_URL, DECILLION_API_HOST).
+location ~ ^/(v1|fed|healthz) {
+    # Resolved when a request arrives (Docker's resolver), so a node whose
+    # address changes (behind a CDN) is followed and nginx starts without it.
+    resolver 127.0.0.11 ipv6=off valid=30s;
+    set $decillion_api ${DECILLION_API_URL};
+    proxy_pass $decillion_api;
+    proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${DECILLION_API_HOST};
+    proxy_set_header Host ${DECILLION_API_HOST};
+    # The node is addressed as itself: a desktop or tunnel socket's Origin is
+    # checked against the node's host (the browser's is this page's), and the
+    # address a person reaches the node at is the node's own.
+    proxy_set_header Origin ${DECILLION_API_URL};
+    proxy_set_header X-Forwarded-Host "";
+    proxy_set_header X-Forwarded-Proto "";
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    # Links and cookies the node hands back point at this origin.
+    proxy_redirect ${DECILLION_API_URL}/ /;
+    proxy_cookie_domain ${DECILLION_API_HOST} $host;
+    proxy_read_timeout 600s;   # agent turns and image generation can be slow
+    proxy_send_timeout 600s;
+    proxy_buffering off;
+}

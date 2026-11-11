@@ -12,12 +12,12 @@ Elpian VM native library (a platform's frontend runs on QuickJS).
 (`aseman-platform-client`; `godot: true` from the agents or the console)
 adds the Godot plugin (`packages/elpian_godot_native`, copied in by
 `tool/assemble.sh` but a dependency only then), the engine's artifacts and
-`--dart-define=ASEMAN_GODOT=true`; `assets/client.json` says `"godot": true`.
+`--dart-define=DECILLION_GODOT=true`; `assets/client.json` says `"godot": true`.
 
 | Here | What |
 |---|---|
-| `lib/client/config.dart` | what this build is for: `assets/client.json` (`node`, `platform`, `name`, `frontend`, `accent`) or `--dart-define=ASEMAN_FRONTEND_URL=…` |
-| `lib/client/node_api.dart` | the node: `developer.platform_frontend`, `auth.login` / `register` / `logout` with `platform`, and `<frontend>_aseman/wake` |
+| `lib/client/config.dart` | what this build is for: `assets/client.json` (`node`, `platform`, `name`, `frontend`, `accent`) or `--dart-define=DECILLION_FRONTEND_URL=…` |
+| `lib/client/node_api.dart` | the node: `developer.platform_frontend`, `auth.login` / `register` / `logout` with `platform`, and `<frontend>_decillion/wake` |
 | `lib/client/wake.dart` | wakes the platform's computer when the app opens, comes back to the foreground, or the frontend answers 503 — one wake at a time |
 | `lib/client/frontend_view.dart` | the frontend's Elpian program, full screen, on the app's own `ElpianAppHost` |
 | `lib/client/client_app.dart`, `account_sheet.dart` | the app: waking, the frontend, a menu to reload and sign in or out |
@@ -33,7 +33,7 @@ the client is assembled, so the engine is always the Aseman client's own.
 tool/assemble.sh                 # lib/src and assets/elpian from ../lib, ../assets
 flutter pub get
 flutter analyze && flutter test
-flutter run --dart-define=ASEMAN_FRONTEND_URL=http://10.0.2.2:8080/v1/platforms/acme/app/
+flutter run --dart-define=DECILLION_FRONTEND_URL=http://10.0.2.2:8080/v1/platforms/acme/app/
 ```
 
 After changing what the client uses from the app, run

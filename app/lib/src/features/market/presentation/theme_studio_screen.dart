@@ -459,7 +459,7 @@ class _ThemeStudioScreenState extends State<ThemeStudioScreen>
         Text(
           'Disable built-in shell / chrome slots or attach Elpian panels '
           '(replace, before, after, wrap). Live programs use `code` / '
-          '`program` with `Aseman.api(ns, action, body)` against the core '
+          '`program` with `Decillion.api(ns, action, body)` against the core '
           'client. New sections go in `ui.islands` (home tabs, profile, '
           'pages). Wrap trees may embed the built-in via `ThemeHostChild`.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -644,7 +644,7 @@ class _ThemeStudioScreenState extends State<ThemeStudioScreen>
       ];
 
   List<Widget> _jsonTab(ColorScheme scheme) => [
-        const AppFieldLabel('aseman.theme/v1 JSON'),
+        const AppFieldLabel('decillion.theme/v1 JSON'),
         TextField(
           controller: _json,
           maxLines: 18,

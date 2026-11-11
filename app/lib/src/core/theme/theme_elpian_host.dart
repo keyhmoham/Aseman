@@ -10,7 +10,7 @@ import '../../features/tools/elpian/host_values.dart';
 /// Host bridge for theme-declared Elpian programs (UI islands / slot panels).
 ///
 /// Speaks the same `aseman.*` protocol as [ElpianAppHost], but routes
-/// `target: "core"` (and core-shaped `aseman` calls) through the signed-in
+/// `target: "core"` (and core-shaped `decillion` calls) through the signed-in
 /// [AsemanService] client — so theme islands can use the full platform API.
 class ThemeElpianHost {
   ThemeElpianHost({
@@ -40,15 +40,15 @@ class ThemeElpianHost {
   }
 
   Map<String, HostCallHandler> handlers() => {
-        'aseman.env': (_, __) => HostValues.reply('object', {
+        'decillion.env': (_, __) => HostValues.reply('object', {
               ...env(),
               'slot': slot,
               'kind': 'theme',
             }),
-        'aseman.request': _request,
-        'aseman.navigate': _navigate,
-        'aseman.compact': (_, __) => HostValues.reply('bool', false),
-        'aseman.expand': (_, __) => HostValues.reply('bool', false),
+        'decillion.request': _request,
+        'decillion.navigate': _navigate,
+        'decillion.compact': (_, __) => HostValues.reply('bool', false),
+        'decillion.expand': (_, __) => HostValues.reply('bool', false),
       };
 
   FutureOr<String> _navigate(String apiName, String payload) {
@@ -66,7 +66,7 @@ class ThemeElpianHost {
     final id = '${req?['id'] ?? ''}';
     if (req == null || id.isEmpty) {
       return HostValues.reply('object', {
-        'error': 'aseman.request needs {id, target, …}',
+        'error': 'decillion.request needs {id, target, …}',
       });
     }
     unawaited(_perform(req).then((result) async {
@@ -84,7 +84,7 @@ class ThemeElpianHost {
         case 'api':
         case 'platform':
           return await _coreCall(req);
-        case 'aseman':
+        case 'decillion':
           // Theme panels have no sandbox preview page; map page ops that are
           // really platform actions onto the core client, else reject.
           return await _asemanOp(req);
@@ -96,7 +96,7 @@ class ThemeElpianHost {
             'ok': false,
             'status': 400,
             'error':
-                'theme panel target must be "core", "aseman", or "http" (got "$target")',
+                'theme panel target must be "core", "decillion", or "http" (got "$target")',
           };
       }
     } catch (e) {
@@ -209,7 +209,7 @@ class ThemeElpianHost {
           'ok': false,
           'status': 400,
           'error':
-              'theme panels: use target "core" with {namespace,action}, or aseman op "ns.action"',
+              'theme panels: use target "core" with {namespace,action}, or decillion op "ns.action"',
         };
     }
   }
@@ -272,7 +272,7 @@ class ThemeElpianHost {
 
   static bool _reserved(String name) {
     final n = name.toLowerCase();
-    return n == 'authorization' || n == 'cookie' || n.startsWith('x-aseman-');
+    return n == 'authorization' || n == 'cookie' || n.startsWith('x-decillion-');
   }
 
   static Map<String, dynamic>? _decodeMap(String payload) {

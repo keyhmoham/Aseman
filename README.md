@@ -41,6 +41,14 @@ Run the entire platform with a single command. Docker with the Compose plugin is
 
 > **Note:** `./aseman.sh up` starts the stack with the Flutter client in debug mode (`docker-compose.hotreload.yml`). `./aseman.sh up --no-hot-reload` is the release image, equivalent to `docker compose up -d --build`.
 
+**Only the web app, on a Decillion node.** To run the Flutter client by itself against Decillion's backend (no Aseman node, database or other containers are built or started):
+
+```bash
+./aseman.sh up --decillion
+```
+
+It builds the release web image and starts it alone (`web-decillion`, compose profile `decillion`) at `http://localhost:${WEB_PORT:-3000}`. Its nginx forwards `/v1`, `/fed` and `/healthz` to `https://preview.decillionai.com` on the app's own origin (`app/deploy/api.decillion.conf.template`), so everything works as beside its own node, websockets included. Another Decillion node: `DECILLION_API_URL=https://… ./aseman.sh up --decillion`. Sign in with an account of that node; a node that takes people by invitation shows an invite-code field, and a new account verifies its email first. `cd app && dart run tool/probe_decillion.dart [url]` checks that a node serves every action the client calls.
+
 ### Service Map
 
 | Service | Purpose | Port |

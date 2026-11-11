@@ -23,6 +23,8 @@ import 'package:aseman/src/features/files/presentation/file_viewer.dart';
 
 import '../../fake_aseman_service.dart';
 
+import '../../navigation.dart';
+
 Uint8List _zip(Map<String, String> files) {
   final archive = Archive();
   for (final e in files.entries) {
@@ -616,10 +618,7 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ASEMAN'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Atlas Collective').last);
-    await tester.pumpAndSettle();
+    await openSpaceRoom(tester);
     await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('src'));
@@ -655,10 +654,7 @@ void main() {
         AsemanApp(dependencies: AppDependencies.withService(service)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('ASEMAN'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Atlas Collective').last);
-      await tester.pumpAndSettle();
+      await openSpaceRoom(tester);
 
       await tester.tap(find.byTooltip('Apps'));
       await tester.pumpAndSettle();

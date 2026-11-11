@@ -75,9 +75,9 @@ class _WebPageWebViewState extends State<_WebPageWebView>
   late final Uri _home = Uri.parse(widget.url);
 
   Future<void> _sendTheme() async {
-    final json = jsonEncode({'type': 'aseman:theme', ..._theme});
+    final json = jsonEncode({'type': 'decillion:theme', ..._theme});
     await _controller?.evaluateJavascript(
-      source: 'window.__asemanSetTheme && window.__asemanSetTheme($json);',
+      source: 'window.__decillionSetTheme && window.__decillionSetTheme($json);',
     );
   }
 

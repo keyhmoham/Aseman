@@ -6,7 +6,7 @@ part of 'developer_console.dart';
 /// written to the space's computer and served.
 const String kWorkflowStarter = '''{
   "\$schema": "https://raw.githubusercontent.com/keyhmoham/Aseman/main/docs/workflows/workflow.schema.json",
-  "aseman_workflow": "1",
+  "decillion_workflow": "1",
   "name": "my-product",
   "inputs": {
     "product": {"type": "string", "default": "My Product"}

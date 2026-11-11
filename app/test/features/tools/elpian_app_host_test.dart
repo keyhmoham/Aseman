@@ -26,8 +26,8 @@ dynamic unwrap(String raw) => (jsonDecode(raw) as Map)['data']['value'];
 void main() {
   test('an Elpian app reaches its space and its own server through its preview only', () {
     final h = host(MockClient((_) async => http.Response('{}', 200)));
-    expect(h.urlFor({'target': 'aseman', 'op': 'ask'}).toString(),
-        'https://node.example${page}_aseman/api/ask');
+    expect(h.urlFor({'target': 'decillion', 'op': 'ask'}).toString(),
+        'https://node.example${page}_decillion/api/ask');
     expect(
         h.urlFor({
           'target': 'app',
@@ -36,10 +36,10 @@ void main() {
         }).toString(),
         'https://node.example${page}api/orders?page=2');
     for (final bad in [
-      {'target': 'aseman', 'op': 'delete_everything'},
+      {'target': 'decillion', 'op': 'delete_everything'},
       {'target': 'app', 'path': '../other/x'},
       {'target': 'app', 'path': 'https://evil.example/x'},
-      {'target': 'app', 'path': '_aseman/api/ask'},
+      {'target': 'app', 'path': '_decillion/api/ask'},
       {'target': 'elsewhere', 'path': 'x'},
     ]) {
       expect(() => h.urlFor(bad), throwsFormatException, reason: '$bad');
@@ -49,7 +49,7 @@ void main() {
   test('the program learns its own address as the client reaches it', () {
     final h = host(MockClient((_) async => http.Response('{}', 200)));
     expect(h.appUrl, 'https://node.example$page');
-    final env = unwrap(h.handlers()['aseman.env']!('aseman.env', '') as String) as Map;
+    final env = unwrap(h.handlers()['decillion.env']!('decillion.env', '') as String) as Map;
     expect(env['appUrl'], 'https://node.example$page');
     expect(env['display'], 'full');
     final platform = ElpianAppHost(baseUrl: 'https://arena.example', page: '/v1/platforms/arena/app', headers: () => {},
@@ -64,15 +64,15 @@ void main() {
       seen.add(req);
       return http.Response(jsonEncode({'agent': 'research', 'reply': 'done'}), 200);
     }), onSettle: settled.complete);
-    final raw = await h.handlers()['aseman.request']!(
-        'aseman.request',
+    final raw = await h.handlers()['decillion.request']!(
+        'decillion.request',
         jsonEncode(jsonEncode({
           'id': 'r1',
-          'target': 'aseman',
+          'target': 'decillion',
           'op': 'ask',
           'method': 'POST',
           'body': {'agent': 'research', 'prompt': 'hi'},
-          'headers': {'Authorization': 'Bearer forged', 'X-Aseman-User-Token': 'forged'},
+          'headers': {'Authorization': 'Bearer forged', 'X-Decillion-User-Token': 'forged'},
         })));
     expect(unwrap(raw), {'accepted': true});
     final result = await settled.future;
@@ -83,7 +83,7 @@ void main() {
       'data': {'agent': 'research', 'reply': 'done'},
     });
     expect(seen.single.headers['Authorization'], 'Bearer person');
-    expect(seen.single.headers.containsKey('X-Aseman-User-Token'), isFalse);
+    expect(seen.single.headers.containsKey('X-Decillion-User-Token'), isFalse);
     expect(jsonDecode(seen.single.body), {'agent': 'research', 'prompt': 'hi'});
   });
 
@@ -91,8 +91,8 @@ void main() {
     final h = host(MockClient((req) async => req.url.path.endsWith('ask')
         ? http.Response(jsonEncode({'error': 'insufficient funds'}), 402)
         : http.Response('nope', 500)));
-    final ask = await h.perform({'target': 'aseman', 'op': 'ask', 'method': 'POST', 'body': {}},
-        h.urlFor({'target': 'aseman', 'op': 'ask'}));
+    final ask = await h.perform({'target': 'decillion', 'op': 'ask', 'method': 'POST', 'body': {}},
+        h.urlFor({'target': 'decillion', 'op': 'ask'}));
     expect(ask, {'ok': false, 'status': 402, 'error': 'insufficient funds'});
     // The app's own server: the status is the program's to judge.
     final app = await h.perform({'target': 'app', 'path': 'api/x'}, h.urlFor({'target': 'app', 'path': 'api/x'}));
@@ -107,10 +107,10 @@ void main() {
       calls++;
       return http.Response('{}', 200);
     }));
-    final raw = await h.handlers()['aseman.request']!('aseman.request', '{"target":"app"}');
+    final raw = await h.handlers()['decillion.request']!('decillion.request', '{"target":"app"}');
     expect((unwrap(raw) as Map)['error'], isNotNull);
-    final bad = await h.handlers()['aseman.request']!(
-        'aseman.request', jsonEncode({'id': 'r2', 'target': 'app', 'path': '../x'}));
+    final bad = await h.handlers()['decillion.request']!(
+        'decillion.request', jsonEncode({'id': 'r2', 'target': 'app', 'path': '../x'}));
     expect((unwrap(bad) as Map)['status'], 400);
     expect(calls, 0);
   });
@@ -132,8 +132,8 @@ void main() {
           ? http.Response('{"code":"WAKING"}', 503)
           : http.Response('{"items":[]}', 200)),
     );
-    h.handlers()['aseman.request']!(
-        'aseman.request', jsonEncode({'id': 'r1', 'target': 'app', 'path': 'api/items'}));
+    h.handlers()['decillion.request']!(
+        'decillion.request', jsonEncode({'id': 'r1', 'target': 'app', 'path': 'api/items'}));
     final r = await settled.future;
     expect(calls, 2);
     expect(wakes, 1);

@@ -15,7 +15,8 @@ class ApiException implements Exception {
   final int status;
 
   bool get isUnauthenticated => code == 'UNAUTHENTICATED' || status == 401;
-  bool get isPermission => code == 'PERMISSION' || status == 403;
+  bool get isPermission =>
+      code == 'PERMISSION_DENIED' || code == 'PERMISSION' || status == 403;
   bool get isNotFound => code == 'NOT_FOUND' || status == 404;
 
   @override
@@ -69,25 +70,22 @@ class AsemanApiClient {
     };
     final signer = this.signer;
     if (signer != null && signer.hasKey) {
-      headers.addAll(await signer.signRequest(
-        method: 'POST',
-        path: path,
-        body: rawBody,
-      ));
+      headers.addAll(
+        await signer.signRequest(method: 'POST', path: path, body: rawBody),
+      );
     }
     final uri = Uri.parse('$baseUrl$path');
     late http.Response resp;
     try {
       resp = await _http
-          .post(
-            uri,
-            headers: headers,
-            body: rawBody.isEmpty ? null : rawBody,
-          )
+          .post(uri, headers: headers, body: rawBody.isEmpty ? null : rawBody)
           .timeout(requestTimeout ?? timeout);
     } on TimeoutException {
-      throw const ApiException('TIMEOUT', 'The server did not answer in time',
-          status: 504);
+      throw const ApiException(
+        'TIMEOUT',
+        'The server did not answer in time',
+        status: 504,
+      );
     } on http.ClientException catch (e) {
       throw ApiException('NETWORK', 'Network error: ${e.message}', status: 0);
     }

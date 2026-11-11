@@ -18,7 +18,7 @@ import '../../features/tools/presentation/app_frontend_theme.dart';
 import '../../features/tools/ui_kit/kit.dart';
 
 /// Renders a theme Elpian source: static JSON tree and/or a live QuickJS
-/// program with the full theme host (`Aseman.env` / `Aseman.api` / core API).
+/// program with the full theme host (`Decillion.env` / `Decillion.api` / core API).
 class ThemeElpianSurface extends StatefulWidget {
   const ThemeElpianSurface({
     super.key,
@@ -147,7 +147,7 @@ class _ThemeElpianSurfaceState extends State<ThemeElpianSurface> {
         roomId: widget.roomId,
         env: () => _env,
         settle: (result) =>
-            _vm.callFunction('__asemanSettle', input: jsonEncode(result)),
+            _vm.callFunction('__decillionSettle', input: jsonEncode(result)),
       );
       setState(() {
         _program = wrapped;
@@ -175,7 +175,7 @@ class _ThemeElpianSurfaceState extends State<ThemeElpianSurface> {
     final encoded = jsonEncode(_env);
     if (_program != null && _envSent.isNotEmpty && encoded != _envSent) {
       _envSent = encoded;
-      _vm.callFunction('__asemanEnv', input: encoded);
+      _vm.callFunction('__decillionEnv', input: encoded);
     }
   }
 

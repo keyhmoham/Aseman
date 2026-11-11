@@ -250,6 +250,7 @@ class _AppPageContentState extends State<AdminPageContent> {
     'Storage' => _storage(),
     'Settings · Pricing' => _pricing(),
     'Settings · Machine' => _machine(),
+    'Settings · Agentic engine' => _agenticEngine(),
     'Settings · Agent instructions' => _agentInstructions(),
     'Settings · Categories' => _categories(),
     _ => const AdminEmptyState(
@@ -472,6 +473,40 @@ class _AppPageContentState extends State<AdminPageContent> {
     onSave: (machine) =>
         widget.onDirectAction('settings', 'update', {'machine': machine}),
   );
+
+  /// The engine the node's agents run on (settings.agentic_engine): deep
+  /// agents (the default) or DeepSeek Harness. Agents move on their next turn.
+  Widget _agenticEngine() {
+    final current =
+        '${_map(widget.results['settings.get'])['agentic_engine'] ?? 'deepagents'}';
+    const engines = {'deepagents': 'Deep agents', 'harness': 'DeepSeek Harness'};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'What every agent on this node runs on. Their memory, rooms and '
+          'work stay as they are; each agent moves on its next turn.',
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in engines.entries)
+              ChoiceChip(
+                label: Text(e.value),
+                selected: e.key == current,
+                onSelected: (_) {
+                  if (e.key != current) {
+                    widget.onDirectAction('settings', 'update', {'agentic_engine': e.key});
+                  }
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 
   Widget _agentInstructions() => _PromptEditor(
     key: ValueKey(

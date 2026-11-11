@@ -8,6 +8,7 @@ import 'package:aseman/src/data/models/space.dart';
 import 'package:aseman/src/data/services/aseman_service.dart';
 import 'package:aseman/src/shared/widgets/avatar.dart';
 import 'package:aseman/src/shared/widgets/avatar_editor.dart';
+import 'package:aseman/src/shared/widgets/avatar_face.dart';
 
 const fileId = '00000000000000010000000000000001';
 
@@ -158,9 +159,13 @@ void main() {
     // The fallback stays under the picture (which cannot load in tests).
     expect(find.text('F1'), findsOneWidget);
     expect(find.text('F2'), findsOneWidget);
-    expect(find.byType(Image), findsOneWidget);
-    final circle = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-    expect((circle.foregroundImage as NetworkImage).url,
-        'https://node.example/v1/files/$fileId/content');
+    // A picture for each avatar that has one (F1 and the AppAvatar's face),
+    // none for F2.
+    expect(find.byType(Image), findsNWidgets(2));
+    final face = tester.widget<AvatarFace>(find.byType(AvatarFace));
+    expect(
+      (face.foregroundImage as NetworkImage).url,
+      'https://node.example/v1/files/$fileId/content',
+    );
   });
 }

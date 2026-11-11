@@ -385,7 +385,7 @@ void main() {
             'direct': true,
             'created_at': '2026-10-19T10:00:00Z',
             'reporter': {'handle': 'alice'},
-            'accused': {'handle': 'bob'},
+            'reported': {'handle': 'bob'},
             'evidence': [
               {
                 'id': 'm1',

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/deferred/deferred_loader.dart';
+
 import '../../app_dependencies.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
@@ -22,6 +24,26 @@ import 'avatar_editor.dart';
 import 'overlay_panels.dart';
 import 'sky_ui.dart';
 import 'theme_slot_host.dart';
+
+// The menu's screens load on first use, each once (DeferredLoader).
+final _store = DeferredLoader(() => market.loadLibrary());
+final _developerConsole = DeferredLoader(() => developer.loadLibrary());
+final _adminConsole = DeferredLoader(() => admin.loadLibrary());
+final _settingsScreen = DeferredLoader(() => settings_ui.loadLibrary());
+
+/// Loads the profile menu's screens (store, developer console, admin
+/// console, settings).
+Future<void> loadProfileScreens() async {
+  await Future.wait([
+    for (final loader in [
+      _store,
+      _developerConsole,
+      _adminConsole,
+      _settingsScreen,
+    ])
+      loader.ensure() ?? Future<void>.value(),
+  ]);
+}
 
 enum ProfileAction {
   store,
@@ -109,7 +131,7 @@ Future<void> dispatchProfileAction(
 ) async {
   switch (action) {
     case ProfileAction.store:
-      await market.loadLibrary();
+      await _store.ensure();
       if (!context.mounted) return;
       await market.showBotsStore(context, dependencies);
     case ProfileAction.wallet:
@@ -117,19 +139,19 @@ Future<void> dispatchProfileAction(
     case ProfileAction.messages:
       await showMessenger(context, dependencies);
     case ProfileAction.developer:
-      await developer.loadLibrary();
+      await _developerConsole.ensure();
       if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) =>
               developer.DeveloperConsole(service: dependencies.service)));
     case ProfileAction.admin:
-      await admin.loadLibrary();
+      await _adminConsole.ensure();
       if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => admin.AdminScreen(dependencies: dependencies),
       ));
     case ProfileAction.settings:
-      await settings_ui.loadLibrary();
+      await _settingsScreen.ensure();
       if (!context.mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) =>

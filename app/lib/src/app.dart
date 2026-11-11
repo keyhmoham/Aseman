@@ -13,7 +13,14 @@ import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
 import 'features/gadgets/presentation/gadgets_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
+import 'core/deferred/deferred_loader.dart';
 import 'features/platform/platform_home.dart' deferred as platform;
+
+/// A platform's own home (its published frontend), loaded on first use.
+final _platformHome = DeferredLoader(() => platform.loadLibrary());
+
+/// Loads a platform client's home.
+Future<void> loadPlatformHome() async => _platformHome.ensure();
 
 class AsemanApp extends StatefulWidget {
   const AsemanApp({super.key, required this.dependencies});
@@ -134,9 +141,12 @@ class _DeferredPlatformHomeState extends State<_DeferredPlatformHome> {
   @override
   void initState() {
     super.initState();
-    platform.loadLibrary().then((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+    _ready = _platformHome.isLoaded;
+    if (!_ready) {
+      _platformHome.ensure()?.then((_) {
+        if (mounted) setState(() => _ready = true);
+      }).ignore();
+    }
   }
 
   @override

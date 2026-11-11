@@ -9,8 +9,8 @@ import 'design_language.dart';
 import 'shell_layout.dart';
 import 'theme_ui_spec.dart';
 
-/// Schema version for installable theme packs (`aseman.theme/v1`).
-const themePackSchema = 'aseman.theme/v1';
+/// Schema version for installable theme packs (`decillion.theme/v1`).
+const themePackSchema = 'decillion.theme/v1';
 
 /// Maximum serialized pack size accepted from the store / assistant (512 KiB).
 const themePackMaxBytes = 512 * 1024;

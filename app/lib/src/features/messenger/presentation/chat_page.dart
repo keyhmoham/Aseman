@@ -31,6 +31,17 @@ import 'dm_desk_panel.dart' deferred as dm_desk;
 import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
+import '../../../core/deferred/deferred_loader.dart';
+
+/// The call screen and a direct chat's desk, each loaded on first use.
+final _callPage = DeferredLoader(() => call_page.loadLibrary());
+final _dmDesk = DeferredLoader(() => dm_desk.loadLibrary());
+
+/// Loads what a direct chat opens (calls, its desk).
+Future<void> loadChatScreens() async {
+  await _callPage.ensure();
+  await _dmDesk.ensure();
+}
 
 /// Opens [chat]: on a wide screen a direct chat (or personal Aseman) is a
 /// floating modal; project rooms and compact widths keep a full-page push
@@ -480,7 +491,7 @@ class _ChatPageState extends State<ChatPage> {
         tooltip: 'Voice call',
         icon: const Icon(Icons.call_outlined),
         onPressed: () async {
-          await call_page.loadLibrary();
+          await _callPage.ensure();
           if (!mounted) return;
           await call_page.startDirectCall(
             context,
@@ -494,7 +505,7 @@ class _ChatPageState extends State<ChatPage> {
         tooltip: 'Video call',
         icon: const Icon(Icons.videocam_outlined),
         onPressed: () async {
-          await call_page.loadLibrary();
+          await _callPage.ensure();
           if (!mounted) return;
           await call_page.startDirectCall(
             context,
@@ -1232,9 +1243,12 @@ class _DeferredDmDeskPanelState extends State<_DeferredDmDeskPanel> {
   @override
   void initState() {
     super.initState();
-    dm_desk.loadLibrary().then((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+    _ready = _dmDesk.isLoaded;
+    if (!_ready) {
+      _dmDesk.ensure()?.then((_) {
+        if (mounted) setState(() => _ready = true);
+      }).ignore();
+    }
   }
 
   @override

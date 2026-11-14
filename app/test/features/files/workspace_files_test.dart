@@ -123,6 +123,7 @@ class _Service extends FakeAsemanService {
   final reads = <String>[];
   final changes = <String>[];
   bool needsComputer = false;
+  bool awake = false;
   final files = <String, Uint8List>{
     'README.md': utf8.encode(
       '# Atlas\n\nThe **desk** of the fund.\n\n- one\n- two',
@@ -143,13 +144,19 @@ class _Service extends FakeAsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
+    if ('$namespace.$action' == 'spaces.computer') {
+      if (body['operation'] == 'provision') awake = true;
+      return {'ok': true, 'operation': body['operation']};
+    }
     if ('$namespace.$action' != 'spaces.sandbox_files') {
       return super.invokeAction(
         namespace,
         action,
         body: body,
         timeout: timeout,
+        anonymous: anonymous,
       );
     }
     final path = '${body['path']}';
@@ -159,8 +166,8 @@ class _Service extends FakeAsemanService {
         '$op $path${body['to'] == null ? '' : ' ${body['to']}'}'
         '${body['wake'] == true ? ' (wake)' : ''}',
       );
-      // A provider that cannot make this change while the computer sleeps.
-      if (needsComputer && body['wake'] != true) {
+      // Simulate asleep computer until a spaces.computer provision ran.
+      if (needsComputer && !awake) {
         return {
           'ok': false,
           'asleep': true,
@@ -548,7 +555,8 @@ void main() {
     expect(find.text('Wake the computer?'), findsOneWidget);
     await tester.tap(find.text('Wake and continue'));
     await tester.pumpAndSettle();
-    expect(service.changes, ['write README.md', 'write README.md (wake)']);
+    // First write fails (asleep); after provision, write succeeds (no wake flag).
+    expect(service.changes, ['write README.md', 'write README.md']);
     expect(utf8.decode(service.files['README.md']!), '# New');
   });
 

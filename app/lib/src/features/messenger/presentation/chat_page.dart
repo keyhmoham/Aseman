@@ -69,8 +69,9 @@ Future<void> showChat(
 
 /// One conversation of the messenger, direct or a project room. Direct chats
 /// use a Chat/Desk dual-tab shell (like a space room); each participant has
-/// their own desk. AI / Aseman directs also get a collapsible avatar and a
-/// voice-call FAB.
+/// their own desk. Every direct gets a collapsible avatar header above the
+/// tabs — agents use the configurable humanoid; person↔person uses that
+/// peer's picture. AI / Aseman directs also get a voice-call FAB.
 class ChatPage extends StatefulWidget {
   const ChatPage({
     super.key,
@@ -143,16 +144,33 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _load();
-    _loadAgents();
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _load());
-    if (_showDualTabs) {
+    unawaited(_boot());
+  }
+
+  /// Bind Direct space (desk / mentionable agents), then load messages + agents.
+  Future<void> _boot() async {
+    if (chat.direct) {
+      try {
+        final enriched = await _service.ensureDirectSpace(chat);
+        if (!mounted) return;
+        if (enriched.spaceId != chat.spaceId ||
+            enriched.roomId != chat.roomId ||
+            enriched.peer?.botId != chat.peer?.botId ||
+            enriched.peer?.kind != chat.peer?.kind) {
+          setState(() => _chat = enriched);
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (_showDualTabs && chat.spaceId.isNotEmpty) {
       _desk.attach(chat.spaceId, chat.roomId);
     }
     if (_isAiChat) {
       _voice = BrainVoiceClient(_service)..addListener(_onVoice);
       unawaited(_bootAvatar());
     }
+    await Future.wait([_load(), _loadAgents()]);
   }
 
   String get _avatarAgentId {
@@ -187,13 +205,17 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
+  String get _peerId => chat.peer?.id ?? chat.roomId;
+
   Future<void> _load() async {
     if (_loading) return;
     _loading = true;
     var switched = false;
     try {
       final thread = _roomId;
-      final res = await _service.fetchRoomChat(chat.spaceId, thread);
+      final res = chat.direct
+          ? await _service.fetchDirectChat(_peerId)
+          : await _service.fetchRoomChat(chat.spaceId, thread);
       if (!mounted) return;
       if (thread != _roomId) {
         switched = true;
@@ -239,8 +261,10 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final oldest = _page.messages.first;
       final thread = _roomId;
-      final res = await _service.fetchRoomChat(chat.spaceId, thread,
-          before: oldest.createdAt);
+      final res = chat.direct
+          ? await _service.fetchDirectChat(_peerId, before: oldest.createdAt)
+          : await _service.fetchRoomChat(chat.spaceId, thread,
+              before: oldest.createdAt);
       if (!mounted || thread != _roomId) return;
       setState(() {
         _page = _page.copyWith(
@@ -261,11 +285,63 @@ class _ChatPageState extends State<ChatPage> {
         msgs.map((m) => m.createdAt).reduce((a, b) => a.isAfter(b) ? a : b);
     if (_seen != null && !newest.isAfter(_seen!)) return;
     _seen = newest;
-    unawaited(_service.markSeen(chat.spaceId, newest).catchError((_) {}));
+    if (chat.direct) {
+      unawaited(_service.markDirectRead(_peerId).catchError((_) {}));
+    } else {
+      unawaited(_service.markSeen(chat.spaceId, newest).catchError((_) {}));
+    }
   }
 
   Future<void> _loadAgents() async {
     try {
+      if (chat.direct) {
+        // @decillion from users.dm_assistant; person↔agent Directs also list
+        // the participant and any other agents on that conversation's space.
+        final agents = <Bot>[];
+        final apps = <Bot>[];
+        if (!chat.saved) {
+          final assistant = await _service.fetchDmAssistant();
+          if (assistant != null) agents.add(assistant);
+        }
+        if (chat.spaceId.isNotEmpty) {
+          final bots = await _service.fetchSpaceBots(chat.spaceId);
+          for (final b in bots) {
+            if (b.isAgent) {
+              if (!agents.any((a) => a.id == b.id || a.accountId == b.accountId)) {
+                agents.add(b);
+              }
+            } else if (b.isTool && !b.isSandbox) {
+              apps.add(b);
+            }
+          }
+        }
+        // Ensure the Direct's founding peer agent is known (bot id for asks).
+        final peer = chat.peer;
+        if (peer != null && peer.isAgent) {
+          final known = agents.any((b) =>
+              b.id == peer.botId ||
+              b.accountId == peer.id ||
+              b.id == peer.id);
+          if (!known) {
+            try {
+              final id = peer.botId.isNotEmpty ? peer.botId : peer.id;
+              final bot = await _service.fetchBot(id);
+              if (bot.id.isNotEmpty &&
+                  !agents.any((a) => a.id == bot.id)) {
+                agents.add(bot);
+              }
+            } catch (_) {}
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _agents = agents;
+            _apps = apps;
+          });
+        }
+        return;
+      }
+      if (chat.spaceId.isEmpty) return;
       final bots = await _service.fetchSpaceBots(chat.spaceId);
       if (mounted) {
         setState(() {
@@ -276,24 +352,156 @@ class _ChatPageState extends State<ChatPage> {
     } catch (_) {}
   }
 
+  /// Ids that identify the Direct chat's founding peer agent (account and bot).
+  Set<String> get _participantIds {
+    final peer = chat.peer;
+    if (peer == null) return {};
+    final ids = <String>{
+      if (peer.id.isNotEmpty) peer.id,
+      if (peer.botId.isNotEmpty) peer.botId,
+    };
+    for (final b in _agents) {
+      if (b.accountId == peer.id ||
+          b.id == peer.id ||
+          (peer.botId.isNotEmpty &&
+              (b.id == peer.botId || b.accountId == peer.botId))) {
+        if (b.id.isNotEmpty) ids.add(b.id);
+        if (b.accountId.isNotEmpty) ids.add(b.accountId);
+      }
+    }
+    return ids;
+  }
+
+  /// Bot record id of the Direct's participant agent (any agent, not only
+  /// Decillion) — what `spaces.ask` / turn seeds address.
+  String get _participantBotId {
+    final peer = chat.peer;
+    if (peer == null || !peer.isAgent) return '';
+    if (peer.botId.isNotEmpty) return peer.botId;
+    for (final b in _agents) {
+      if (b.isBuiltin) continue;
+      if (b.accountId == peer.id || b.id == peer.id) return b.id;
+    }
+    return '';
+  }
+
+  bool _isParticipantAgent(Bot b) {
+    final ids = _participantIds;
+    return ids.contains(b.id) || ids.contains(b.accountId);
+  }
+
+  /// Whether [body] / [mentions] address the built-in @decillion assistant.
+  bool _mentionsAssistant(String body, List<String> mentions) {
+    if (RegExp(r'(^|[^a-z0-9-])@decillion\b', caseSensitive: false)
+        .hasMatch(body)) {
+      return true;
+    }
+    for (final a in _agents) {
+      if (!a.isBuiltin) continue;
+      if (_isParticipantAgent(a)) continue;
+      if (mentions.contains(a.id) ||
+          (a.accountId.isNotEmpty && mentions.contains(a.accountId))) {
+        return true;
+      }
+      final handle = a.name.trim().toLowerCase().replaceFirst('@', '');
+      if (handle.isNotEmpty &&
+          RegExp('(^|[^a-z0-9-])@${RegExp.escape(handle)}\\b',
+                  caseSensitive: false)
+              .hasMatch(body)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Bot ids of agents the sender @mentioned that are not the DM participant.
+  /// Includes market agents installed on the Direct; @decillion is separate.
+  List<String> _otherMentionedAgentIds(List<String> mentions, String body) {
+    final peerIds = _participantIds;
+    final out = <String>{};
+    for (final id in mentions) {
+      if (id.isEmpty || peerIds.contains(id)) continue;
+      final hit = _agents.where(
+          (b) => b.id == id || b.accountId == id || b.name == id);
+      if (hit.isEmpty) continue;
+      final b = hit.first;
+      if (b.isBuiltin || _isParticipantAgent(b)) continue;
+      out.add(b.id);
+    }
+    for (final b in _agents) {
+      if (b.isBuiltin || _isParticipantAgent(b)) continue;
+      final handle = b.name.trim().toLowerCase().replaceFirst('@', '');
+      if (handle.isEmpty) continue;
+      if (RegExp('(^|[^a-z0-9-])@${RegExp.escape(handle)}\\b',
+              caseSensitive: false)
+          .hasMatch(body)) {
+        out.add(b.id);
+      }
+    }
+    return out.toList();
+  }
+
+  String get _assistantBotId {
+    for (final b in _agents) {
+      if (b.isBuiltin && b.id.isNotEmpty) return b.id;
+    }
+    return '';
+  }
+
   Future<void> _send(
       String body, List<String> mentions, List<String> attachments,
       {String replyTo = ''}) async {
-    var to = mentions;
-    final peer = chat.peer;
-    if (to.isEmpty &&
-        chat.direct &&
-        !chat.saved &&
-        peer != null &&
-        peer.isAgent) {
-      final agent = _agents.where((b) =>
-          b.id == peer.botId || b.accountId == peer.id || b.id == peer.id);
-      to = [agent.isNotEmpty ? agent.first.id : peer.botId];
-      to.removeWhere((id) => id.isEmpty);
-    }
     try {
-      await _service.sendRoomMessage(chat.spaceId, _roomId, body,
-          mentions: to, attachments: attachments, replyTo: replyTo);
+      if (chat.direct) {
+        final others = _otherMentionedAgentIds(mentions, body);
+        final assistant = _mentionsAssistant(body, mentions);
+        final peer = chat.peer;
+        final agentPeer = peer != null && peer.isAgent && !chat.saved;
+
+        if (agentPeer && chat.spaceId.isNotEmpty) {
+          // Person↔agent Direct on its space room. Backend directMentions:
+          //   • no other agents named → founding peer agent runs
+          //   • other agents @mentioned → those run (peer need not be named)
+          // Replies are stored as users.directs (visible in dm_list).
+          final List<String> address;
+          if (others.isEmpty && !assistant) {
+            address = const []; // bare → peer
+          } else if (others.isNotEmpty) {
+            address = others;
+          } else {
+            // Only @decillion: do not auto-run the peer.
+            final aid = _assistantBotId;
+            address = aid.isEmpty ? const [] : [aid];
+          }
+          final sent = await _service.sendRoomMessage(
+            chat.spaceId,
+            chat.roomId,
+            body,
+            mentions: address,
+            attachments: attachments,
+            replyTo: replyTo,
+          );
+          // Person↔person assistant path; also fine after a Direct store.
+          if (assistant &&
+              others.isEmpty &&
+              sent.id.isNotEmpty &&
+              address.isEmpty) {
+            unawaited(_service.dmAgentAsk(sent.id).catchError((_) {}));
+          }
+        } else {
+          // Person↔person, or agent DM before Direct space is bound.
+          // users.dm_send asks the peer agent when `to` is an agent account.
+          final sent = await _service.sendDirectMessage(_peerId, body,
+              attachments: attachments, replyTo: replyTo);
+          if (!chat.saved && assistant && sent.id.isNotEmpty) {
+            unawaited(_service.dmAgentAsk(sent.id).catchError((_) {}));
+          }
+        }
+      } else {
+        // Project rooms: mentioned agents only; empty mentions → none.
+        await _service.sendRoomMessage(chat.spaceId, _roomId, body,
+            mentions: mentions, attachments: attachments, replyTo: replyTo);
+      }
       await _load();
     } catch (e) {
       _say('Send failed: $e');
@@ -334,7 +542,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _togglePin() async {
     final pin = !chat.pinned;
     try {
-      await _service.pinChat(chat.spaceId, chat.roomId, pin);
+      await _service.pinChat(_peerId, pin);
       if (!mounted) return;
       setState(() => _chat = pin
           ? _chat.copyWith(pinnedAt: DateTime.now())
@@ -367,7 +575,7 @@ class _ChatPageState extends State<ChatPage> {
     );
     if (ok != true) return;
     try {
-      await _service.clearChat(chat.spaceId);
+      await _service.clearChat(_peerId);
       if (mounted && !widget.embedded) {
         await Navigator.of(context).maybePop();
       }
@@ -399,7 +607,7 @@ class _ChatPageState extends State<ChatPage> {
       if (ok != true) return;
     }
     try {
-      await _service.blockDirect(chat.spaceId, block);
+      await _service.blockDirect(_peerId, block);
       if (!mounted) return;
       setState(() => _chat = _chat.copyWith(blocked: block));
       await _load();
@@ -421,7 +629,9 @@ class _ChatPageState extends State<ChatPage> {
               unawaited(_toggleBlock());
             case 'report':
               unawaited(reportToAdmins(context, _service,
-                  spaceId: chat.spaceId, roomId: chat.roomId));
+                  spaceId: chat.spaceId,
+                  roomId: chat.roomId,
+                  peer: chat.direct ? _peerId : ''));
             case 'avatar':
               unawaited(_editAvatar());
           }
@@ -489,7 +699,8 @@ class _ChatPageState extends State<ChatPage> {
     return [
       IconButton(
         tooltip: 'Voice call',
-        icon: const Icon(Icons.call_outlined),
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.call_outlined, size: 20),
         onPressed: () async {
           await _callPage.ensure();
           if (!mounted) return;
@@ -503,7 +714,8 @@ class _ChatPageState extends State<ChatPage> {
       ),
       IconButton(
         tooltip: 'Video call',
-        icon: const Icon(Icons.videocam_outlined),
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.videocam_outlined, size: 20),
         onPressed: () async {
           await _callPage.ensure();
           if (!mounted) return;
@@ -564,7 +776,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (!_isAiChat || _surface != 1) return false;
+    if (!_showDualTabs || _surface != 1) return false;
     if (n.metrics.axis != Axis.vertical) return false;
     final next = (n.metrics.pixels / 120).clamp(0.0, 1.0);
     if ((next - _avatarCollapse).abs() > 0.02) {
@@ -576,22 +788,49 @@ class _ChatPageState extends State<ChatPage> {
   static const _tabsBarHeight = 62.0;
 
   /// Matches [RoomChat] flat `bottomPad` (composer band) + a FAB gap.
-  static const _voiceFabBottom = 94.0 + 12.0;
+  static const _voiceFabBottom = 72.0 + 12.0;
 
   double get _avatarExpanded => 132.0;
 
   double get _avatarCollapsed => 56.0;
 
   double get _avatarHeaderHeight {
-    if (!_isAiChat) return 0;
+    if (!_showDualTabs) return 0;
     return _avatarExpanded +
         (_avatarCollapsed - _avatarExpanded) * _avatarCollapse;
   }
 
-  /// Avatar (when AI) + Desk/Chat tabs; rides up as the avatar collapses.
+  /// Collapsing avatar + Desk/Chat tabs; rides up as the avatar collapses.
   double get _chromeHeight {
     if (!_showDualTabs) return 0;
-    return (_isAiChat ? _avatarHeaderHeight : 0) + _tabsBarHeight;
+    return _avatarHeaderHeight + _tabsBarHeight;
+  }
+
+  String get _headerSubtitle {
+    if (chat.isAseman) return 'Your personal Aseman';
+    final peer = chat.peer;
+    if (peer?.isAgent ?? false) return 'AI agent';
+    if (peer == null) return 'Direct chat';
+    final handle = peer.handle.isNotEmpty ? '@${peer.handle}' : '';
+    if (handle.isEmpty) return 'Direct chat';
+    return '$handle · Direct chat';
+  }
+
+  /// Avatar in the collapsing DM header: configurable humanoid for AI,
+  /// the other person's picture for person↔person.
+  Widget _headerAvatar(double size) {
+    if (_isAiChat) {
+      return AgentHumanoidAvatar(
+        agentId: _avatarPrefs.agentId,
+        picture: chat.peer?.avatar ?? '',
+        userId: _me,
+        platform: chat.peer?.humanoid,
+        prefs: _avatarPrefs,
+        radius: size / 2,
+        listening: _voice?.state.status == BrainVoiceStatus.listening,
+      );
+    }
+    return ChatAvatar(chat: chat, radius: size / 2, userId: _me);
   }
 
   @override
@@ -604,7 +843,8 @@ class _ChatPageState extends State<ChatPage> {
     final topPad = MediaQuery.paddingOf(context).top;
     final bottomInset = widget.bottomInset;
     final chrome = _chromeHeight;
-    final useOuterAvatar = _isAiChat && _showDualTabs;
+    // Every direct chat uses the outer collapsing avatar + Desk/Chat tabs.
+    final useOuterAvatar = _showDualTabs;
 
     Widget chatBody = NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
@@ -617,22 +857,34 @@ class _ChatPageState extends State<ChatPage> {
         dependencies: widget.dependencies,
         spaceId: chat.spaceId,
         roomId: _roomId,
-        threadRoomId: chat.roomId,
-        threadTitle: _thread?.title ?? '',
-        onThread: _switchThread,
+        // Threads are a spaces.room concept — not used for Expo DMs.
+        threadRoomId: chat.direct ? '' : chat.roomId,
+        threadTitle: chat.direct ? '' : (_thread?.title ?? ''),
+        onThread: chat.direct ? null : _switchThread,
         canModerate: chat.canModerate,
         loading: _initialLoading,
         mentionable: _agents,
         direct: chat.direct,
         saved: chat.saved,
+        peerId: _peerId,
         onSend: _send,
-        onEdit: (m, body) =>
-            _change(() => _service.editRoomMessage(m.id, body)),
-        onDelete: (m) =>
-            _change(() => _service.deleteRoomMessage(chat.spaceId, m.id)),
+        onEdit: (m, body) => _change(() => chat.direct
+            ? _service.editDirectMessage(m.id, body)
+            : _service.editRoomMessage(m.id, body)),
+        onDelete: (m) => _change(() => chat.direct
+            ? _service.deleteDirectMessage(m.id)
+            : _service.deleteRoomMessage(chat.spaceId, m.id)),
         onReport: (m) => reportToAdmins(context, _service,
-            spaceId: chat.spaceId, roomId: _roomId, messageId: m.id),
-        onTyping: chat.saved ? null : _typing,
+            spaceId: chat.spaceId,
+            roomId: _roomId,
+            peer: chat.direct ? _peerId : '',
+            messageId: m.id),
+        onTyping: chat.saved
+            ? null
+            : (chat.direct
+                ? () => unawaited(
+                    _service.directTyping(_peerId).catchError((_) {}))
+                : _typing),
         typing: _page.typing,
         receipts: receipts,
         peerSeenAt: _page.peerSeenAt,
@@ -745,8 +997,9 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
           ),
-          // Avatar (AI) then Desk/Chat tabs — tabs sit under the avatar and
-          // ride up as it collapses.
+          // Avatar then Desk/Chat tabs — tabs sit under the avatar and ride
+          // up as it collapses. Person DMs match agent chrome; only the
+          // avatar widget differs (peer picture vs configurable humanoid).
           Positioned(
             top: topPad,
             left: 0,
@@ -754,31 +1007,27 @@ class _ChatPageState extends State<ChatPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_isAiChat)
-                  _CollapsingAgentHeader(
-                    height: _avatarHeaderHeight,
-                    collapse: _avatarCollapse,
-                    title: chat.title,
-                    prefs: _avatarPrefs,
-                    picture: chat.peer?.avatar ?? '',
-                    platform: chat.peer?.humanoid,
-                    userId: _me,
-                    listening:
-                        _voice?.state.status == BrainVoiceStatus.listening,
-                    leading: embedded || !(modal || canPop)
-                        ? null
-                        : IconButton(
-                            tooltip: modal ? 'Close' : 'Back',
-                            onPressed: () =>
-                                Navigator.of(context).maybePop(),
-                            icon: Icon(modal
-                                ? Icons.close_rounded
-                                : Icons.arrow_back_rounded),
-                          ),
-                    onCustomize: _editAvatar,
-                    onRoom: _openFacility,
-                    menu: _menu(),
-                  ),
+                _CollapsingDmHeader(
+                  height: _avatarHeaderHeight,
+                  collapse: _avatarCollapse,
+                  title: chat.title,
+                  subtitle: _headerSubtitle,
+                  avatarBuilder: _headerAvatar,
+                  leading: embedded || !(modal || canPop)
+                      ? null
+                      : IconButton(
+                          tooltip: modal ? 'Close' : 'Back',
+                          onPressed: () =>
+                              Navigator.of(context).maybePop(),
+                          icon: Icon(modal
+                              ? Icons.close_rounded
+                              : Icons.arrow_back_rounded),
+                        ),
+                  onRoom: _openFacility,
+                  onCustomize: _isAiChat ? _editAvatar : null,
+                  actions: _callActions(),
+                  menu: _menu(),
+                ),
                 SizedBox(
                   height: _tabsBarHeight,
                   child: Center(
@@ -799,7 +1048,7 @@ class _ChatPageState extends State<ChatPage> {
           if (_isAiChat)
             Positioned(
               right: 18,
-              // RoomChat's flat composer sits in a ~94px bottom band; clear
+              // RoomChat's flat composer sits in a ~72px bottom band; clear
               // that band (+ gap) so the FAB floats above the message bar.
               bottom: _voiceFabBottom + (embedded ? bottomInset : 0),
               child: _VoiceFab(
@@ -829,33 +1078,31 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-class _CollapsingAgentHeader extends StatelessWidget {
-  const _CollapsingAgentHeader({
+/// Collapsing app bar shared by agent and person direct chats. [avatarBuilder]
+/// supplies the face (configurable humanoid vs the peer's picture).
+class _CollapsingDmHeader extends StatelessWidget {
+  const _CollapsingDmHeader({
     required this.height,
     required this.collapse,
     required this.title,
-    required this.prefs,
-    required this.listening,
-    this.picture = '',
-    this.platform,
-    this.userId = '',
+    required this.subtitle,
+    required this.avatarBuilder,
     this.leading,
     this.onCustomize,
     this.onRoom,
+    this.actions = const [],
     this.menu,
   });
 
   final double height;
   final double collapse;
   final String title;
-  final BrainAvatarPrefs prefs;
-  final bool listening;
-  final String picture;
-  final AgentHumanoid? platform;
-  final String userId;
+  final String subtitle;
+  final Widget Function(double size) avatarBuilder;
   final Widget? leading;
   final VoidCallback? onCustomize;
   final VoidCallback? onRoom;
+  final List<Widget> actions;
   final Widget? menu;
 
   @override
@@ -864,7 +1111,6 @@ class _CollapsingAgentHeader extends StatelessWidget {
     // Keep a usable avatar size when collapsed so actions stay aligned.
     final size = 92.0 + (36.0 - 92.0) * collapse;
     final subtitleOpacity = (1 - collapse * 1.35).clamp(0.0, 1.0);
-    final personal = prefs.agentId.isEmpty;
     final titleSize = 17.0 - 2.5 * collapse;
     return SizedBox(
       height: height,
@@ -879,15 +1125,7 @@ class _CollapsingAgentHeader extends StatelessWidget {
             child: Row(
               children: [
                 if (leading != null) leading!,
-                AgentHumanoidAvatar(
-                  agentId: prefs.agentId,
-                  picture: picture,
-                  userId: userId,
-                  platform: platform,
-                  prefs: prefs,
-                  radius: size / 2,
-                  listening: listening,
-                ),
+                avatarBuilder(size),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -908,7 +1146,7 @@ class _CollapsingAgentHeader extends StatelessWidget {
                         Opacity(
                           opacity: subtitleOpacity,
                           child: Text(
-                            personal ? 'Your personal Aseman' : 'AI agent',
+                            subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -936,6 +1174,16 @@ class _CollapsingAgentHeader extends StatelessWidget {
                     onPressed: onCustomize,
                     icon: const Icon(Icons.face_retouching_natural_outlined,
                         size: 20),
+                  ),
+                for (final action in actions)
+                  IconButtonTheme(
+                    data: const IconButtonThemeData(
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    child: action,
                   ),
                 if (menu != null) menu!,
               ],
@@ -1178,7 +1426,7 @@ class ChatAvatar extends StatelessWidget {
           onImageError: picture == null ? null : (_, __) {},
           backgroundColor: ThemeRoles.wellFill(context),
           child: Text(
-            name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+            _avatarInitial(name),
             style: TextStyle(
               fontSize: radius * .8,
               fontWeight: FontWeight.w800,
@@ -1193,7 +1441,7 @@ class ChatAvatar extends StatelessWidget {
       size: size,
       borderRadius: corners,
       backgroundColor: ThemeRoles.wellFill(context),
-      child: Text(label.characters.first.toUpperCase(),
+      child: Text(_avatarInitial(label, fallback: '#'),
           style: TextStyle(
               fontSize: radius * .8,
               fontWeight: FontWeight.w800,
@@ -1210,6 +1458,15 @@ class ChatAvatar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// First grapheme for avatar initials; never throws on empty / odd unicode.
+String _avatarInitial(String name, {String fallback = '?'}) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return fallback;
+  final chars = trimmed.characters;
+  if (chars.isEmpty) return fallback;
+  return chars.first.toUpperCase();
 }
 
 /// Loads the DM desk (tools / Elpian / computer) only when the Desk tab is

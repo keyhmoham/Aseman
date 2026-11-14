@@ -5,9 +5,13 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aseman/aseman/internal/plugins/api"
+	"github.com/aseman/aseman/internal/plugins/entity"
 	"github.com/aseman/aseman/pkg/errs"
+	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 )
 
 func (f *dmFixture) upload(from, to string, name, mime string, size int) map[string]any {
@@ -190,6 +194,34 @@ func TestAVoiceMessageCarriesItsSoundWave(t *testing.T) {
 	song := f.must("dm_file_upload", f.alice, map[string]any{"to": bob, "name": "s.mp3", "mime": "audio/mpeg", "data": data, "waveform": []int{1, 2}})
 	if none["waveform"] != nil || song["waveform"] != nil {
 		t.Fatalf("none=%v song=%v", none["waveform"], song["waveform"])
+	}
+}
+
+func TestSendingAFileToAnAgentDirect(t *testing.T) {
+	f := dmHarness(t)
+	botID := mustID(t, "00000000000000010000000000000077")
+	accID := mustID(t, "00000000000000010000000000000078")
+	now := time.Now().UTC()
+	if err := f.s.R.CreateID(f.ctx, "accounts", accID, &account.Account{Entity: entity.Entity{ID: accID, CreatedAt: now, UpdatedAt: now},
+		Handle: "helper", Kind: account.KindBot, Status: account.StatusActive}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.R.CreateID(f.ctx, "bots", botID, &bot.Bot{Entity: entity.Entity{ID: botID, CreatedAt: now, UpdatedAt: now},
+		AccountID: accID, Name: "Helper", Kind: bot.KindAgent}); err != nil {
+		t.Fatal(err)
+	}
+	up := f.upload("alice", accID.String(), "brief.txt", "text/plain", 40)
+	id := up["file_id"].(string)
+	sent := f.must("dm_send", f.alice, map[string]any{"to": accID.String(), "body": "read this", "attachments": []string{id}})
+	if sent["ok"] != true {
+		t.Fatalf("send = %v", sent)
+	}
+	att := firstMessage(f.must("dm_list", f.alice, map[string]any{"peer": accID.String()}))["attachments"].([]any)[0].(map[string]any)
+	if att["file_id"] != id {
+		t.Fatalf("attachments = %v", att)
+	}
+	if got := f.s.fileAttachments(f.ctx, []string{id}); len(got) != 1 || got[0].ID != id || got[0].Name != "brief.txt" {
+		t.Fatalf("fileAttachments = %+v", got)
 	}
 }
 

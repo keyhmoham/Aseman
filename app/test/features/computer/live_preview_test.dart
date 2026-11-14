@@ -22,6 +22,7 @@ class _Service extends FakeAsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     final call = '$namespace.$action';
     if (call == 'spaces.computer') {
@@ -34,7 +35,7 @@ class _Service extends FakeAsemanService {
       state = 'awake';
       return r;
     }
-    return super.invokeAction(namespace, action, body: body, timeout: timeout);
+    return super.invokeAction(namespace, action, body: body, timeout: timeout, anonymous: anonymous);
   }
 }
 

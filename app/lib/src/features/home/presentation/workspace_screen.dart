@@ -89,6 +89,7 @@ class WorkspaceScreen extends StatefulWidget {
     super.key,
     required this.dependencies,
     this.initialWorkspace = 'Home',
+    this.initialSpaceId,
     this.initialRoom,
     this.initialRoomId,
     this.onBackToFeed,
@@ -96,6 +97,9 @@ class WorkspaceScreen extends StatefulWidget {
   });
   final AppDependencies dependencies;
   final String initialWorkspace;
+
+  /// Space id when opening from chats (preferred over [initialWorkspace] name).
+  final String? initialSpaceId;
 
   /// Room to open once this workspace's rooms have loaded. [initialRoomId]
   /// wins when it matches; [initialRoom] is the room's name.
@@ -139,6 +143,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     session = WorkspaceController(
       dependencies: widget.dependencies,
       initialWorkspace: widget.initialWorkspace,
+      initialSpaceId: widget.initialSpaceId,
       initialRoom: widget.initialRoom,
       initialRoomId: widget.initialRoomId,
       onWorkspaceChanged: widget.onWorkspaceChanged,
@@ -373,16 +378,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
 
   void goHome() => session.goHome();
 
-  Future<void> switchWorkspace(String value) async {
-    if (value == session.workspace || workspaceMotion.isAnimating) return;
+  Future<void> switchWorkspace(String value, {String spaceId = ''}) async {
+    final same = spaceId.isNotEmpty
+        ? spaceId == session.activeSpaceId
+        : value == session.workspace;
+    if (same || workspaceMotion.isAnimating) return;
     // Refresh the spaces list so a freshly created workspace resolves to its
     // id (otherwise the desk feed falls back to the global feed and hides the
     // composer because spaceFor() cannot find the new workspace).
     await session.refreshSpaces();
-    if (!mounted || value == session.workspace) return;
+    if (!mounted) return;
+    final stillSame = spaceId.isNotEmpty
+        ? spaceId == session.activeSpaceId
+        : value == session.workspace;
+    if (stillSame) return;
     await workspaceMotion.reverse();
     if (!mounted) return;
-    session.selectWorkspace(value);
+    session.selectWorkspace(value, spaceId: spaceId);
     _attachGadgets();
     await session.loadRooms();
     await session.loadSpaceBots();
@@ -835,8 +847,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
               space: space,
               onUpdated: (updated) {
                 session.loadWorkspaces();
-                if (updated.name != workspace && mounted) {
-                  switchWorkspace(updated.name);
+                if (updated.id != session.activeSpaceId && mounted) {
+                  switchWorkspace(updated.name, spaceId: updated.id);
                 }
               },
               onExit: () {
@@ -848,10 +860,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
           );
         });
       },
-      onPick: (value) async {
+      onPick: (value, {spaceId = ''}) async {
         Navigator.pop(context);
         await Future<void>.delayed(const Duration(milliseconds: 320));
-        if (mounted) await switchWorkspace(value);
+        if (mounted) await switchWorkspace(value, spaceId: spaceId);
       },
     );
     if (sheet) {
@@ -875,8 +887,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
         space: sp,
         onUpdated: (updated) {
           session.loadWorkspaces();
-          if (updated.name != workspace && mounted) {
-            switchWorkspace(updated.name);
+          if (updated.id != session.activeSpaceId && mounted) {
+            switchWorkspace(updated.name, spaceId: updated.id);
           }
         },
         onExit: () {

@@ -19,6 +19,7 @@ class _FileStubClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     switch (action) {
       case 'file_upload':
@@ -51,10 +52,28 @@ class _FileStubClient extends AsemanApiClient {
       case 'file_delete':
         files.remove(body['file']);
         return const ApiResponse(200, {'ok': true});
+      case 'dm_file_upload':
+        lastDmUpload = Map<String, dynamic>.from(body);
+        final id = 'dm-${seq++}';
+        final rec = <String, dynamic>{
+          'file_id': id,
+          'id': id,
+          'name': body['name'],
+          'mime': body['mime'],
+          'size': base64Decode(body['data'] as String).length,
+          'content_url': '/v1/files/$id/content',
+          if (body['voice'] == true) 'voice': true,
+          if (body['duration_ms'] != null) 'duration_ms': body['duration_ms'],
+          if (body['waveform'] != null) 'waveform': body['waveform'],
+        };
+        files[id] = rec;
+        return ApiResponse(200, rec);
       default:
         return const ApiResponse(200, <String, dynamic>{});
     }
   }
+
+  Map<String, dynamic>? lastDmUpload;
 }
 
 void main() {
@@ -111,6 +130,45 @@ void main() {
     await service.deleteFile(list[0].id);
     final after = await service.fetchSpaceFiles('space-1');
     expect(after, hasLength(1));
+  });
+
+  test('dmFileUpload sends Decillion voice metadata on users.dm_file_upload',
+      () async {
+    final client = _FileStubClient();
+    final service = AsemanService(client);
+    final f = await service.dmFileUpload(
+      'peer-1',
+      name: 'voice-note.wav',
+      mime: 'audio/wav',
+      bytes: Uint8List.fromList([1, 2, 3, 4]),
+      voice: true,
+      durationMs: 7400,
+      waveform: const [10, 55, 100, 40],
+    );
+
+    expect(client.lastDmUpload?['to'], 'peer-1');
+    expect(client.lastDmUpload?['voice'], isTrue);
+    expect(client.lastDmUpload?['duration_ms'], 7400);
+    expect(client.lastDmUpload?['waveform'], [10, 55, 100, 40]);
+    expect(client.lastDmUpload?['mime'], 'audio/wav');
+    expect(f.voice, isTrue);
+    expect(f.durationMs, 7400);
+    expect(f.waveform, [10, 55, 100, 40]);
+  });
+
+  test('dmFileUpload omits voice fields for plain audio attachments', () async {
+    final client = _FileStubClient();
+    final service = AsemanService(client);
+    await service.dmFileUpload(
+      'peer-1',
+      name: 'song.mp3',
+      mime: 'audio/mpeg',
+      bytes: Uint8List.fromList([9]),
+    );
+
+    expect(client.lastDmUpload?.containsKey('voice'), isFalse);
+    expect(client.lastDmUpload?.containsKey('duration_ms'), isFalse);
+    expect(client.lastDmUpload?.containsKey('waveform'), isFalse);
   });
 
   test('RoomMessage.fromJson parses attachment metadata', () {

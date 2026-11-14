@@ -55,21 +55,30 @@ class AsemanApiClient {
   bool get isAuthenticated => session != null && session!.isLoggedIn;
 
   /// Call an action at /v1/{namespace}/{action}.
+  ///
+  /// [anonymous] matches Expo `call(..., { anonymous: true })`: no bearer and
+  /// no Ed25519 headers (sign-in and public auth.config).
   Future<ApiResponse> call(
     String namespace,
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     final path = '/v1/$namespace/$action';
-    final rawBody = body.isEmpty ? '' : jsonEncode(body);
+    // Always send a JSON object. The node rejects an empty body in Decode, and
+    // the signature covers the exact bytes on the wire (same as the Expo client).
+    final rawBody = jsonEncode(body);
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (session?.token != null && session!.token.isNotEmpty)
+      'Accept': 'application/json',
+      if (!anonymous &&
+          session?.token != null &&
+          session!.token.isNotEmpty)
         'Authorization': 'Bearer ${session!.token}',
     };
     final signer = this.signer;
-    if (signer != null && signer.hasKey) {
+    if (!anonymous && signer != null && signer.hasKey) {
       headers.addAll(
         await signer.signRequest(method: 'POST', path: path, body: rawBody),
       );
@@ -78,7 +87,7 @@ class AsemanApiClient {
     late http.Response resp;
     try {
       resp = await _http
-          .post(uri, headers: headers, body: rawBody.isEmpty ? null : rawBody)
+          .post(uri, headers: headers, body: rawBody)
           .timeout(requestTimeout ?? timeout);
     } on TimeoutException {
       throw const ApiException(

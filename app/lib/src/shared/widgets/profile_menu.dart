@@ -2,9 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../core/deferred/deferred_loader.dart';
-
+import '../../app.dart' show AsemanApp;
 import '../../app_dependencies.dart';
+import '../../core/deferred/deferred_loader.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
@@ -20,6 +20,8 @@ import '../../features/market/presentation/bots_store_screen.dart'
 import '../../features/messenger/presentation/messenger_panel.dart';
 import '../../features/settings/presentation/settings_screen.dart'
     deferred as settings_ui;
+import '../../features/settings/presentation/widgets/devices_panel.dart'
+    deferred as devices_ui;
 import 'avatar_editor.dart';
 import 'overlay_panels.dart';
 import 'sky_ui.dart';
@@ -30,9 +32,10 @@ final _store = DeferredLoader(() => market.loadLibrary());
 final _developerConsole = DeferredLoader(() => developer.loadLibrary());
 final _adminConsole = DeferredLoader(() => admin.loadLibrary());
 final _settingsScreen = DeferredLoader(() => settings_ui.loadLibrary());
+final _devicesPanel = DeferredLoader(() => devices_ui.loadLibrary());
 
 /// Loads the profile menu's screens (store, developer console, admin
-/// console, settings).
+/// console, settings, devices).
 Future<void> loadProfileScreens() async {
   await Future.wait([
     for (final loader in [
@@ -40,6 +43,7 @@ Future<void> loadProfileScreens() async {
       _developerConsole,
       _adminConsole,
       _settingsScreen,
+      _devicesPanel,
     ])
       loader.ensure() ?? Future<void>.value(),
   ]);
@@ -49,6 +53,7 @@ enum ProfileAction {
   store,
   wallet,
   messages,
+  devices,
   developer,
   admin,
   settings,
@@ -124,40 +129,77 @@ Future<void> showProfileMenu(
   if (action != null) await dispatchProfileAction(context, dependencies, action);
 }
 
+/// Prefer the app navigator — You-tab builder contexts can be deactivated
+/// while a deferred library loads (theme sync rebuilds the shell).
+BuildContext? _navContext(BuildContext fallback) {
+  final nav = AsemanApp.navigatorKey.currentContext;
+  if (nav != null && nav.mounted) return nav;
+  return fallback.mounted ? fallback : null;
+}
+
 Future<void> dispatchProfileAction(
   BuildContext context,
   AppDependencies dependencies,
   ProfileAction action,
 ) async {
-  switch (action) {
-    case ProfileAction.store:
-      await _store.ensure();
-      if (!context.mounted) return;
-      await market.showBotsStore(context, dependencies);
-    case ProfileAction.wallet:
-      await showAccountPanel(context, dependencies, AccountArea.wallet);
-    case ProfileAction.messages:
-      await showMessenger(context, dependencies);
-    case ProfileAction.developer:
-      await _developerConsole.ensure();
-      if (!context.mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              developer.DeveloperConsole(service: dependencies.service)));
-    case ProfileAction.admin:
-      await _adminConsole.ensure();
-      if (!context.mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => admin.AdminScreen(dependencies: dependencies),
-      ));
-    case ProfileAction.settings:
-      await _settingsScreen.ensure();
-      if (!context.mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              settings_ui.SettingsScreen(dependencies: dependencies)));
-    case ProfileAction.logout:
-      await dependencies.sessionController.logout();
+  try {
+    switch (action) {
+      case ProfileAction.store:
+        await _store.ensure();
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await market.showBotsStore(ctx, dependencies);
+        return;
+      case ProfileAction.wallet:
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await showAccountPanel(ctx, dependencies, AccountArea.wallet);
+        return;
+      case ProfileAction.messages:
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await showMessenger(ctx, dependencies);
+        return;
+      case ProfileAction.devices:
+        await _devicesPanel.ensure();
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await devices_ui.showDevicesPanel(ctx, dependencies);
+        return;
+      case ProfileAction.developer:
+        await _developerConsole.ensure();
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await Navigator.of(ctx).push(MaterialPageRoute<void>(
+            builder: (_) =>
+                developer.DeveloperConsole(service: dependencies.service)));
+        return;
+      case ProfileAction.admin:
+        await _adminConsole.ensure();
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await Navigator.of(ctx).push(MaterialPageRoute<void>(
+          builder: (_) => admin.AdminScreen(dependencies: dependencies),
+        ));
+        return;
+      case ProfileAction.settings:
+        await _settingsScreen.ensure();
+        final ctx = _navContext(context);
+        if (ctx == null) return;
+        await Navigator.of(ctx).push(MaterialPageRoute<void>(
+            builder: (_) =>
+                settings_ui.SettingsScreen(dependencies: dependencies)));
+        return;
+      case ProfileAction.logout:
+        await dependencies.sessionController.logout();
+        return;
+    }
+  } catch (e) {
+    final ctx = _navContext(context);
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(content: Text('Couldn’t open: $e')),
+    );
   }
 }
 
@@ -262,6 +304,11 @@ class ProfileMenuBody extends StatelessWidget {
                   label: 'Messages',
                   onTap: () => onSelect(ProfileAction.messages),
                 ),
+              QuietTile(
+                icon: Icons.devices_outlined,
+                label: 'Devices',
+                onTap: () => onSelect(ProfileAction.devices),
+              ),
               QuietTile(
                 icon: Icons.api_rounded,
                 label: 'Developer API',

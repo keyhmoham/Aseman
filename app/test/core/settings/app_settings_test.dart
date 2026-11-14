@@ -14,6 +14,11 @@ void main() {
     await first.restore();
     expect(first.themeMode, ThemeMode.system);
     expect(first.accent, AppSettingsController.defaultAccent);
+    expect(
+      first.accent.toARGB32(),
+      DefaultThemePacks.sky.defaultPalette.accent.toARGB32(),
+    );
+    expect(DefaultThemePacks.sky.defaultPalette.id, 'blue');
 
     first.setThemeMode(ThemeMode.dark);
     first.setPalette(

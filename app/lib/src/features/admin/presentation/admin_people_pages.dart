@@ -555,13 +555,10 @@ Widget _buildProjectsPage(_AppPageContentState state) {
       (sum, s) => sum + _number(s['spent'] ?? _map(s['usage'])['spent']),
     );
     final palette = adminPalette(state.context);
-    final adminsSpace = _map(state.widget.results['spaces.admins_space_get']);
-    final adminsSpaceId = '${_map(adminsSpace['space'])['id'] ?? ''}';
+    // Expo never calls spaces.admins_space_*; no admins-space card.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        state._adminsSpaceCard(spaces, adminsSpace),
-        const SizedBox(height: 18),
         AdminGrid(
           maxColumns: 2,
           minTileWidth: 340,
@@ -686,9 +683,7 @@ Widget _buildProjectsPage(_AppPageContentState state) {
                       '${s['name'] ?? s['id']}',
                       size: 34,
                       avatar: _avatarOf(s),
-                      icon: '${s['id']}' == adminsSpaceId
-                          ? Icons.admin_panel_settings_rounded
-                          : s['home'] == true
+                      icon: s['home'] == true
                           ? Icons.home_rounded
                           : Icons.folder_rounded,
                     ),
@@ -696,7 +691,7 @@ Widget _buildProjectsPage(_AppPageContentState state) {
                     Expanded(
                       child: _primaryCell(
                         '${s['name'] ?? s['id']}',
-                        '${'${s['id']}' == adminsSpaceId ? 'Admins space · ' : ''}${s['home'] == true ? 'Home · ' : ''}${_shortId(s['id'])}',
+                        '${s['home'] == true ? 'Home · ' : ''}${_shortId(s['id'])}',
                       ),
                     ),
                   ],
@@ -791,9 +786,7 @@ Widget _buildAdminsSpaceCard(
                   'Admins already in ${chosen.isEmpty ? 'the project' : name} stay members; new admins are no longer added.',
                   'Stop',
                 )) {
-                  await state.widget.onDirectAction('spaces', 'admins_space_set', {
-                    'space': '',
-                  });
+                  // Expo has no spaces.admins_space_set.
                 }
               },
               child: const Text('Clear'),
@@ -809,27 +802,13 @@ Future<void> _buildPickAdminsSpace(
     List<Map<String, dynamic>> spaces,
     String currentId,
   ) async {
-    // Direct conversations are between two accounts and cannot take members.
-    final candidates =
-        spaces.where((s) => '${s['direct_key'] ?? ''}'.isEmpty).toList()..sort(
-          (a, b) => '${a['name'] ?? a['id']}'.toLowerCase().compareTo(
-            '${b['name'] ?? b['id']}'.toLowerCase(),
-          ),
-        );
-    final picked = await showAppDialog<Map<String, dynamic>>(
-      context: state.context,
-      builder: (context) =>
-          _AdminsSpacePicker(projects: candidates, currentId: currentId),
-    );
-    if (picked == null || '${picked['id']}' == currentId) return;
-    await state.widget.onDirectAction('spaces', 'admins_space_set', {
-      'space': '${picked['id']}',
-    });
+    // Expo has no spaces.admins_space_*; picker is a no-op.
+    return;
   }
 
 Widget _buildChatReportsPage(_AppPageContentState state) {
     final scheme = Theme.of(state.context).colorScheme;
-    final response = _map(state.widget.results['spaces.admin_chat_reports']);
+    final response = _map(state.widget.results['users.admin_chat_reports']);
     final reports = _listOfMaps(response['reports']);
     final open = _integer(response['open']);
     const statuses = ['open', 'resolved', 'dismissed', 'all'];
@@ -848,7 +827,7 @@ Widget _buildChatReportsPage(_AppPageContentState state) {
 
     Future<void> resolve(Map<String, dynamic> r, String to) async {
       try {
-        await state.widget.onDirectAction('spaces', 'admin_chat_report_resolve', {
+        await state.widget.onDirectAction('users', 'admin_chat_report_resolve', {
           'id': r['id'],
           'status': to,
         });
@@ -891,7 +870,7 @@ Widget _buildChatReportsPage(_AppPageContentState state) {
                 selected: s == status,
                 onSelected: (_) {
                   state.setState(() => state.reportStatus = s);
-                  state.widget.onQuery?.call('spaces.admin_chat_reports', {
+                  state.widget.onQuery?.call('users.admin_chat_reports', {
                     'status': s,
                   });
                 },

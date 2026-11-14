@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'app_colors.dart';
 import 'app_shape.dart';
 import 'app_surfaces.dart';
 import 'aseman_tokens.dart';
@@ -90,22 +89,43 @@ abstract final class AppTheme {
       surfaceContainer: nest(dark ? .06 : .045),
       surfaceContainerHigh: surfaceHigh,
       surfaceContainerHighest: nest(dark ? .10 : .07),
-      primaryContainer: Color.alphaBlend(seed.withValues(alpha: .14), surface),
+      // M3 Expressive container roles: soft accent tonal in light, quieter
+      // mid-tone in dark (FAB default = primary-container; tonal buttons /
+      // nav indicators = secondary-container). Never full primary wash.
+      primaryContainer: Color.alphaBlend(
+        seed.withValues(alpha: dark ? .26 : .14),
+        surface,
+      ),
       onPrimaryContainer: dark
           ? seed
           : Color.alphaBlend(seed.withValues(alpha: .72), onSurf),
       secondaryContainer: Color.alphaBlend(
-        secondary.withValues(alpha: .12),
+        secondary.withValues(alpha: dark ? .26 : .14),
         surface,
       ),
+      onSecondaryContainer: dark
+          ? secondary
+          : Color.alphaBlend(secondary.withValues(alpha: .72), onSurf),
       tertiaryContainer: Color.alphaBlend(
-        (tokens.success ?? seeded.tertiary).withValues(alpha: .12),
+        (tokens.success ?? seeded.tertiary).withValues(alpha: dark ? .26 : .14),
         surface,
       ),
+      onTertiaryContainer: dark
+          ? (tokens.success ?? seeded.tertiary)
+          : Color.alphaBlend(
+              (tokens.success ?? seeded.tertiary).withValues(alpha: .72),
+              onSurf,
+            ),
       errorContainer: Color.alphaBlend(
-        (tokens.danger ?? seeded.error).withValues(alpha: .12),
+        (tokens.danger ?? seeded.error).withValues(alpha: dark ? .26 : .14),
         surface,
       ),
+      onErrorContainer: dark
+          ? (tokens.danger ?? seeded.error)
+          : Color.alphaBlend(
+              (tokens.danger ?? seeded.error).withValues(alpha: .72),
+              onSurf,
+            ),
     );
     final extension = AsemanTokens.fromTokens(
       packId: pack.id,
@@ -262,7 +282,9 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
     shape: WidgetStatePropertyAll(
         menu.border(sideColor: borderColor)),
   );
-  final buttonStyle = ThemeChrome.buttonStyle(base, tokens: tokens);
+  final filledStyle = ThemeChrome.filledButtonStyle(base, tokens: tokens);
+  final elevatedStyle = ThemeChrome.elevatedButtonStyle(base, tokens: tokens);
+  final outlinedStyle = ThemeChrome.outlinedButtonStyle(base, tokens: tokens);
   final iconStyle = ThemeChrome.iconButtonStyle(base, tokens: tokens);
   OutlineInputBorder fieldBorder(Color color, [double width = 1]) =>
       OutlineInputBorder(
@@ -280,20 +302,18 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
               top: Radius.circular(
                   sheet.radius <= 0 ? tokens.radiusCard : sheet.radius)),
         );
-  final navIndicator = Color.alphaBlend(
-    scheme.primary.withValues(
-        alpha: scheme.brightness == Brightness.dark ? .22 : .12),
-    scheme.surface.withValues(
-        alpha: scheme.brightness == Brightness.dark ? .55 : .88),
-  );
   return base.copyWith(
     extensions: [tokens],
-    filledButtonTheme: FilledButtonThemeData(style: buttonStyle),
-    elevatedButtonTheme: ElevatedButtonThemeData(style: buttonStyle),
-    outlinedButtonTheme: OutlinedButtonThemeData(style: buttonStyle),
+    // M3 Expressive button colors: filled = primary/on-primary; tonal =
+    // secondary-container; elevated = surface-container-low; outlined /
+    // text keep low emphasis. Shape/padding still follow the pack recipe.
+    filledButtonTheme: FilledButtonThemeData(style: filledStyle),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: elevatedStyle),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: outlinedStyle),
     textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
             shape: WidgetStatePropertyAll(buttonShape),
+            foregroundColor: WidgetStatePropertyAll(scheme.primary),
             splashFactory: _inkFactory(lang.interaction.ink),
             textStyle: WidgetStatePropertyAll(
                 label.copyWith(fontWeight: FontWeight.w700)))),
@@ -321,21 +341,26 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       backgroundColor: overlay,
       elevation: nav.elevation,
       height: tokens.navHeight,
-      indicatorColor: navIndicator,
-      indicatorShape: nav.border(sideColor: scheme.primary),
+      // M3 Expressive: active indicator = secondary-container.
+      indicatorColor: scheme.secondaryContainer,
+      indicatorShape: nav.border(),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return label.copyWith(
           fontSize: 11,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color: selected ? scheme.primary : scheme.onSurfaceVariant,
+          // Vertical items: label sits below the pill → secondary.
+          color: selected ? scheme.secondary : scheme.onSurfaceVariant,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
           size: 22,
-          color: selected ? scheme.primary : scheme.onSurfaceVariant,
+          // Icon sits on the indicator → on-secondary-container.
+          color: selected
+              ? scheme.onSecondaryContainer
+              : scheme.onSurfaceVariant,
         );
       }),
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -459,22 +484,21 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
           fontWeight: FontWeight.w500),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: fab.fill == FillKind.solid
-          ? scheme.primaryContainer
-          : AppFab.mistOf(scheme, tokens: tokens),
-      foregroundColor: fab.fill == FillKind.solid
-          ? scheme.onPrimaryContainer
-          : AppFab.inkOf(scheme),
-      focusColor: scheme.primary.withValues(alpha: .12),
-      hoverColor: scheme.primary.withValues(alpha: lang.interaction.hoverAlpha),
-      splashColor: scheme.primary.withValues(alpha: .12),
-      elevation: fab.elevation,
-      focusElevation: fab.elevation,
-      hoverElevation: fab.elevation,
-      highlightElevation: fab.elevation,
+      // M3 Expressive default FAB: primary-container / on-primary-container.
+      backgroundColor: AppFab.containerOf(scheme, tokens: tokens),
+      foregroundColor: AppFab.inkOf(scheme, tokens: tokens),
+      focusColor: AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
+      hoverColor: AppFab.inkOf(scheme, tokens: tokens)
+          .withValues(alpha: lang.interaction.hoverAlpha),
+      splashColor:
+          AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
+      elevation: fab.elevation > 0 ? fab.elevation : 3,
+      focusElevation: fab.elevation > 0 ? fab.elevation : 3,
+      hoverElevation: fab.elevation > 0 ? fab.elevation + 1 : 4,
+      highlightElevation: fab.elevation > 0 ? fab.elevation : 3,
       disabledElevation: 0,
       enableFeedback: lang.interaction.ink != InkKind.none,
-      shape: fab.border(sideColor: scheme.primary),
+      shape: AppFab.shapeOf(scheme, tokens: tokens),
       extendedIconLabelSpacing: 10,
       extendedPadding: EdgeInsetsDirectional.only(
           start: fab.paddingH, end: fab.paddingH + 4),
@@ -490,10 +514,10 @@ InteractiveInkFeatureFactory? _inkFactory(InkKind ink) => switch (ink) {
       InkKind.none => NoSplash.splashFactory,
     };
 
-/// Soft mist floating actions — translucent wash, hairline rim, accent ink.
-///
-/// Replaces solid `primaryContainer` FABs so floating actions match SoftCard /
-/// glass language. Prefer [SkyFab] at call sites for the glow capsule.
+/// M3 Expressive floating actions — opaque primary-container / on-primary-
+/// container (soft tonal in light, quieter mid-tone in dark). No mist wash,
+/// hairline rim, or accent bloom. Prefer [SkyFab] when a hand-rolled capsule
+/// is needed; stock [FloatingActionButton] reads the same theme roles.
 abstract final class AppFab {
   /// Regular / extended FAB corner (16dp).
   static const ShapeBorder shape = RoundedRectangleBorder(
@@ -510,31 +534,54 @@ abstract final class AppFab {
     borderRadius: BorderRadius.all(Radius.circular(AppShape.fabLarge)),
   );
 
-  /// Quiet accent mist over the page surface (not a solid container fill).
-  static Color mistOf(
+  /// M3 Expressive FAB container: primary-container (or error-container).
+  static Color containerOf(
     ColorScheme scheme, {
     bool danger = false,
     AsemanTokens? tokens,
   }) {
-    final accent = danger ? scheme.error : scheme.primary;
-    final wash = tokens?.fabMistAlpha ??
-        (scheme.brightness == Brightness.dark ? .24 : .14);
-    return Color.alphaBlend(
-      accent.withValues(alpha: wash),
-      scheme.surface,
-    );
+    if (danger) return scheme.errorContainer;
+    final fab = tokens?.control('fab');
+    return switch (fab?.fill) {
+      FillKind.tonal => scheme.secondaryContainer,
+      FillKind.outline || FillKind.text => Colors.transparent,
+      _ => scheme.primaryContainer,
+    };
   }
 
-  /// Icon / label ink on a mist FAB.
-  static Color inkOf(ColorScheme scheme, {bool danger = false}) =>
-      danger ? scheme.error : scheme.primary;
+  /// Icon / label ink on [containerOf] — on-primary-container (or
+  /// on-secondary-container when the pack FAB recipe is tonal).
+  static Color inkOf(
+    ColorScheme scheme, {
+    bool danger = false,
+    AsemanTokens? tokens,
+  }) {
+    if (danger) return scheme.onErrorContainer;
+    final fab = tokens?.control('fab');
+    return switch (fab?.fill) {
+      FillKind.tonal => scheme.onSecondaryContainer,
+      _ => scheme.onPrimaryContainer,
+    };
+  }
 
-  /// Hairline rim keyed to the accent.
-  static Color rimOf(ColorScheme scheme, {bool danger = false}) {
+  /// @Deprecated Kept for call sites mid-migration; prefer [containerOf].
+  static Color mistOf(
+    ColorScheme scheme, {
+    bool danger = false,
+    AsemanTokens? tokens,
+  }) =>
+      containerOf(scheme, danger: danger, tokens: tokens);
+
+  /// Hairline only when the pack recipe asks for a border (e.g. neo-brutal).
+  static Color? rimOf(
+    ColorScheme scheme, {
+    bool danger = false,
+    AsemanTokens? tokens,
+  }) {
+    final fab = tokens?.control('fab');
+    if (fab == null || fab.borderWidth <= 0) return null;
     final accent = danger ? scheme.error : scheme.primary;
-    return accent.withValues(alpha: scheme.brightness == Brightness.dark
-        ? .42
-        : .30);
+    return accent.withValues(alpha: fab.borderAlpha);
   }
 
   static ShapeBorder shapeOf(
@@ -544,172 +591,94 @@ abstract final class AppFab {
     AsemanTokens? tokens,
   }) {
     final fab = tokens?.control('fab');
+    final rim = rimOf(scheme, danger: danger, tokens: tokens);
     if (fab != null && radius == null) {
-      return fab.border(sideColor: rimOf(scheme, danger: danger));
+      return fab.border(sideColor: rim);
     }
     return RoundedRectangleBorder(
       borderRadius: BorderRadius.all(
           Radius.circular(radius ?? tokens?.radiusFab ?? AppShape.fab)),
-      side: BorderSide(color: rimOf(scheme, danger: danger)),
+      side: rim == null ? BorderSide.none : BorderSide(color: rim),
     );
   }
 
-  /// Soft depth + accent bloom under the capsule.
+  /// Neutral depth under floating chrome (no accent bloom).
   static List<BoxShadow> glowOf(ColorScheme scheme, {bool danger = false}) {
-    final accent = danger ? scheme.error : scheme.primary;
     final dark = scheme.brightness == Brightness.dark;
     return [
       BoxShadow(
-        color: Colors.black.withValues(alpha: dark ? .30 : .08),
-        blurRadius: 18,
-        offset: const Offset(0, 8),
-      ),
-      BoxShadow(
-        color: accent.withValues(alpha: dark ? .22 : .16),
-        blurRadius: 22,
-        spreadRadius: -2,
-        offset: const Offset(0, 4),
+        color: Colors.black.withValues(alpha: dark ? .28 : .10),
+        blurRadius: 16,
+        offset: const Offset(0, 6),
       ),
     ];
   }
 
-  /// Fill + rim for hand-rolled mist chips ([SkyFab], compose control).
-  ///
-  /// Honors the pack FAB [FillKind]: solid / outline / glass stay flat;
-  /// gradient keeps the Sky mist wash.
+  /// Opaque M3 container fill for hand-rolled FABs ([SkyFab]).
   static Decoration decorationOf(
     ColorScheme scheme, {
     double? radius,
     bool danger = false,
-    bool glow = true,
+    bool glow = false,
     AsemanTokens? tokens,
   }) {
-    final mist = mistOf(scheme, danger: danger, tokens: tokens);
+    final fill = containerOf(scheme, danger: danger, tokens: tokens);
     final fab = tokens?.control('fab');
-    final rim = rimOf(scheme, danger: danger);
-    final fillKind = fab?.fill ?? FillKind.gradient;
     final recipe = fab == null
         ? ControlRecipe(
             shape: ShapeKind.rounded,
             radius: radius ?? tokens?.radiusFab ?? AppShape.fab,
-            borderWidth: 1,
           )
         : (radius != null ? fab.copyWith(radius: radius) : fab);
+    final rim = rimOf(scheme, danger: danger, tokens: tokens);
     final shape = ThemeChrome.outlinedBorder(
       recipe,
       sideColor: rim,
-      borderWidth: recipe.borderWidth > 0
-          ? recipe.borderWidth
-          : (fillKind == FillKind.outline ? 1.5 : 0),
+      borderWidth: rim == null ? 0 : recipe.borderWidth,
     );
     final shadows = glow
         ? (tokens?.language.shadow.resolve(scheme,
                 accent: danger ? scheme.error : scheme.primary) ??
             glowOf(scheme, danger: danger))
         : null;
-    final cyan = tokens?.cyan ?? AppColors.cyan;
-    switch (fillKind) {
-      case FillKind.solid:
-        return ShapeDecoration(
-          color: mist,
-          shape: shape,
-          shadows: shadows,
-        );
-      case FillKind.outline:
-      case FillKind.text:
-        return ShapeDecoration(
-          color: Colors.transparent,
-          shape: shape,
-          shadows: shadows,
-        );
-      case FillKind.glass:
-      case FillKind.tonal:
-        return ShapeDecoration(
-          color: mist.withValues(alpha: scheme.brightness == Brightness.dark
-              ? .55
-              : .72),
-          shape: shape,
-          shadows: shadows,
-        );
-      case FillKind.gradient:
-        // ShapeDecoration has no gradient; fall back to rounded BoxDecoration
-        // when the recipe is not cut (cut packs use solid above via tokens).
-        if (recipe.shape == ShapeKind.cut || recipe.shape == ShapeKind.sharp) {
-          return ShapeDecoration(
-            color: mist,
-            shape: shape,
-            shadows: shadows,
-          );
-        }
-        return BoxDecoration(
-          borderRadius: recipe.borderRadius,
-          border: recipe.borderWidth > 0
-              ? Border.all(
-                  color: rim.withValues(alpha: recipe.borderAlpha),
-                  width: recipe.borderWidth,
-                )
-              : Border.all(color: rim),
-          boxShadow: shadows,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              mist,
-              Color.alphaBlend(
-                (danger ? scheme.error : cyan).withValues(
-                  alpha: scheme.brightness == Brightness.dark ? .10 : .06,
-                ),
-                mist,
-              ),
-            ],
-          ),
-        );
-    }
+    return ShapeDecoration(
+      color: fill,
+      shape: shape,
+      shadows: shadows,
+    );
   }
 
-  /// Soft selected-tab pill used by [SegmentedTabBar] / [HomeTabBar].
+  /// M3 Expressive selected-tab indicator ([SegmentedTabBar] / [HomeTabBar]):
+  /// opaque [ColorScheme.secondaryContainer] — soft accent tonal in light,
+  /// quieter accent mid-tone in dark (not full primary, no bubble chrome).
   static BoxDecoration tabIndicatorOf(
     ColorScheme scheme, {
     double? radius,
     AsemanTokens? tokens,
   }) {
-    final dark = scheme.brightness == Brightness.dark;
     final nav = tokens?.control('nav_pill');
     final r = radius ?? nav?.radius ?? 22;
     final corners = nav?.borderRadius ?? BorderRadius.circular(r);
     return BoxDecoration(
-      color: Color.alphaBlend(
-        scheme.primary.withValues(alpha: dark ? .22 : .12),
-        scheme.surface.withValues(alpha: dark ? .55 : .88),
-      ),
+      color: scheme.secondaryContainer,
       borderRadius: corners,
-      border: Border.all(
-        color: nav != null && nav.borderWidth > 0
-            ? rimOf(scheme).withValues(alpha: nav.borderAlpha)
-            : rimOf(scheme),
-        width: nav != null && nav.borderWidth > 0 ? nav.borderWidth : 1,
-      ),
-      boxShadow: tokens?.language.shadow.resolve(scheme, accent: scheme.primary) ??
-          [
-            BoxShadow(
-              color: scheme.primary.withValues(alpha: dark ? .18 : .10),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
     );
   }
 
+  /// Ink drawn on [tabIndicatorOf] — [ColorScheme.onSecondaryContainer].
+  static Color tabIndicatorInkOf(ColorScheme scheme) =>
+      scheme.onSecondaryContainer;
+
   static Color backgroundOf(BuildContext context, {bool danger = false}) =>
-      mistOf(Theme.of(context).colorScheme,
+      containerOf(Theme.of(context).colorScheme,
           danger: danger, tokens: AsemanTokens.maybeOf(context));
 
   static Color foregroundOf(BuildContext context, {bool danger = false}) =>
-      inkOf(Theme.of(context).colorScheme, danger: danger);
+      inkOf(Theme.of(context).colorScheme,
+          danger: danger, tokens: AsemanTokens.maybeOf(context));
 }
 
-/// Soft mist floating action — icon, or icon + label. Prefer this over a
-/// stock [FloatingActionButton] so actions match SoftCard / glass chrome.
+/// M3 Expressive floating action — solid primary-container capsule.
 class SkyFab extends StatelessWidget {
   const SkyFab({
     super.key,
@@ -738,7 +707,7 @@ class SkyFab extends StatelessWidget {
     final radius = mini
         ? (tokens?.radiusFabSmall ?? AppShape.fabSmall)
         : (fab?.radius ?? tokens?.radiusFab ?? AppShape.fab);
-    final ink = AppFab.inkOf(scheme, danger: danger);
+    final ink = AppFab.inkOf(scheme, danger: danger, tokens: tokens);
     final iconSz = tokens?.language.iconSize ?? (mini ? 20 : 22);
     final pad = label == null
         ? EdgeInsets.all(mini ? 10 : (fab?.paddingV ?? 14))
@@ -783,8 +752,15 @@ class SkyFab extends StatelessWidget {
       danger: danger,
       tokens: tokens,
     );
+    final elevation = fab?.elevation ?? 0;
+    final shadows = elevation > 0
+        ? tokens?.language.shadow.resolve(scheme,
+            accent: danger ? scheme.error : scheme.primary)
+        : null;
     Widget button = Material(
-      color: Colors.transparent,
+      color: AppFab.containerOf(scheme, danger: danger, tokens: tokens),
+      elevation: elevation > 0 ? elevation : 3,
+      shadowColor: scheme.shadow,
       clipBehavior: Clip.antiAlias,
       shape: shape,
       child: InkWell(
@@ -801,27 +777,15 @@ class SkyFab extends StatelessWidget {
           accent: ink,
           ink: inkKind,
         ),
-        child: Ink(
-          decoration: AppFab.decorationOf(
-            scheme,
-            radius: mini ? radius : null,
-            danger: danger,
-            glow: false,
-            tokens: tokens,
-          ),
-          child: body,
-        ),
+        child: body,
       ),
     );
-    button = DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: shape,
-        shadows: tokens?.language.shadow.resolve(scheme,
-                accent: danger ? scheme.error : scheme.primary) ??
-            AppFab.glowOf(scheme, danger: danger),
-      ),
-      child: button,
-    );
+    if (shadows != null && shadows.isNotEmpty) {
+      button = DecoratedBox(
+        decoration: ShapeDecoration(shape: shape, shadows: shadows),
+        child: button,
+      );
+    }
     if (heroTag != null) {
       button = Hero(tag: heroTag!, child: button);
     }

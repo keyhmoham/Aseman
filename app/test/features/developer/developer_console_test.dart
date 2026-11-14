@@ -154,25 +154,36 @@ class _Service extends FakeAsemanService {
         return {'content': '# Writing workflows: a guide for models'};
       case 'workflow_runs':
         return {'runs': runs};
-      case 'platform_catalog':
-        return {
-          'object': 'list',
-          'base': '/v1/platform',
-          'namespaces': [
-            {
-              'name': 'spaces',
-              'actions': [
-                {
-                  'name': 'message_send',
-                  'summary': 'Send a message',
-                  'path': '/v1/platform/spaces/message_send',
-                }
-              ],
-            }
-          ],
-        };
     }
     return const {};
+  }
+
+  @override
+  Future<dynamic> invokeAction(
+    String namespace,
+    String action, {
+    Map<String, dynamic> body = const {},
+    Duration? timeout,
+    bool anonymous = false,
+  }) async {
+    if (namespace == 'admin' && action == 'actions_list') {
+      calls.add('admin.actions_list');
+      return {
+        'namespaces': [
+          {
+            'namespace': 'spaces',
+            'actions': [
+              {
+                'name': 'message_send',
+                'summary': 'Send a message',
+              }
+            ],
+          }
+        ],
+      };
+    }
+    return super.invokeAction(namespace, action,
+        body: body, timeout: timeout, anonymous: anonymous);
   }
 }
 

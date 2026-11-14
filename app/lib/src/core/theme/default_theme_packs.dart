@@ -38,10 +38,11 @@ abstract final class DefaultThemePacks {
         ),
         shell: const ShellLayoutSpec(),
         // Accents colour interactive chrome only — surfaces stay neutral greys.
+        // Blue is first so [ThemePack.defaultPalette] matches the app default.
         palettes: const [
           ThemePaletteOption(
-            id: 'violet',
-            label: 'Violet',
+            id: 'blue',
+            label: 'Blue',
             accent: AppColors.primary,
             secondary: Color(0xFF6B7280),
             success: AppColors.success,
@@ -49,9 +50,9 @@ abstract final class DefaultThemePacks {
             danger: AppColors.danger,
           ),
           ThemePaletteOption(
-            id: 'blue',
-            label: 'Blue',
-            accent: Color(0xFF3B82F6),
+            id: 'violet',
+            label: 'Violet',
+            accent: AppColors.violet,
             secondary: Color(0xFF6B7280),
             success: AppColors.success,
             warning: AppColors.warning,

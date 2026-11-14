@@ -13,11 +13,13 @@ import '../theme/theme_pack.dart';
 /// `localStorage` on the web, so the choice survives a restart everywhere.
 class AppSettingsController extends ChangeNotifier {
   static const storageKey = 'aseman.theme';
-  static const defaultAccent = Color(0xFF8B7BFF);
+  /// Sky pack blue — matches [DefaultThemePacks.sky] default palette.
+  static const defaultAccent = Color(0xFF3B82F6);
 
   ThemeMode themeMode = ThemeMode.system;
   Color accent = defaultAccent;
   /// Empty until the user picks a pack palette (or restore finds one).
+  /// Fresh installs resolve to Sky's blue via [defaultAccent] matching.
   String paletteId = '';
 
   bool _dirty = false;
@@ -59,6 +61,33 @@ class AppSettingsController extends ChangeNotifier {
   void setThemeMode(ThemeMode value) {
     if (themeMode == value) return;
     themeMode = value;
+    _epoch++;
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// Apply a preference loaded from session metadata without marking dirty
+  /// for an immediate re-upload (caller still may schedule a push).
+  void hydrateThemeMode(ThemeMode value) {
+    if (themeMode == value) return;
+    themeMode = value;
+    _epoch++;
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  void hydrateAccent(Color value) {
+    if (accent == value) return;
+    accent = value;
+    _epoch++;
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  void hydratePalette({required String paletteId, required Color accent}) {
+    if (this.paletteId == paletteId && this.accent == accent) return;
+    this.paletteId = paletteId;
+    this.accent = accent;
     _epoch++;
     notifyListeners();
     _scheduleSave();

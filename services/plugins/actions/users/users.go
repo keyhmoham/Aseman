@@ -499,10 +499,11 @@ func (a *dmSendAction) Handle(ctx context.Context, req *api.ActionRequest) (*api
 	if botID, ok := a.s.agentAccount(ctx, to); ok && to != req.Caller.ID {
 		// It joins that run before going off on its own, so stopping the run
 		// stops it too and the run's turn waits for it.
+		atts := a.s.fileAttachments(ctx, in.Attachments)
 		deliver, leave := a.s.joinRun(helper.WithActor(context.WithoutCancel(ctx), req.Caller.ID))
 		go func() {
 			defer leave()
-			a.s.deliverDirect(deliver, req.Caller.ID, to, botID, in.Body)
+			a.s.deliverDirect(deliver, req.Caller.ID, to, botID, in.Body, atts)
 		}()
 	}
 	return helper.JSON(map[string]any{"id": id.String(), "ok": true})

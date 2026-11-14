@@ -82,6 +82,16 @@ class WorkspaceFiles {
     Uint8List? data,
     bool wake = false,
   }) async {
+    // Expo sandbox_files: list|read|write|mkdir|delete|preview with
+    // path/content/data_base64 — no wake flag. Wake via spaces.computer first.
+    if (wake) {
+      await service.invokeAction(
+        'spaces',
+        'computer',
+        body: {'space': spaceId, 'operation': 'provision'},
+        timeout: const Duration(minutes: 5),
+      );
+    }
     final res = await service.invokeAction(
       'spaces',
       'sandbox_files',
@@ -91,9 +101,7 @@ class WorkspaceFiles {
         'path': relative(path),
         if (to != null) 'to': relative(to),
         if (data != null) 'data_base64': base64Encode(data),
-        if (wake) 'wake': true,
       },
-      // Waking the computer for a change can take a while.
       timeout: Duration(minutes: wake ? 5 : 2),
     );
     final map = res is Map ? res.cast<String, dynamic>() : <String, dynamic>{};

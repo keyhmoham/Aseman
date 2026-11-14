@@ -28,6 +28,11 @@ abstract final class PostLinks {
   }
 }
 
+/// Caps nested `:::post` / forward expansion in the widget tree so a hostile
+/// or cyclic body cannot blow the stack during chat/feed build (release
+/// [ErrorWidget] = grey box over the message list).
+const _richPostMaxDepth = 6;
+
 /// Renders an extended-markdown post body into styled, professional widgets:
 /// formatted text, headings, lists, quotes, code, tables, images, video, audio,
 /// charts and user/agent/tool/space cards.
@@ -36,7 +41,8 @@ class RichPostContent extends StatelessWidget {
       {super.key,
       this.headers = const {},
       this.resolveUrl,
-      this.onLinkTap});
+      this.onLinkTap,
+      this.depth = 0});
 
   final String source;
   final Map<String, String> headers;
@@ -46,27 +52,62 @@ class RichPostContent extends StatelessWidget {
   final String Function(String url)? resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
 
+  /// Nesting depth for `:::post` forwards; callers outside forwards leave 0.
+  final int depth;
+
   String _url(String raw) => resolveUrl?.call(raw) ?? raw;
 
   @override
   Widget build(BuildContext context) {
-    final blocks = parseRichMarkdown(source);
+    if (depth > _richPostMaxDepth) {
+      return _plainFallback(source);
+    }
+    List<PostBlock> blocks;
+    try {
+      blocks = parseRichMarkdown(source);
+    } catch (_) {
+      return _plainFallback(source);
+    }
     if (blocks.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      for (final block in blocks)
-        _BlockView(block,
-            headers: headers, resolveUrl: _url, onLinkTap: onLinkTap),
-    ]);
+    try {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (final block in blocks)
+          _BlockView(block,
+              headers: headers,
+              resolveUrl: _url,
+              onLinkTap: onLinkTap,
+              depth: depth),
+      ]);
+    } catch (_) {
+      return _plainFallback(source);
+    }
+  }
+
+  static Widget _plainFallback(String source) {
+    final text = source.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(text,
+          style: const TextStyle(fontSize: 12.5, height: 1.5)),
+    );
   }
 }
 
 class _BlockView extends StatelessWidget {
   const _BlockView(this.block,
-      {required this.headers, required this.resolveUrl, this.onLinkTap});
+      {required this.headers,
+      required this.resolveUrl,
+      this.onLinkTap,
+      this.depth = 0});
   final PostBlock block;
   final Map<String, String> headers;
   final String Function(String url) resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
+  final int depth;
+
+  List<InlineToken> get _run =>
+      block.inline.isNotEmpty ? block.inline.first : const [];
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +125,7 @@ class _BlockView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 4),
           child: Text.rich(
-              _inline(context, block.inline.first,
+              _inline(context, _run,
                   onLinkTap: onLinkTap,
                   headers: headers,
                   resolveUrl: resolveUrl,
@@ -99,7 +140,7 @@ class _BlockView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Text.rich(
-              _inline(context, block.inline.first,
+              _inline(context, _run,
                   onLinkTap: onLinkTap,
                   headers: headers,
                   resolveUrl: resolveUrl),
@@ -144,7 +185,7 @@ class _BlockView extends StatelessWidget {
             border: Border(left: BorderSide(color: scheme.primary, width: 3)),
           ),
           child: Text.rich(
-              _inline(context, block.inline.first,
+              _inline(context, _run,
                   onLinkTap: onLinkTap,
                   headers: headers,
                   resolveUrl: resolveUrl),
@@ -306,7 +347,8 @@ class _BlockView extends StatelessWidget {
           child: _ForwardedPost(block.data ?? const {},
               headers: headers,
               resolveUrl: resolveUrl,
-              onLinkTap: onLinkTap),
+              onLinkTap: onLinkTap,
+              depth: depth),
         );
     }
   }
@@ -449,10 +491,12 @@ class _ChartWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final type = (data['type'] as String? ?? 'bar').toLowerCase();
-    final labels =
-        (data['labels'] as List?)?.cast<String>() ?? const <String>[];
-    final raw = data['values'] as List? ?? const <dynamic>[];
+    final type = '${data['type'] ?? 'bar'}'.toLowerCase();
+    final labels = [
+      for (final l in data['labels'] is List ? data['labels'] as List : const [])
+        '$l',
+    ];
+    final raw = data['values'] is List ? data['values'] as List : const [];
     final values = raw.whereType<num>().map((n) => n.toDouble()).toList();
     if (values.isEmpty) {
       return const SizedBox.shrink();
@@ -621,11 +665,15 @@ class _InfoCard extends StatelessWidget {
 /// from" tag naming its author, who opens on a tap, over the post itself.
 class _ForwardedPost extends StatelessWidget {
   const _ForwardedPost(this.data,
-      {required this.headers, required this.resolveUrl, this.onLinkTap});
+      {required this.headers,
+      required this.resolveUrl,
+      this.onLinkTap,
+      this.depth = 0});
   final Map<String, dynamic> data;
   final Map<String, String> headers;
   final String Function(String url) resolveUrl;
   final Future<void> Function(String link)? onLinkTap;
+  final int depth;
 
   @override
   Widget build(BuildContext context) {
@@ -637,6 +685,7 @@ class _ForwardedPost extends StatelessWidget {
         : handle.isNotEmpty
             ? '@$handle'
             : 'a post';
+    final body = '${data['body'] ?? ''}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -656,10 +705,11 @@ class _ForwardedPost extends StatelessWidget {
               : () => PostLinks.open(context, authorId, handle),
         ),
         const SizedBox(height: 8),
-        RichPostContent('${data['body'] ?? ''}',
+        RichPostContent(body,
             headers: headers,
             resolveUrl: resolveUrl,
-            onLinkTap: onLinkTap),
+            onLinkTap: onLinkTap,
+            depth: depth + 1),
       ]),
     );
   }
@@ -700,7 +750,7 @@ class ForwardedTag extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
+            child: Row(children: [
               Builder(builder: (context) {
                 const radius = 10.0;
                 final size = radius * 2;
@@ -727,7 +777,7 @@ class ForwardedTag extends StatelessWidget {
               const SizedBox(width: 6),
               Icon(Icons.shortcut_rounded, size: 14, color: scheme.primary),
               const SizedBox(width: 4),
-              Flexible(
+              Expanded(
                 child: Text.rich(
                   TextSpan(children: [
                     TextSpan(

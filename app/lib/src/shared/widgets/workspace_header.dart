@@ -461,7 +461,8 @@ class WorkspacePicker extends StatefulWidget {
       this.inBottomSheet = false,
       this.dense = false});
   final String current;
-  final ValueChanged<String> onPick;
+  /// [spaceId] is set when the tile is a known project (preferred for loading).
+  final void Function(String name, {String spaceId}) onPick;
   final VoidCallback? onOpenFeed;
 
   /// The feed is open now: its tile is the selected one.
@@ -542,7 +543,7 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
     final created = await promptCreateWorkspace(context, deps);
     if (created == null || !mounted) return;
     setState(() => spaces = [...spaces, created]);
-    widget.onPick(created.name);
+    widget.onPick(created.name, spaceId: created.id);
   }
 
   @override
@@ -615,7 +616,17 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                             onOpenCurrent: widget.feedSelected ||
                                     widget.current.isEmpty
                                 ? null
-                                : () => widget.onPick(widget.current),
+                                : () {
+                                    var id = '';
+                                    for (final s in spaces) {
+                                      if (s.name == widget.current) {
+                                        id = s.id;
+                                        break;
+                                      }
+                                    }
+                                    widget.onPick(widget.current,
+                                        spaceId: id);
+                                  },
                           ),
                           const SizedBox(height: AppSpacing.md),
                         ],
@@ -700,7 +711,8 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                                       .substring(
                                           0, math.min(2, name.length))
                                       .toUpperCase(),
-                                  onTap: () => widget.onPick(name),
+                                  onTap: () => widget.onPick(name,
+                                      spaceId: space.id),
                                   onSettings: widget.onSettings != null &&
                                           space.id.isNotEmpty
                                       ? () => widget.onSettings!(space)

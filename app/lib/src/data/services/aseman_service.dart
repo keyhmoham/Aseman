@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/network/api_client.dart';
+import '../../core/network/device_meta.dart';
 import '../../core/network/session_store.dart';
 import '../../core/platform/platform_mode.dart';
 import '../../core/theme/app_colors.dart';
@@ -59,6 +61,7 @@ class AsemanService implements BackendService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     if (!BackendCapabilities.contains(namespace, action)) {
       throw ArgumentError.value('$namespace.$action', 'action',
@@ -69,6 +72,7 @@ class AsemanService implements BackendService {
       action,
       body: body,
       requestTimeout: timeout,
+      anonymous: anonymous,
     );
     return response.body;
   }
@@ -78,12 +82,14 @@ class AsemanService implements BackendService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     final value = await invokeAction(
       namespace,
       action,
       body: body,
       timeout: timeout,
+      anonymous: anonymous,
     );
     return value is Map ? value.cast<String, dynamic>() : <String, dynamic>{};
   }
@@ -104,7 +110,7 @@ class AsemanService implements BackendService {
       'password': password,
       if (inviteCode.trim().isNotEmpty) 'invite_code': inviteCode.trim(),
       ...PlatformMode.authField,
-    });
+    }, anonymous: true);
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
   }
 
@@ -116,7 +122,7 @@ class AsemanService implements BackendService {
       'account': account,
       'password': password,
       ...PlatformMode.authField,
-    });
+    }, anonymous: true);
     return _adopt(_sessionFrom(resp.body as Map<String, dynamic>));
   }
 
@@ -132,7 +138,7 @@ class AsemanService implements BackendService {
       if (provider == 'apple') 'identity_token': identityToken,
       if (inviteCode.trim().isNotEmpty) 'invite_code': inviteCode.trim(),
       ...PlatformMode.authField,
-    });
+    }, anonymous: true);
     return _adopt(_sessionFrom((response.body as Map).cast<String, dynamic>()));
   }
 
@@ -146,7 +152,7 @@ class AsemanService implements BackendService {
       'code': code,
       if (password.isNotEmpty) 'password': password,
       ...PlatformMode.authField,
-    });
+    }, anonymous: true);
     final token = result['token'] as String? ?? '';
     if (token.isEmpty) return null;
     return _adopt(_sessionFrom(result));
@@ -154,8 +160,8 @@ class AsemanService implements BackendService {
 
   /// Trades a single sign-on handoff for a session (once).
   Future<Session> ssoComplete(String handoff) async {
-    final result =
-        await actionMap('enterprise', 'sso_complete', body: {'handoff': handoff});
+    final result = await actionMap('enterprise', 'sso_complete',
+        body: {'handoff': handoff}, anonymous: true);
     return _adopt(_sessionFrom(result));
   }
 
@@ -164,7 +170,14 @@ class AsemanService implements BackendService {
   /// right after logging in were unauthenticated until the app restarted).
   Session _adopt(Session s) {
     client.session = s;
+    unawaited(_stampDeviceMeta());
     return s;
+  }
+
+  Future<void> _stampDeviceMeta() async {
+    try {
+      await sessionUpdate(meta: thisDeviceMeta());
+    } catch (_) {}
   }
 
   /// Whether the signed-in account may use the admin console (`auth.me`).
@@ -183,7 +196,10 @@ class AsemanService implements BackendService {
 
   Future<void> restoreSession() async {
     final stored = await SessionStore.load();
-    if (stored != null) client.session = stored;
+    if (stored != null) {
+      client.session = stored;
+      unawaited(_stampDeviceMeta());
+    }
   }
 
   /// The platform this client is for (see [PlatformMode]): its name and
@@ -222,8 +238,78 @@ class AsemanService implements BackendService {
         token: json['token'] as String? ?? '',
         privateKey: json['private_key'] as String? ?? '',
         publicKey: json['public_key'] as String? ?? '',
+        sessionId: json['session_id'] as String? ?? '',
         homeSpaceId: json['home_space_id'] as String? ?? '',
       );
+
+  // ── multi-device sessions ─────────────────────────────────────────────────
+
+  /// Every place this account is signed in (`auth.sessions_list`).
+  Future<({List<DeviceSession> sessions, String sessionId})> sessionsList() async {
+    final result = await actionMap('auth', 'sessions_list');
+    final list = result['sessions'] as List? ?? const [];
+    return (
+      sessions: list
+          .whereType<Map>()
+          .map((e) => DeviceSession.fromJson(e.cast<String, dynamic>()))
+          .toList(),
+      sessionId: '${result['session_id'] ?? ''}',
+    );
+  }
+
+  /// Revoke one session, every other session, or all sessions.
+  Future<int> sessionRevoke({
+    String? session,
+    bool others = false,
+    bool all = false,
+  }) async {
+    final result = await actionMap('auth', 'session_revoke', body: {
+      if (session != null && session.isNotEmpty) 'session': session,
+      if (others) 'others': true,
+      if (all) 'all': true,
+    });
+    return (result['revoked'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Update device metadata on this or another session.
+  Future<void> sessionUpdate({
+    Map<String, dynamic>? meta,
+    String? session,
+  }) async {
+    await actionMap('auth', 'session_update', body: {
+      if (session != null && session.isNotEmpty) 'session': session,
+      'meta': meta ?? thisDeviceMeta(),
+    });
+  }
+
+  /// This device session's metadata tree (`auth.session_metadata_view`).
+  Future<Map<String, dynamic>> sessionMetadataView({String? session}) async {
+    final result = await actionMap('auth', 'session_metadata_view', body: {
+      if (session != null && session.isNotEmpty) 'session': session,
+    });
+    final tree = result['tree'];
+    return tree is Map ? tree.cast<String, dynamic>() : <String, dynamic>{};
+  }
+
+  Future<void> sessionMetadataPatch(
+    List<Map<String, dynamic>> patch, {
+    String? session,
+  }) async {
+    await actionMap('auth', 'session_metadata_patch', body: {
+      'patch': patch,
+      if (session != null && session.isNotEmpty) 'session': session,
+    });
+  }
+
+  Future<void> sessionMetadataReplace(
+    Map<String, dynamic> tree, {
+    String? session,
+  }) async {
+    await actionMap('auth', 'session_metadata_replace', body: {
+      'tree': tree,
+      if (session != null && session.isNotEmpty) 'session': session,
+    });
+  }
 
   // ── spaces ────────────────────────────────────────────────────────────────
 
@@ -249,23 +335,31 @@ class AsemanService implements BackendService {
     await client.call('users', 'notifications_read');
   }
 
+  /// Projects the caller belongs to (multi-room workspaces and single-room
+  /// projects). Omits direct chats — those are the messenger's `dm_threads`.
+  ///
+  /// Do not send `kind: workspace`: on Decillion that means multi-room only
+  /// and drops single-room projects. Empty kind = every project (Expo default).
   Future<List<Workspace>> fetchSpaces({int limit = 100, int offset = 0}) async {
     final resp = await client.call('spaces', 'space_list', body: {
-      'kind': 'workspace',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
     final list = (resp.body as Map?)?['spaces'] as List? ?? [];
     return list
-        .whereType<Map<String, dynamic>>()
-        .map(Workspace.fromJson)
+        .whereType<Map>()
+        .map((row) => Workspace.fromJson(row.cast<String, dynamic>()))
         .toList();
   }
 
-  Future<Workspace> createSpace(String name, String description) async {
+  /// Create a project. Expo compose default is `kind: "room"` (one conversation
+  /// + threads); workspaces are multi-room.
+  Future<Workspace> createSpace(String name, String description,
+      {String kind = 'room'}) async {
     final resp = await client.call('spaces', 'space_create', body: {
       'name': name,
       'description': description,
+      if (kind.isNotEmpty) 'kind': kind,
     });
     final m = resp.body as Map<String, dynamic>;
     return Workspace(
@@ -356,17 +450,13 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  /// Create a room. One made for something ([purpose], with an [icon] and a
-  /// [color]) is greeted by the lead with three things to start on.
+  /// Create a room (`spaces.room_create`: space, name, topic only — Expo SOT).
   Future<WorkspaceRoom> createRoom(String spaceId, String name, String topic,
       {String purpose = '', String icon = '', String color = ''}) async {
     final resp = await client.call('spaces', 'room_create', body: {
       'space': spaceId,
       'name': name,
-      'topic': topic,
-      if (purpose.isNotEmpty) 'purpose': purpose,
-      if (icon.isNotEmpty) 'icon': icon,
-      if (color.isNotEmpty) 'color': color,
+      if (topic.isNotEmpty) 'topic': topic,
     });
     final m = resp.body as Map<String, dynamic>;
     return WorkspaceRoom(
@@ -401,57 +491,227 @@ class AsemanService implements BackendService {
         body: {'space': spaceId, 'patch': patch});
   }
 
-  // ── messenger ─────────────────────────────────────────────────────────────
+  // ── messenger (Decillion Expo: users.dm_*) ────────────────────────────────
 
-  /// Every conversation of the caller, newest first: direct chats and the
-  /// rooms of their projects. [kind] narrows it to "direct" or "room";
-  /// [query] keeps the chats whose other side (or room) is named like it.
+  /// Personal DMs (`users.dm_threads`). Expo Home Personal drops `saved`
+  /// (Decillion / self notes) — those live on the Aseman tab. [kind] of
+  /// `"room"` is empty here; use [fetchProjectChats] for Rooms.
   Future<List<ChatSummary>> fetchChats(
-      {String kind = '', String query = ''}) async {
-    final resp = await client.call('spaces', 'chat_list', body: {
-      if (kind.isNotEmpty) 'kind': kind,
-      if (query.isNotEmpty) 'query': query,
-    });
-    final list = (resp.body as Map?)?['chats'] as List? ?? [];
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(ChatSummary.fromJson)
-        .toList();
+      {String kind = '', String query = '', bool includeSaved = false}) async {
+    if (kind == 'room') return const [];
+    final resp =
+        await client.call('users', 'dm_threads', body: {'limit': 50});
+    final list = (resp.body as Map?)?['threads'] as List? ?? [];
+    var chats = <ChatSummary>[];
+    for (final row in list.whereType<Map>()) {
+      try {
+        final chat = ChatSummary.fromJson(row.cast<String, dynamic>());
+        if (includeSaved || !chat.isAseman) chats.add(chat);
+      } catch (_) {
+        // Skip a bad thread — one corrupt last-message must not blank Chats.
+      }
+    }
+    final q = query.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      chats = [
+        for (final c in chats)
+          if (_chatMatchesQuery(c, q)) c
+      ];
+    }
+    return chats;
+  }
+
+  /// Home Rooms rows from `spaces.space_list` (Expo projects — not DM threads).
+  /// Skips `home` and any `direct` kind. One row per project.
+  Future<List<ChatSummary>> fetchProjectChats() async {
+    final spaces = await fetchSpaces();
+    final pins = await projectPinIds();
+    return [
+      for (final s in spaces)
+        if (!s.home && s.spaceKind != 'direct')
+          ChatSummary(
+            spaceId: s.id,
+            roomId: s.lastRoomId,
+            direct: false,
+            spaceName: s.name,
+            spaceAvatar: s.avatar,
+            roomName: s.name,
+            lastBody: s.lastBody,
+            lastSenderId: s.lastSenderId,
+            lastSenderName: s.lastSenderName,
+            updatedAt: s.lastAt,
+            working: s.working,
+            role: s.role,
+            pinnedAt: pins.contains(s.id)
+                ? DateTime.fromMillisecondsSinceEpoch(
+                    pins.length - pins.indexOf(s.id))
+                : null,
+          ),
+    ];
+  }
+
+  /// Project pin order (`spaces.pins_get`).
+  Future<List<String>> projectPinIds() async {
+    try {
+      final resp = await client.call('spaces', 'pins_get');
+      final ids = (resp.body as Map?)?['ids'];
+      if (ids is! List) return const [];
+      return [for (final id in ids) '$id'];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Pin or unpin a project on Home Rooms (`spaces.pins_set`).
+  Future<void> pinProject(String spaceId, bool pinned) async {
+    final ids = [...await projectPinIds()]..remove(spaceId);
+    if (pinned) ids.insert(0, spaceId);
+    await client.call('spaces', 'pins_set', body: {'ids': ids});
+  }
+
+  bool _chatMatchesQuery(ChatSummary c, String q) {
+    final peer = c.peer;
+    final hay = [
+      c.title,
+      peer?.name ?? '',
+      peer?.handle ?? '',
+      peer?.id ?? '',
+      c.lastBody,
+    ].join(' ').toLowerCase();
+    return hay.contains(q);
   }
 
   /// Opens the direct chat with a person or an agent ([peer] is an account or
-  /// bot id), starting it on first use.
+  /// bot id). Resolves bot→account via `spaces.direct_open` (desk / facility
+  /// space + peer kind/bot_id), then loads the conversation with
+  /// `users.dm_list` — same transport Expo uses for messages.
   Future<ChatSummary> openDirect(String peer) async {
-    final resp =
-        await client.call('spaces', 'direct_open', body: {'peer': peer});
+    var peerMap = <String, dynamic>{'id': peer};
+    var spaceId = '';
+    var roomId = '';
+    var spaceName = '';
+    var role = '';
+    var saved = false;
+    var home = false;
+    try {
+      final opened =
+          await client.call('spaces', 'direct_open', body: {'peer': peer});
+      final o = (opened.body as Map?)?.cast<String, dynamic>() ?? const {};
+      if (o['peer'] is Map) {
+        peerMap = (o['peer'] as Map).cast<String, dynamic>();
+      }
+      spaceId = '${o['space_id'] ?? ''}';
+      roomId = '${o['room_id'] ?? ''}';
+      spaceName = '${o['space_name'] ?? ''}';
+      role = '${o['role'] ?? ''}';
+      saved = o['saved'] == true;
+      home = o['home'] == true;
+    } catch (_) {}
+    final accountPeer = '${peerMap['id'] ?? peer}';
+    final resp = await client.call('users', 'dm_list', body: {
+      'peer': accountPeer,
+      'limit': 1,
+    });
     final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
-    return ChatSummary.fromJson({...m, 'kind': 'direct'});
+    final msgs = m['messages'] as List? ?? const [];
+    final last = msgs.isNotEmpty && msgs.last is Map
+        ? (msgs.last as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    return ChatSummary.fromJson({
+      'peer': peerMap,
+      'last': last,
+      'space_id': spaceId,
+      'room_id': roomId.isNotEmpty ? roomId : accountPeer,
+      'space_name': spaceName,
+      'kind': 'direct',
+      'role': role,
+      'saved': saved,
+      'home': home,
+      'blocked': m['blocked'] == true,
+      'can_send': m['can_send'] != false,
+      'typing': m['peer_typing'] == true,
+    });
   }
 
-  /// Opens the caller's personal Aseman chat — also their home workspace.
+  /// The built-in chat assistant people @mention as `@decillion`
+  /// (`users.dm_assistant`). Null when the node has none configured.
+  Future<Bot?> fetchDmAssistant() async {
+    final resp = await client.call('users', 'dm_assistant');
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    final botId = '${m['bot_id'] ?? ''}';
+    if (botId.isEmpty) return null;
+    final name = '${m['name'] ?? m['display_name'] ?? m['handle'] ?? 'Decillion'}';
+    return Bot(
+      id: botId,
+      ownerId: '',
+      accountId: '${m['id'] ?? ''}',
+      name: name.isNotEmpty ? name : 'Decillion',
+      kind: 'agent',
+      vmType: '',
+      status: '',
+      avatar: '${m['avatar'] ?? ''}',
+      imageRef: 'decillion-chat',
+    );
+  }
+
+  /// Ensures a Direct space exists for [peer] (account id) and returns the
+  /// enriched chat summary — used when opening a DM from `dm_threads` that has
+  /// no space_id yet (desk / facility / mentionable agents).
+  Future<ChatSummary> ensureDirectSpace(ChatSummary chat) async {
+    if (!chat.direct) return chat;
+    final peer = chat.peer?.id ?? chat.roomId;
+    if (peer.isEmpty) return chat;
+    final agent = chat.peer?.isAgent ?? false;
+    final hasBotId = chat.peer?.botId.isNotEmpty ?? false;
+    if (chat.spaceId.isNotEmpty && (!agent || hasBotId)) return chat;
+    return openDirect(peer);
+  }
+
+  /// Opens the caller's personal notes chat (Saved Messages / Aseman).
   Future<ChatSummary> openSaved() async {
-    final resp = await client.call('spaces', 'direct_open',
-        body: {'peer': session?.accountId ?? ''});
-    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
-    return ChatSummary.fromJson(
-        {...m, 'kind': 'direct', 'saved': true, 'home': true});
+    final me = session?.accountId ?? '';
+    final chat = await openDirect(me);
+    return ChatSummary(
+      spaceId: chat.spaceId,
+      roomId: chat.roomId.isNotEmpty ? chat.roomId : me,
+      direct: true,
+      spaceName: chat.spaceName,
+      spaceAvatar: chat.spaceAvatar,
+      roomName: chat.roomName,
+      peer: chat.peer ?? ChatPeer(id: me),
+      lastBody: chat.lastBody,
+      lastSenderId: chat.lastSenderId,
+      lastSenderName: chat.lastSenderName,
+      lastAttachments: chat.lastAttachments,
+      updatedAt: chat.updatedAt,
+      unread: chat.unread,
+      working: chat.working,
+      role: chat.role,
+      pinnedAt: chat.pinnedAt,
+      saved: true,
+      home: true,
+      blocked: chat.blocked,
+      canSend: chat.canSend,
+      typing: chat.typing,
+    );
   }
 
-  /// Pins a chat to the top of the caller's chats, or unpins it.
-  Future<void> pinChat(String spaceId, String roomId, bool pinned) async {
-    await client.call('spaces', 'chat_pin',
-        body: {'space': spaceId, 'room': roomId, 'pinned': pinned});
+  /// Pins a direct chat (`users.dm_pin` / `users.dm_unpin`). [peer] is the
+  /// other account's id.
+  Future<void> pinChat(String peer, bool pinned) async {
+    await client.call('users', pinned ? 'dm_pin' : 'dm_unpin',
+        body: {'peer': peer});
   }
 
-  /// Deletes a direct chat for the caller only: it returns with a newer message.
-  Future<void> clearChat(String spaceId) async {
-    await client.call('spaces', 'chat_clear', body: {'space': spaceId});
+  /// Deletes a direct chat for the caller only (`users.dm_delete`).
+  Future<void> clearChat(String peer) async {
+    await client.call('users', 'dm_delete', body: {'peer': peer});
   }
 
-  /// Blocks (or unblocks) the other side of a direct chat: neither can write.
-  Future<void> blockDirect(String spaceId, bool blocked) async {
-    await client.call('spaces', 'direct_block',
-        body: {'space': spaceId, 'blocked': blocked});
+  /// Blocks or unblocks a peer (`users.dm_block` / `users.dm_unblock`).
+  Future<void> blockDirect(String peer, bool blocked) async {
+    await client.call('users', blocked ? 'dm_block' : 'dm_unblock',
+        body: {'peer': peer});
   }
 
   // ── room threads ──────────────────────────────────────────────────────────
@@ -504,8 +764,8 @@ class AsemanService implements BackendService {
         body: {'space': spaceId, 'room': roomId, 'typing': typing});
   }
 
-  /// Reports a message ([messageId]) or a whole chat to the node's admins.
-  /// [reason] is spam, harassment, abuse, scam, inappropriate or other.
+  /// Reports a room message ([messageId]) or a whole room chat to admins
+  /// (`spaces.message_report`). For directs use [reportDirect].
   Future<void> reportChat(String spaceId, String roomId,
       {String messageId = '', required String reason, String note = ''}) async {
     await client.call('spaces', 'message_report', body: {
@@ -517,12 +777,22 @@ class AsemanService implements BackendService {
     });
   }
 
-  /// Admin: what people reported in chats. [status] is open, resolved,
-  /// dismissed or all.
+  /// Reports a direct message or the whole chat with [peer] (`users.dm_report`).
+  Future<void> reportDirect(String peer,
+      {String messageId = '', required String reason, String note = ''}) async {
+    await client.call('users', 'dm_report', body: {
+      'peer': peer,
+      'reason': reason,
+      if (messageId.isNotEmpty) 'message_id': messageId,
+      if (note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  /// Admin: what people reported in chats (`users.admin_chat_reports`).
   Future<({List<Map<String, dynamic>> reports, int open})> adminChatReports(
       {String status = 'open'}) async {
     final resp = await client
-        .call('spaces', 'admin_chat_reports', body: {'status': status});
+        .call('users', 'admin_chat_reports', body: {'status': status});
     final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
     return (
       reports: (m['reports'] as List? ?? const [])
@@ -532,9 +802,10 @@ class AsemanService implements BackendService {
     );
   }
 
-  /// Admin: resolve, dismiss or reopen ("open") a chat report.
+  /// Admin: resolve, dismiss or reopen a chat report
+  /// (`users.admin_chat_report_resolve`).
   Future<void> adminResolveChatReport(String id, String status) async {
-    await client.call('spaces', 'admin_chat_report_resolve',
+    await client.call('users', 'admin_chat_report_resolve',
         body: {'id': id, 'status': status});
   }
 
@@ -745,8 +1016,7 @@ class AsemanService implements BackendService {
     );
   }
 
-  /// A room's conversation for a chat page: messages plus who is typing and,
-  /// for a direct chat, the peer's read cursor and whether anyone can write.
+  /// A room's conversation for a chat page (`spaces.message_list`).
   /// Pass [before] to page further back through history.
   Future<RoomChatPage> fetchRoomChat(String spaceId, String roomId,
       {int limit = 50, DateTime? before}) async {
@@ -760,11 +1030,105 @@ class AsemanService implements BackendService {
         (resp.body as Map?)?.cast<String, dynamic>() ?? const {});
   }
 
-  /// Changes the text of a message the caller sent.
+  /// A direct conversation (`users.dm_list`). [peer] is the other account id.
+  Future<RoomChatPage> fetchDirectChat(String peer,
+      {int limit = 50, DateTime? before}) async {
+    final resp = await client.call('users', 'dm_list', body: {
+      'peer': peer,
+      'limit': limit,
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    });
+    return RoomChatPage.fromJson(
+        (resp.body as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  /// Marks a direct conversation read (`users.dm_read`).
+  Future<void> markDirectRead(String peer) async {
+    await client.call('users', 'dm_read', body: {'peer': peer});
+  }
+
+  /// Changes the text of a room message the caller sent.
   Future<void> editRoomMessage(String messageId, String body) async {
-    body = await hostMarkupMedia(body);
     await client.call('spaces', 'message_edit',
         body: {'message': messageId, 'body': body});
+  }
+
+  /// Changes the text of a direct message (`users.dm_edit`).
+  Future<void> editDirectMessage(String messageId, String body) async {
+    await client.call('users', 'dm_edit',
+        body: {'id': messageId, 'body': body});
+  }
+
+  /// Unsend a direct message for both sides (`users.dm_unsend`).
+  Future<void> deleteDirectMessage(String messageId) async {
+    await client.call('users', 'dm_unsend', body: {'id': messageId});
+  }
+
+  /// Signal typing in a direct chat (`users.dm_typing`).
+  Future<void> directTyping(String peer) async {
+    await client.call('users', 'dm_typing', body: {'peer': peer});
+  }
+
+  /// React to a DM (`users.dm_react`); empty [emoji] removes yours.
+  Future<void> dmReact(String messageId, {String emoji = ''}) async {
+    await client
+        .call('users', 'dm_react', body: {'id': messageId, 'emoji': emoji});
+  }
+
+  /// Hide a DM for the caller only (`users.dm_hide`).
+  Future<void> dmHide(String messageId) async {
+    await client.call('users', 'dm_hide', body: {'id': messageId});
+  }
+
+  /// Keep files of a received DM in the caller's storage (`users.dm_keep`).
+  Future<void> dmKeep(String messageId, {String file = ''}) async {
+    await client.call('users', 'dm_keep', body: {
+      'message': messageId,
+      if (file.isNotEmpty) 'file': file,
+    });
+  }
+
+  /// Ask the built-in chat assistant to answer a DM that mentioned it
+  /// (`users.dm_agent_ask`). [messageId] is the sent message's id.
+  Future<void> dmAgentAsk(String messageId) async {
+    await client.call('users', 'dm_agent_ask', body: {'message': messageId});
+  }
+
+  /// Upload a file to send in a DM (`users.dm_file_upload`); returns file id.
+  ///
+  /// Pass [voice] with [durationMs] / [waveform] for an in-app voice note so
+  /// the node stores Decillion attachment metadata (`voice`, `duration_ms`,
+  /// `waveform`) and clients render a voice bubble.
+  Future<UploadedFile> dmFileUpload(
+    String peer, {
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+    bool voice = false,
+    int durationMs = 0,
+    List<int> waveform = const [],
+  }) async {
+    final resp = await client.call('users', 'dm_file_upload', body: {
+      'to': peer,
+      'name': name,
+      if (mime.isNotEmpty) 'mime': mime,
+      'data': base64Encode(bytes),
+      if (voice) 'voice': true,
+      if (voice && durationMs > 0) 'duration_ms': durationMs,
+      if (voice && waveform.isNotEmpty) 'waveform': waveform,
+    }, requestTimeout: const Duration(minutes: 3));
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return _fileFrom({
+      ...m,
+      'id': m['file_id'] ?? m['id'] ?? '',
+      'name': m['name'] ?? name,
+      'mime': m['mime'] ?? mime,
+      'size': m['size'] ?? bytes.length,
+      if (voice) 'voice': m['voice'] ?? true,
+      if (voice && durationMs > 0)
+        'duration_ms': m['duration_ms'] ?? durationMs,
+      if (voice && waveform.isNotEmpty) 'waveform': m['waveform'] ?? waveform,
+    });
   }
 
   /// Earlier wording of an edited message (plus the current body).
@@ -860,7 +1224,9 @@ class AsemanService implements BackendService {
       {List<String> mentions = const [],
       List<String> attachments = const [],
       String replyTo = ''}) async {
-    body = await hostMarkupMedia(body);
+    // Expo: mentions go through turn_submit (no reply_to); plain sends use
+    // message_send (reply_to allowed). Do not host-rewrite the body first —
+    // Expo posts/messages send the body as written.
     final resp = mentions.isNotEmpty
         ? await client.call('spaces', 'turn_submit', body: {
             'space': spaceId,
@@ -871,12 +1237,13 @@ class AsemanService implements BackendService {
             'prompt': body,
             'seeds': mentions,
             if (attachments.isNotEmpty) 'attachments': attachments,
-            if (replyTo.isNotEmpty) 'reply_to': replyTo,
           })
         : await client.call('spaces', 'message_send', body: {
             'space': spaceId,
             'room': roomId,
             'body': body,
+            // Mentions travel even when empty is intentional: Direct rooms
+            // apply spaces.directMentions (founding peer agent) server-side.
             if (attachments.isNotEmpty) 'attachments': attachments,
             if (replyTo.isNotEmpty) 'reply_to': replyTo,
           });
@@ -889,6 +1256,32 @@ class AsemanService implements BackendService {
       body: body,
       createdAt: DateTime.now(),
       mentions: mentions,
+      attachments: await _resolveAttachments(attachments),
+      replyTo: replyTo,
+    );
+  }
+
+  /// Sends a direct message (`users.dm_send`).
+  Future<RoomMessage> sendDirectMessage(
+    String peer,
+    String body, {
+    List<String> attachments = const [],
+    String replyTo = '',
+  }) async {
+    final resp = await client.call('users', 'dm_send', body: {
+      'to': peer,
+      'body': body,
+      if (replyTo.isNotEmpty) 'reply_to': replyTo,
+      if (attachments.isNotEmpty) 'attachments': attachments,
+    });
+    final m = resp.body as Map<String, dynamic>;
+    return RoomMessage(
+      id: m['id'] as String? ?? '',
+      spaceId: '',
+      roomId: peer,
+      senderId: session?.accountId ?? '',
+      body: body,
+      createdAt: DateTime.now(),
       attachments: await _resolveAttachments(attachments),
       replyTo: replyTo,
     );
@@ -1001,17 +1394,20 @@ class AsemanService implements BackendService {
   }
 
   /// Sets or clears a workspace's avatar; its owner and admins may
-  /// (`spaces.space_update`).
+  /// (`spaces.metadata_patch` on `/profile/avatar` — `space_update` has no avatar).
   Future<void> setSpaceAvatar(String spaceId, String fileId) async {
-    await client.call('spaces', 'space_update',
-        body: {'space': spaceId, 'avatar': fileId});
+    await patchSpaceMetadata(spaceId, [
+      {'op': 'set', 'path': '/profile/avatar', 'value': fileId},
+    ]);
   }
 
   /// Sets or clears an agent's or an app's avatar; its owner may
-  /// (`bots.bot_edit`).
+  /// (`bots.bot_edit` via `descriptor_patch.avatar`).
   Future<void> setBotAvatar(String botId, String fileId) async {
-    await client
-        .call('bots', 'bot_edit', body: {'bot': botId, 'avatar': fileId});
+    await client.call('bots', 'bot_edit', body: {
+      'bot': botId,
+      'descriptor_patch': {'avatar': fileId},
+    });
   }
 
   /// The signed-in account's avatar (a file id), "" when it has none.
@@ -1056,21 +1452,16 @@ class AsemanService implements BackendService {
     return _fileFrom(m);
   }
 
-  /// Fetch a single file's metadata, optionally including its decoded payload.
+  /// Fetch a single file's metadata (`spaces.file_get`: {file} only).
   Future<UploadedFile> fetchFile(String fileId, {bool withData = false}) async {
-    final resp = await client.call('spaces', 'file_get', body: {
-      'file': fileId,
-      if (withData) 'with_data': true,
-    });
+    final resp =
+        await client.call('spaces', 'file_get', body: {'file': fileId});
     final m = resp.body as Map<String, dynamic>;
     return _fileFrom(m);
   }
 
-  /// Download a file's full payload (base64-decoded) for saving to disk.
+  /// Download a file's full payload from `/v1/files/{id}/content`.
   Future<Uint8List> downloadFile(String fileId) async {
-    final f = await fetchFile(fileId, withData: true);
-    if (f.bytes != null) return f.bytes!;
-    // Fallback: stream from the raw content endpoint.
     final resp = await http.get(
       Uri.parse(fileContentUrl(fileId)),
       headers: authHeaders(),
@@ -1299,6 +1690,11 @@ class AsemanService implements BackendService {
 
   /// Changes an existing bot; only what is given changes. An agent whose
   /// configuration or computer changes is redeployed with it.
+  ///
+  /// Decillion's `bots.bot_edit` takes name/instructions/provider/model and
+  /// `descriptor_patch` (description, avatar, …). VM size changes go through
+  /// `bots.bot_resize`. Create-time fields (`max_turns`, `skills`, …) are not
+  /// editable on this action.
   Future<void> editBot(
     String botId, {
     String? name,
@@ -1313,23 +1709,31 @@ class AsemanService implements BackendService {
     int? memoryMb,
     int? diskMb,
   }) async {
+    // maxTurns / maxTokens / skills are create-time YAML on Decillion and are
+    // not accepted by bot_edit; kept on the signature for the agent form.
+    final _ = (maxTurns, maxTokens, skills);
+    final descriptorPatch = <String, dynamic>{
+      if (description != null) 'description': description,
+      if (name != null) 'name': name,
+      if (provider != null && provider.isNotEmpty) 'provider': provider,
+      if (model != null && model.isNotEmpty) 'model': model,
+    };
     await client.call('bots', 'bot_edit', body: {
       'bot': botId,
       if (name != null) 'name': name,
-      if (description != null) 'description': description,
       if (instructions != null) 'instructions': instructions,
       if (provider != null && provider.isNotEmpty) 'provider': provider,
       if (model != null && model.isNotEmpty) 'model': model,
-      if (maxTurns != null) 'max_turns': maxTurns,
-      if (maxTokens != null) 'max_tokens': maxTokens,
-      if (skills != null) 'skills': skills,
-      if (cpu != null && cpu > 0)
-        'resources': {
-          'cpu': cpu,
-          'memory': memoryMb ?? 512,
-          'disk': diskMb ?? 512,
-        },
+      if (descriptorPatch.isNotEmpty) 'descriptor_patch': descriptorPatch,
     });
+    if (cpu != null && cpu > 0) {
+      await client.call('bots', 'bot_resize', body: {
+        'bot': botId,
+        'cpu': cpu,
+        'memory_mb': memoryMb ?? 512,
+        'disk_mb': diskMb ?? 512,
+      });
+    }
   }
 
   Future<Bot> fetchBot(String botId) async {
@@ -1337,16 +1741,13 @@ class AsemanService implements BackendService {
     return Bot.fromJson(resp.body as Map<String, dynamic>);
   }
 
-  /// Chat with an agent or ask an app backend; returns the reply string.
-  /// [history] carries earlier turns of the conversation so conversational
-  /// agents remember the context.
+  /// Chat with an agent or ask an app backend (`message.ask`: to, body, …).
   Future<String> askBot(String botId, String message,
       {List<Map<String, String>> history = const []}) async {
     final resp = await client.call('message', 'ask', body: {
       'to': botId,
       'body': message,
-      if (history.isNotEmpty) 'history': history,
-    });
+    }, requestTimeout: const Duration(minutes: 5));
     final m = resp.body as Map<String, dynamic>;
     if (m['status'] == 'answered' && m['response'] != null) {
       return (m['response'] as String?) ?? '';
@@ -1360,18 +1761,16 @@ class AsemanService implements BackendService {
     return (g['response'] as String?) ?? '';
   }
 
-  /// Ask a bot inside a space via spaces.ask — gives langchain agents access
-  /// to the space's shared docker sandbox (sandbox_exec tool). [history]
-  /// carries earlier turns so the agent remembers the conversation.
+  /// Ask a bot inside a space (`spaces.ask`: space, bot, body, room?,
+  /// attachments?). Client timeout matches Expo (5 minutes).
   Future<String> askBotInSpace(String spaceId, String botId, String message,
-      {List<Map<String, String>> history = const []}) async {
+      {List<Map<String, String>> history = const [], String roomId = ''}) async {
     final resp = await client.call('spaces', 'ask', body: {
       'space': spaceId,
       'bot': botId,
       'body': message,
-      if (history.isNotEmpty) 'history': history,
-      'timeout_sec': 120,
-    });
+      if (roomId.isNotEmpty) 'room': roomId,
+    }, requestTimeout: const Duration(minutes: 5));
     final m = resp.body as Map<String, dynamic>;
     return (m['reply'] as String?) ?? '';
   }
@@ -1385,24 +1784,30 @@ class AsemanService implements BackendService {
     return ((resp.body as Map?)?['output'] as String?) ?? '';
   }
 
-  /// Shared per-space sandbox status (ensures the sandbox bot exists).
+  /// Workspace computer status (`spaces.computer` operation `status`).
   Future<Map<String, dynamic>> sandboxStatus(String spaceId) async {
-    final resp =
-        await client.call('spaces', 'sandbox_status', body: {'space': spaceId});
+    final resp = await client.call('spaces', 'computer', body: {
+      'space': spaceId,
+      'operation': 'status',
+    }, requestTimeout: const Duration(minutes: 3));
     return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
   }
 
-  /// Start the shared per-space sandbox.
+  /// Provision / wake the workspace computer (`spaces.computer` `provision`).
   Future<Map<String, dynamic>> sandboxStart(String spaceId) async {
-    final resp =
-        await client.call('spaces', 'sandbox_start', body: {'space': spaceId});
+    final resp = await client.call('spaces', 'computer', body: {
+      'space': spaceId,
+      'operation': 'provision',
+    }, requestTimeout: const Duration(minutes: 3));
     return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
   }
 
-  /// Stop the shared per-space sandbox (kept for reuse).
+  /// Sleep the workspace computer (`spaces.computer` `sleep`).
   Future<Map<String, dynamic>> sandboxStop(String spaceId) async {
-    final resp =
-        await client.call('spaces', 'sandbox_stop', body: {'space': spaceId});
+    final resp = await client.call('spaces', 'computer', body: {
+      'space': spaceId,
+      'operation': 'sleep',
+    }, requestTimeout: const Duration(minutes: 3));
     return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
   }
 
@@ -1454,19 +1859,24 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  /// Members of a space (enriched with handle/kind/role), paged. [kind]
-  /// keeps only `user` (people) or `bot` (agents and apps) members; empty
-  /// lists everyone.
+  /// Members of a space (`spaces.members_list`: space, limit, offset). [kind]
+  /// is filtered client-side (Expo does not send it).
   Future<List<Map<String, dynamic>>> fetchSpaceMembers(String spaceId,
       {String kind = '', int limit = 50, int offset = 0}) async {
     final resp = await client.call('spaces', 'members_list', body: {
       'space': spaceId,
-      if (kind.isNotEmpty) 'kind': kind,
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
-    final list = (resp.body as Map?)?['members'] as List? ?? [];
-    return list.whereType<Map<String, dynamic>>().toList();
+    var list = (resp.body as Map?)?['members'] as List? ?? [];
+    var members = list.whereType<Map<String, dynamic>>().toList();
+    if (kind.isNotEmpty) {
+      members = [
+        for (final m in members)
+          if ('${m['kind'] ?? ''}' == kind) m
+      ];
+    }
+    return members;
   }
 
   /// Search room messages across a whole space, newest first (paged).
@@ -1668,21 +2078,12 @@ class AsemanService implements BackendService {
     return const [];
   }
 
-  /// Downloads every remote image/video/audio in [body] into Aseman storage
-  /// (reusing the URL cache) and returns markup that only references hosted
-  /// files. Call before publishing a designed post or message so previews and
-  /// readers never hit the original link.
-  Future<String> hostMarkupMedia(String body) async {
-    if (body.trim().isEmpty) return body;
-    final resp =
-        await client.call('users', 'host_markup', body: {'body': body});
-    final hosted = (resp.body as Map?)?['body'];
-    return hosted is String && hosted.isNotEmpty ? hosted : body;
-  }
+  /// Expo has no `users.host_markup`: posts/messages send the body as written
+  /// (media via `users.file_upload` ids). Kept as a no-op for call sites.
+  Future<String> hostMarkupMedia(String body) async => body;
 
   Future<SocialPost> createPost(String body,
       {String? spaceId, List<String> tags = const []}) async {
-    body = await hostMarkupMedia(body);
     final resp = await client.call('posts', 'post_create', body: {
       'body': body,
       if (spaceId != null && spaceId.isNotEmpty) 'space': spaceId,
@@ -1700,7 +2101,6 @@ class AsemanService implements BackendService {
 
   /// Edits one of the signed-in user's posts.
   Future<void> updatePost(String postId, String body) async {
-    body = await hostMarkupMedia(body);
     await client
         .call('posts', 'post_update', body: {'post': postId, 'body': body});
   }
@@ -1842,18 +2242,21 @@ class AsemanService implements BackendService {
         .toList();
   }
 
-  /// Install a listing into a workspace (adds the bot to the space).
+  /// Install a listing into a workspace (`market.install` requires space).
   Future<String> installListing(String listingId, {String? spaceId}) async {
+    if (spaceId == null || spaceId.isEmpty) {
+      throw ArgumentError.value(spaceId, 'spaceId', 'market.install needs space');
+    }
     final resp = await client.call('market', 'install', body: {
       'listing': listingId,
-      if (spaceId != null && spaceId.isNotEmpty) 'space': spaceId,
+      'space': spaceId,
     });
     return ((resp.body as Map?)?['bot_id'] as String?) ?? '';
   }
 
-  /// Install a theme listing (applies the pack to the signed-in account).
+  /// Apply a theme listing (`themes.apply` with listing — Expo SOT).
   Future<void> installThemeListing(String listingId) async {
-    await client.call('market', 'install', body: {'listing': listingId});
+    await client.call('themes', 'apply', body: {'listing': listingId});
   }
 
   // ── themes ────────────────────────────────────────────────────────────────
@@ -1916,14 +2319,14 @@ class AsemanService implements BackendService {
   }
 
   /// How the node takes new people and signs them in (`auth.config`).
-  Future<AuthConfig> authConfig() async =>
-      AuthConfig.fromJson(await actionMap('auth', 'config'));
+  Future<AuthConfig> authConfig() async => AuthConfig.fromJson(
+      await actionMap('auth', 'config', anonymous: true));
 
   /// Emails a one-time code that verifies [email]; returns how the node
   /// delivers it (`email`, or `log` on a node without mail).
   Future<String> sendVerification(String email) async {
     final out = await actionMap('auth', 'send_verification',
-        body: {'email': email, ...PlatformMode.authField});
+        body: {'email': email, ...PlatformMode.authField}, anonymous: true);
     return '${out['delivery'] ?? ''}';
   }
 
@@ -2067,11 +2470,24 @@ class AsemanService implements BackendService {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  /// Rich room profile (members, agents, messages, files, recent activity).
+  /// Room details (`spaces.room_get` — Expo has no `room_profile`).
   Future<RoomProfile> fetchRoomProfile(String roomId) async {
     final resp =
-        await client.call('spaces', 'room_profile', body: {'room': roomId});
-    return RoomProfile.fromJson(resp.body as Map<String, dynamic>);
+        await client.call('spaces', 'room_get', body: {'room': roomId});
+    final m = (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+    return RoomProfile.fromJson({
+      'id': m['id'] ?? roomId,
+      'name': m['name'] ?? '',
+      'topic': m['topic'] ?? '',
+      'space_id': m['space_id'] ?? '',
+      'space_name': m['space_name'] ?? '',
+      'member_count': m['member_count'] ?? 0,
+      'agent_count': m['agent_count'] ?? 0,
+      'message_count': m['message_count'] ?? 0,
+      'file_count': m['file_count'] ?? 0,
+      'am_member': m['am_member'] ?? false,
+      'recent_messages': m['recent_messages'] ?? const [],
+    });
   }
 
   /// Join a public workspace (or accept a pending invitation).
@@ -2147,12 +2563,24 @@ class AsemanService implements BackendService {
         body: {'routine': routineId});
   }
 
-  /// Search top-level posts by body text.
+  /// Search posts (`posts.post_search`: query, limit, offset). For a following
+  /// feed Expo uses `posts.post_feed` with `following: true`, not a scope.
   Future<List<SocialPost>> searchPosts(String query,
       {bool following = false, int limit = 20, int offset = 0}) async {
+    if (following && query.trim().isEmpty) {
+      final resp = await client.call('posts', 'post_feed', body: {
+        'following': true,
+        'limit': limit,
+        if (offset > 0) 'offset': offset,
+      });
+      final list = (resp.body as Map?)?['posts'] as List? ?? [];
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map(SocialPost.fromJson)
+          .toList();
+    }
     final resp = await client.call('posts', 'post_search', body: {
       'query': query,
-      if (following) 'scope': 'following',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
@@ -2290,16 +2718,17 @@ class AsemanService implements BackendService {
       actionMap('users', 'notify_set',
           body: {'category': category, 'enabled': enabled});
 
+  /// Mute a room or personal chat (`users.notify_mute`: kind, id, muted).
   Future<Map<String, dynamic>> notifyMute({
     String space = '',
     String peer = '',
     required bool muted,
-  }) =>
-      actionMap('users', 'notify_mute', body: {
-        if (space.isNotEmpty) 'space': space,
-        if (peer.isNotEmpty) 'peer': peer,
-        'muted': muted,
-      });
+  }) {
+    final kind = space.isNotEmpty ? 'space' : 'peer';
+    final id = space.isNotEmpty ? space : peer;
+    return actionMap('users', 'notify_mute',
+        body: {'kind': kind, 'id': id, 'muted': muted});
+  }
 
   // ── Room message react / hide / keep (works in project rooms and DMs) ─
 
@@ -2354,9 +2783,10 @@ class AsemanService implements BackendService {
   Future<Map<String, dynamic>> callIncoming() =>
       actionMap('users', 'call_incoming');
 
+  /// Poll a call (`users.call_poll`: id, since?).
   Future<Map<String, dynamic>> callPoll(String id, {String after = ''}) =>
       actionMap('users', 'call_poll',
-          body: {'id': id, if (after.isNotEmpty) 'after': after});
+          body: {'id': id, if (after.isNotEmpty) 'since': after});
 
   Future<Map<String, dynamic>> callSignal(
     String id, {
@@ -2379,16 +2809,20 @@ class AsemanService implements BackendService {
   Future<Map<String, dynamic>> brainRooms() =>
       actionMap('users', 'brain_rooms');
 
-  Future<Map<String, dynamic>> brainRoomSet(String room,
+  /// [space] is a room/project id the personal assistant may read (`json:"space"`).
+  Future<Map<String, dynamic>> brainRoomSet(String space,
           {required bool allowed}) =>
       actionMap('users', 'brain_room_set',
-          body: {'room': room, 'allowed': allowed});
+          body: {'space': space, 'allowed': allowed});
 
   Future<Map<String, dynamic>> brainMemoryGet() =>
       actionMap('users', 'brain_memory_get');
 
-  Future<Map<String, dynamic>> brainMemorySet(Map<String, dynamic> body) =>
-      actionMap('users', 'brain_memory_set', body: body);
+  /// Set personal-assistant notes (`users.brain_memory_set`: {notes}).
+  Future<Map<String, dynamic>> brainMemorySet(Map<String, dynamic> body) {
+    final notes = '${body['notes'] ?? ''}';
+    return actionMap('users', 'brain_memory_set', body: {'notes': notes});
+  }
 
   /// Saved-messages / self DM thread (brain proposals + agents_working).
   Future<Map<String, dynamic>> dmListSelf({int limit = 40}) {

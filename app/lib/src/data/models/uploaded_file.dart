@@ -35,7 +35,7 @@ class UploadedFile {
   final String contentUrl;
   final DateTime? createdAt;
 
-  /// Decoded payload when the file was fetched with data (file_get with_data
+  /// Decoded payload when present (Expo file_get returns metadata; content via
   /// / file_download).
   final Uint8List? bytes;
 

@@ -288,6 +288,7 @@ abstract final class ThemeChrome {
       recipe,
       accent: accentColor,
       selected: selected,
+      slot: slot,
       // Cards / sheets / bubbles stay neutral — accent is for ink & selection.
       neutral: _isSurfaceSlot(slot),
     );
@@ -313,17 +314,11 @@ abstract final class ThemeChrome {
         : recipe.typography.apply(
             baseText ?? Theme.of(context).textTheme.labelLarge ?? const TextStyle(),
           );
-    final g = recipe.fill == FillKind.gradient
-        ? (recipe.gradient?.toGradient() ??
-            LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accentColor.withValues(alpha: .85),
-                (tokens?.cyan ?? accentColor).withValues(alpha: .55),
-              ],
-            ))
-        : recipe.gradient?.toGradient();
+    // Prefer opaque M3 container fills over accent gradient washes (vibe
+    // bubble). Packs may still opt into an explicit [ControlRecipe.gradient].
+    final g = recipe.fill == FillKind.gradient && recipe.gradient != null
+        ? recipe.gradient!.toGradient()
+        : null;
     final effects = recipe.effects.copyWith(
       focusRing: focused && recipe.effects.focusRing <= 0
           ? (interaction?.focusRing ?? 0)
@@ -396,6 +391,7 @@ abstract final class ThemeChrome {
     required Color accent,
     bool selected = false,
     bool neutral = false,
+    String slot = '',
   }) {
     final scheme = Theme.of(context).colorScheme;
     final tokens = AsemanTokens.maybeOf(context);
@@ -414,12 +410,17 @@ abstract final class ThemeChrome {
         FillKind.outline || FillKind.text => Colors.transparent,
       };
     }
+    final isFab = slot == 'fab';
+    // M3 Expressive: filled button = primary; FAB / soft container =
+    // primary-container; tonal = secondary-container (opaque, not a wash).
     return switch (recipe.fill) {
-      FillKind.solid => scheme.primaryContainer,
-      FillKind.tonal => accent.withValues(alpha: .12),
+      FillKind.solid =>
+        isFab ? scheme.primaryContainer : scheme.primary,
+      FillKind.tonal => scheme.secondaryContainer,
       FillKind.outline || FillKind.text => Colors.transparent,
       FillKind.glass => AppSurfaces.overlay(scheme, tokens: tokens),
-      FillKind.gradient => accent.withValues(alpha: .18),
+      FillKind.gradient =>
+        isFab ? scheme.primaryContainer : scheme.primary,
     };
   }
 
@@ -553,16 +554,24 @@ abstract final class ThemeChrome {
   static Color cardBorder(BuildContext context) =>
       AppSurfaces.cardBorder(Theme.of(context).colorScheme);
 
-  /// Material [ButtonStyle] shared by filled / outlined / tonal / elevated.
+  /// Shared shape / padding / type for pack buttons (no fill — callers set
+  /// M3 Expressive color roles so [FilledButton.tonal] can keep
+  /// secondary-container).
   static ButtonStyle buttonStyle(
     ThemeData base, {
     required AsemanTokens tokens,
     Color? sideColor,
+    bool forceOutline = false,
   }) {
     final scheme = base.colorScheme;
     final label = base.textTheme.labelLarge ?? const TextStyle();
     final button = tokens.control('button');
-    final shape = button.border(sideColor: sideColor ?? scheme.outline);
+    final outlined = forceOutline || button.fill == FillKind.outline;
+    final shape = button.border(
+      sideColor: outlined || button.borderWidth > 0
+          ? (sideColor ?? scheme.outline)
+          : null,
+    );
     return ButtonStyle(
       shape: WidgetStatePropertyAll(shape),
       padding: WidgetStatePropertyAll(EdgeInsets.symmetric(
@@ -576,6 +585,78 @@ abstract final class ThemeChrome {
         InkKind.ripple => null,
         InkKind.highlight || InkKind.none => NoSplash.splashFactory,
       },
+    );
+  }
+
+  /// M3 Expressive filled: primary / on-primary (solid, no mist or rim).
+  ///
+  /// Colors stay off the shared [FilledButtonTheme] so [FilledButton.tonal]
+  /// can still resolve to secondary-container / on-secondary-container.
+  static ButtonStyle filledButtonStyle(
+    ThemeData base, {
+    required AsemanTokens tokens,
+  }) =>
+      buttonStyle(base, tokens: tokens);
+
+  /// M3 Expressive tonal: secondary-container / on-secondary-container.
+  static ButtonStyle tonalButtonStyle(
+    ThemeData base, {
+    required AsemanTokens tokens,
+  }) {
+    final scheme = base.colorScheme;
+    return buttonStyle(base, tokens: tokens).copyWith(
+      backgroundColor: WidgetStatePropertyAll(scheme.secondaryContainer),
+      foregroundColor: WidgetStatePropertyAll(scheme.onSecondaryContainer),
+      overlayColor: WidgetStateProperty.resolveWith((states) {
+        final ink = scheme.onSecondaryContainer;
+        if (states.contains(WidgetState.pressed)) {
+          return ink.withValues(alpha: .12);
+        }
+        if (states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.focused)) {
+          return ink.withValues(
+              alpha: tokens.language.interaction.hoverAlpha);
+        }
+        return null;
+      }),
+    );
+  }
+
+  /// M3 Expressive elevated: surface-container-low / primary.
+  static ButtonStyle elevatedButtonStyle(
+    ThemeData base, {
+    required AsemanTokens tokens,
+  }) {
+    final scheme = base.colorScheme;
+    final button = tokens.control('button');
+    return buttonStyle(base, tokens: tokens).copyWith(
+      backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerLow),
+      foregroundColor: WidgetStatePropertyAll(scheme.primary),
+      elevation: WidgetStatePropertyAll(
+          button.elevation > 0 ? button.elevation : 1),
+      shadowColor: WidgetStatePropertyAll(scheme.shadow),
+    );
+  }
+
+  /// M3 Expressive outlined: outline / on-surface-variant.
+  static ButtonStyle outlinedButtonStyle(
+    ThemeData base, {
+    required AsemanTokens tokens,
+  }) {
+    final scheme = base.colorScheme;
+    final button = tokens.control('button');
+    return buttonStyle(
+      base,
+      tokens: tokens,
+      sideColor: scheme.outline,
+      forceOutline: true,
+    ).copyWith(
+      foregroundColor: WidgetStatePropertyAll(scheme.onSurfaceVariant),
+      backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+      side: WidgetStatePropertyAll(BorderSide(
+        color: scheme.outline,
+        width: button.borderWidth > 0 ? button.borderWidth : 1,
+      )),
     );
   }
 

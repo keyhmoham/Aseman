@@ -201,16 +201,14 @@ class SpaceComputer extends ChangeNotifier {
   Future<void> _watch(int generation) async {
     var failures = 0;
     while (generation == _generation) {
-      final started = DateTime.now();
-      final since = _info.rev;
       try {
+        // Expo polls `spaces.computer` with operation `status` (no `watch`).
         final response = await service.invokeAction(
           'spaces',
           'computer',
           body: {
             'space': spaceId,
-            'operation': 'watch',
-            if (since.isNotEmpty && _loaded) 'since': since,
+            'operation': 'status',
           },
           timeout: const Duration(seconds: 60),
         );
@@ -218,12 +216,10 @@ class SpaceComputer extends ChangeNotifier {
         failures = 0;
         _error = null;
         _apply(response);
-        // A node that answers at once with nothing new (one without the
-        // long poll) is asked again after a pause, not in a busy loop.
-        if (_info.rev == since &&
-            DateTime.now().difference(started) < const Duration(seconds: 2)) {
-          await _wait(const Duration(seconds: 4));
-        }
+        // Status is not a long poll: pause between refreshes like Expo's
+        // useProjectSetup (10s awake / ~45–60s asleep).
+        final awake = _info.state == ComputerState.awake;
+        await _wait(Duration(seconds: awake ? 10 : 45));
       } catch (e) {
         if (generation != _generation) return;
         failures++;
@@ -270,8 +266,8 @@ class SpaceComputer extends ChangeNotifier {
     }
   }
 
-  /// Starts the computer (the first time, or after it fell asleep).
-  Future<void> wake() => _operate('wake', ComputerState.waking);
+  /// Starts the computer (Expo: `spaces.computer` operation `provision`).
+  Future<void> wake() => _operate('provision', ComputerState.waking);
 
   /// Puts it to sleep: its files stay, its programs stop.
   Future<void> sleep() => _operate('sleep', ComputerState.sleeping);

@@ -17,7 +17,8 @@ import '../../../app_dependencies.dart';
 /// The providers this node offers, by name (empty: no SSO here).
 Future<List<String>> ssoProviders(AppDependencies deps) async {
   try {
-    final out = await deps.service.invokeAction('enterprise', 'sso_discover', body: {'email': ''});
+    final out = await deps.service.invokeAction('enterprise', 'sso_discover',
+        body: {'email': ''}, anonymous: true);
     final list = out is Map ? out['providers'] : null;
     return [if (list is List) for (final p in list) if (p is Map) '${p['name']}'];
   } catch (_) {
@@ -34,7 +35,8 @@ bool get _inAppWebView =>
 /// Signs in with the provider that serves [email]. Errors are thrown with
 /// the node's message.
 Future<void> signInWithSso(BuildContext context, AppDependencies deps, String email) async {
-  final out = await deps.service.invokeAction('enterprise', 'sso_start', body: {'email': email, 'return': '/'});
+  final out = await deps.service.invokeAction('enterprise', 'sso_start',
+      body: {'email': email, 'return': '/'}, anonymous: true);
   final url = Uri.parse('${out is Map ? out['url'] : ''}');
   if (kIsWeb) {
     await launchUrl(url, webOnlyWindowName: '_self');

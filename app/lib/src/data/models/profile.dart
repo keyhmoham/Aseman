@@ -1,6 +1,6 @@
 /// Rich profile payloads returned by the backend profile actions
 /// (users.account_get, bots.bot_profile, spaces.space_profile,
-/// spaces.room_profile). These back the entity profile screens.
+/// spaces.room_get). These back the entity profile screens.
 library;
 
 import 'post.dart';

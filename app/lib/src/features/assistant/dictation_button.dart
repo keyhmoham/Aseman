@@ -16,9 +16,12 @@ class DictationButton extends StatefulWidget {
     super.key,
     required this.dependencies,
     required this.onText,
+    this.style,
   });
   final AppDependencies dependencies;
   final ValueChanged<String> onText;
+  /// Optional chrome so the composer can match attach / send geometry.
+  final ButtonStyle? style;
 
   @override
   State<DictationButton> createState() => _DictationButtonState();
@@ -103,23 +106,29 @@ class _DictationButtonState extends State<DictationButton> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final style = widget.style;
     return switch (state) {
       _State.idle => IconButton(
         tooltip: 'Dictate',
+        style: style,
         onPressed: _start,
-        icon: const Icon(Icons.mic_none_rounded),
+        icon: const Icon(Icons.mic_none_rounded, size: 20),
       ),
       _State.recording => IconButton(
         tooltip: 'Stop and write it down',
+        style: style,
         onPressed: _stop,
-        icon: Icon(Icons.stop_circle_rounded, color: scheme.error),
+        icon: Icon(Icons.stop_circle_rounded, size: 20, color: scheme.error),
       ),
-      _State.writing => const Padding(
-        padding: EdgeInsets.all(12),
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
+      _State.writing => const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         ),
       ),
     };

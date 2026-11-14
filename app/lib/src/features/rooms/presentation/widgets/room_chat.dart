@@ -9,6 +9,7 @@ import '../../../../agui/agui.dart';
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_shape.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/halo_ring_cache.dart';
 import '../../../../core/theme/theme_chrome.dart';
 import '../../../../core/theme/theme_roles.dart';
@@ -26,6 +27,9 @@ import '../../../assistant/assistant.dart';
 import '../../../home/presentation/widgets/routines_panel.dart';
 import '../../../search_feed/presentation/post_editor.dart';
 import '../../../search_feed/presentation/rich_post_content.dart';
+import '../../../voice/voice_model.dart';
+import '../../../voice/voice_recorder.dart';
+import '../../../voice/voice_recorder_bar.dart';
 import '../../domain/room_work.dart';
 import '../room_chat_scroll.dart';
 import '../room_work_controller.dart';
@@ -83,6 +87,7 @@ class RoomChat extends StatefulWidget {
     this.onThread,
     this.direct = false,
     this.saved = false,
+    this.peerId = '',
   });
   final String room;
   final List<RoomMessage> messages;
@@ -92,6 +97,10 @@ class RoomChat extends StatefulWidget {
   final AppDependencies? dependencies;
   final String spaceId;
   final String roomId;
+
+  /// Account id of the other side of a direct chat (not the Direct space room
+  /// id). Required for `users.dm_file_upload` / voice notes.
+  final String peerId;
 
   /// Shows the latest suggested task above the composer (the home chat).
   final bool suggestions;
@@ -204,6 +213,12 @@ class _RoomChatState extends State<RoomChat> {
   final ScrollController _chatScroll = ScrollController();
   final Set<String> _expandedLogs = {};
   bool _sending = false;
+
+  /// In-app voice note: recording or stopped-to-preview (Decillion composer).
+  VoiceMessageRecorder? _voiceRecorder;
+  String? _voicePhase; // 'recording' | 'stopped'
+  VoiceNote? _voiceFile;
+  DateTime _voiceStartedAt = DateTime.now();
 
   /// Scroll to restore after this chat was left and opened again; null when
   /// the person has not scrolled this room yet (land on the live bottom).
@@ -557,6 +572,7 @@ class _RoomChatState extends State<RoomChat> {
     if (_didRestore || _restore == null) _persistScroll();
     _work?.removeListener(_workChanged);
     _work?.dispose();
+    unawaited(_voiceRecorder?.dispose() ?? Future<void>.value());
     input.dispose();
     _chatScroll.dispose();
     super.dispose();
@@ -848,7 +864,11 @@ class _RoomChatState extends State<RoomChat> {
     final service = widget.dependencies?.service;
     if (service == null) return;
     try {
-      await service.messageReact(widget.spaceId, m.id, emoji: emoji);
+      if (widget.direct) {
+        await service.dmReact(m.id, emoji: emoji);
+      } else {
+        await service.messageReact(widget.spaceId, m.id, emoji: emoji);
+      }
       if (mounted) {
         setState(() => _myReaction[m.id] = emoji);
         ScaffoldMessenger.of(context)
@@ -866,7 +886,11 @@ class _RoomChatState extends State<RoomChat> {
     final service = widget.dependencies?.service;
     if (service == null) return;
     try {
-      await service.messageHide(widget.spaceId, m.id);
+      if (widget.direct) {
+        await service.dmHide(m.id);
+      } else {
+        await service.messageHide(widget.spaceId, m.id);
+      }
       if (mounted) {
         setState(() => _hiddenHere.add(m.id));
         ScaffoldMessenger.of(context).showSnackBar(
@@ -888,7 +912,11 @@ class _RoomChatState extends State<RoomChat> {
     final service = widget.dependencies?.service;
     if (service == null) return;
     try {
-      await service.messageKeep(widget.spaceId, m.id);
+      if (widget.direct) {
+        await service.dmKeep(m.id);
+      } else {
+        await service.messageKeep(widget.spaceId, m.id);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Kept in your storage')));
@@ -1086,7 +1114,7 @@ class _RoomChatState extends State<RoomChat> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Attach to message',
+                      Text('Add to message',
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
@@ -1101,7 +1129,8 @@ class _RoomChatState extends State<RoomChat> {
                           Navigator.pop(context);
                           _pickFile(_videoTypes);
                         }),
-                        _attachOption(Icons.mic_rounded, 'Voice / Audio', () {
+                        _attachOption(Icons.audiotrack_rounded, 'Audio file',
+                            () {
                           Navigator.pop(context);
                           _pickFile(_audioTypes);
                         }),
@@ -1116,6 +1145,11 @@ class _RoomChatState extends State<RoomChat> {
                             Icons.folder_shared_rounded, 'Project folder', () {
                           Navigator.pop(context);
                           _attachFolder();
+                        }),
+                        _attachOption(Icons.auto_awesome_rounded,
+                            'Design a message', () {
+                          Navigator.pop(context);
+                          _openDesigner();
                         }),
                       ]),
                     ]))));
@@ -1231,9 +1265,18 @@ class _RoomChatState extends State<RoomChat> {
     ),
   ];
 
+  /// Direct chats always store attachments via `users.dm_file_upload` keyed by
+  /// the peer account id — even after `ensureDirectSpace` binds a desk space.
+  /// `spaces.message_send` for Directs still claims `direct_attachments`, so
+  /// `spaces.file_upload` ids 400. Person↔person and person↔agent DMs both use
+  /// this path.
+  bool get _useDmFileUpload =>
+      widget.direct && widget.peerId.isNotEmpty;
+
   Future<void> _pickFile(List<XTypeGroup> types) async {
     final deps = widget.dependencies;
-    if (deps == null || widget.spaceId.isEmpty) return;
+    // Person DMs: users.dm_file_upload (peer account id). Rooms: spaces.file_upload.
+    if (deps == null || (!_useDmFileUpload && widget.spaceId.isEmpty)) return;
     final XFile? picked;
     try {
       picked = await openFile(acceptedTypeGroups: types);
@@ -1276,13 +1319,23 @@ class _RoomChatState extends State<RoomChat> {
     if (deps == null) return;
     setState(() => draft.uploading = true);
     try {
-      final uploaded = await deps.service.uploadFile(
-        widget.spaceId,
-        roomId: widget.roomId,
-        name: draft.name,
-        mime: draft.mime,
-        bytes: draft.bytes,
-      );
+      final uploaded = _useDmFileUpload
+          ? await deps.service.dmFileUpload(
+              widget.peerId,
+              name: draft.name,
+              mime: draft.mime,
+              bytes: draft.bytes,
+              voice: draft.voice,
+              durationMs: draft.durationMs,
+              waveform: draft.waveform,
+            )
+          : await deps.service.uploadFile(
+              widget.spaceId,
+              roomId: widget.roomId,
+              name: draft.name,
+              mime: draft.mime,
+              bytes: draft.bytes,
+            );
       draft.fileId = uploaded.id;
       draft.uploaded = true;
     } catch (e) {
@@ -1291,6 +1344,147 @@ class _RoomChatState extends State<RoomChat> {
       // The upload finished (success or failure) — stop the spinner.
       draft.uploading = false;
       if (mounted) setState(() {});
+    }
+  }
+
+  /// Empty composer → record a voice note (Decillion: send button is a mic).
+  bool get _canRecordVoice {
+    if (widget.dependencies == null || widget.composerNotice != null) {
+      return false;
+    }
+    // Saved notes use live voice / dictation, not chat voice notes.
+    if (widget.saved) return false;
+    if (_sending || _editing != null || _voicePhase != null) return false;
+    if (input.text.trim().isNotEmpty || _drafts.isNotEmpty) return false;
+    // Person DMs / notes: users.dm_file_upload with voice metadata.
+    if (_useDmFileUpload) return true;
+    // Project rooms only (not Direct desks): spaces.file_upload audio.
+    return !widget.direct && widget.spaceId.isNotEmpty;
+  }
+
+  Future<void> _startVoiceMessage() async {
+    if (!_canRecordVoice) return;
+    final recorder = VoiceMessageRecorder();
+    try {
+      await recorder.start();
+    } catch (e) {
+      await recorder.dispose();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
+      return;
+    }
+    if (!mounted) {
+      await recorder.dispose();
+      return;
+    }
+    setState(() {
+      _voiceRecorder = recorder;
+      _voicePhase = 'recording';
+      _voiceFile = null;
+      _voiceStartedAt = recorder.startedAt;
+    });
+  }
+
+  Future<void> _stopVoiceForPreview() async {
+    final recorder = _voiceRecorder;
+    if (recorder == null || _voicePhase != 'recording') return;
+    try {
+      final file = await recorder.stop();
+      if (!mounted) return;
+      if (!voiceLongEnough(file.durationMs)) {
+        await _cancelVoiceMessage();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'That was too short. Tap the mic and speak, then send.')));
+        return;
+      }
+      setState(() {
+        _voicePhase = 'stopped';
+        _voiceFile = file;
+      });
+    } catch (e) {
+      await _cancelVoiceMessage();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Record failed: $e')));
+    }
+  }
+
+  Future<void> _cancelVoiceMessage() async {
+    final recorder = _voiceRecorder;
+    _voiceRecorder = null;
+    _voicePhase = null;
+    _voiceFile = null;
+    if (recorder != null) {
+      try {
+        await recorder.cancel();
+      } catch (_) {}
+      try {
+        await recorder.dispose();
+      } catch (_) {}
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _sendVoiceMessage() async {
+    final deps = widget.dependencies;
+    if (deps == null || _sending) return;
+    var file = _voiceFile;
+    final recorder = _voiceRecorder;
+    if (file == null && recorder != null && _voicePhase == 'recording') {
+      try {
+        file = await recorder.stop();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Record failed: $e')));
+        return;
+      }
+    }
+    if (file == null) return;
+    if (!voiceLongEnough(file.durationMs)) {
+      await _cancelVoiceMessage();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('That was too short. Tap the mic and speak, then send.')));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _voicePhase = null;
+      _voiceFile = null;
+      _voiceRecorder = null;
+    });
+    try {
+      await recorder?.dispose();
+    } catch (_) {}
+    try {
+      final draft = _DraftAttachment(
+        name: file.name,
+        mime: file.mime,
+        bytes: file.bytes,
+        // Only users.dm_file_upload stores voice / duration_ms / waveform.
+        voice: _useDmFileUpload,
+        durationMs: file.durationMs,
+        waveform: file.waveform,
+      );
+      await _uploadDraft(draft);
+      if (!draft.uploaded || draft.fileId.isEmpty) {
+        throw StateError(draft.error ?? 'Upload failed');
+      }
+      await widget.onSend?.call('', const [], [draft.fileId],
+          replyTo: _replyTo?.id ?? '');
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Voice send failed: $e')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -1427,7 +1621,7 @@ class _RoomChatState extends State<RoomChat> {
     }
     final working = _workingIndicator();
     if (widget.flat) {
-      final bottomPad = 94 + widget.bottomContentInset;
+      final bottomPad = 72 + widget.bottomContentInset;
       return _Panel(
           flat: true,
           child: Stack(children: [
@@ -1742,12 +1936,39 @@ class _RoomChatState extends State<RoomChat> {
     ];
   }
 
+  /// Default single-line message composer height (Material control size).
+  static const double _composerHeight = 56;
+
+  /// Shared size for attach / mention / dictate / send in the composer row.
+  static const double _composerIconSize = 40;
+
+  /// Uniform gap between composer icon buttons (and the field).
+  static const double _composerIconGap = AppSpacing.xs;
+
+  ButtonStyle _composerIconStyle({Color? backgroundColor, Color? foregroundColor}) =>
+      IconButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+        minimumSize: const Size(_composerIconSize, _composerIconSize),
+        maximumSize: const Size(_composerIconSize, _composerIconSize),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+      );
+
+  ButtonStyle _composerSendStyle({Color? backgroundColor, Color? foregroundColor}) =>
+      _composerIconStyle(
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+      );
+
   Widget _composer() {
     final scheme = Theme.of(context).colorScheme;
     final shell = ThemeChrome.inputShell(context, elevated: widget.flat);
     final notice = widget.composerNotice;
     if (notice != null) {
       return Container(
+        constraints: const BoxConstraints(minHeight: _composerHeight),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
             color: shell.color,
@@ -1763,6 +1984,15 @@ class _RoomChatState extends State<RoomChat> {
       );
     }
     final work = _work;
+    final hasChrome = _drafts.isNotEmpty ||
+        _mentions.isNotEmpty ||
+        _editing != null ||
+        _replyTo != null ||
+        (_editing == null &&
+            _voicePhase == null &&
+            PromptCommandSuggestions.matches(input.text)) ||
+        _voicePhase != null;
+    final inputRow = _composerInputRow(scheme);
     final box = Material(
         color: shell.color,
         elevation: shell.elevation,
@@ -1770,7 +2000,10 @@ class _RoomChatState extends State<RoomChat> {
         borderRadius: shell.radius,
         clipBehavior: Clip.antiAlias,
         child: Padding(
-            padding: shell.padding,
+            padding: EdgeInsets.symmetric(
+              horizontal: math.max(6.0, shell.padding.left * 0.75),
+              vertical: hasChrome ? 6 : 0,
+            ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               if (_drafts.isNotEmpty)
                 Padding(
@@ -1801,94 +2034,26 @@ class _RoomChatState extends State<RoomChat> {
                         ]))),
               if (_editing != null || _replyTo != null) _composerBanner(),
               if (_editing == null &&
+                  _voicePhase == null &&
                   PromptCommandSuggestions.matches(input.text))
                 PromptCommandSuggestions(
                     typed: input.text, onPick: _pickCommand),
-              LayoutBuilder(builder: (context, box) {
-                final actions = [
-                  _composerAction(Icons.add_rounded, 'Attach file',
-                      _sending ? null : (ctx) => _showAttachSheet(ctx)),
-                  _composerAction(Icons.alternate_email_rounded,
-                      'Mention an agent', (ctx) => _pickMention(ctx)),
-                  _composerAction(
-                      Icons.auto_awesome_rounded,
-                      'Design a message',
-                      _sending ? null : (_) => _openDesigner()),
-                ];
-                final field = TextField(
-                    controller: input,
-                    enabled: !_sending,
-                    onSubmitted: _submit,
-                    onChanged: _typed,
-                    minLines: 1,
-                    maxLines: 5,
-                    textInputAction: TextInputAction.send,
-                    style: const TextStyle(fontSize: 15),
-                    decoration: InputDecoration(
-                        hintText: (_work?.questions.isNotEmpty ?? false)
-                            ? 'Answer ${_work!.questions.first.agent}…'
-                            : widget.hint,
-                        hintMaxLines: 1,
-                        filled: false,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 12),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none));
-                // While agents work, an empty composer's button stops them.
-                final stop = _busy &&
-                    !_sending &&
-                    _editing == null &&
-                    input.text.trim().isEmpty &&
-                    _drafts.isEmpty;
-                final send = stop
-                    ? IconButton.filled(
-                        tooltip: 'Stop the work in progress',
-                        style: IconButton.styleFrom(
-                            backgroundColor: scheme.error,
-                            foregroundColor: scheme.onError),
-                        onPressed:
-                            (_work?.stopping ?? false) ? null : _stopWork,
-                        icon: const Icon(Icons.stop_rounded, size: 20))
-                    : IconButton.filled(
-                        tooltip: 'Send',
-                        onPressed: _sending ? null : () => _submit(input.text),
-                        icon: _sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.send_rounded, size: 20));
-                final deps = widget.dependencies;
-                final mic = deps == null || _sending || _editing != null
-                    ? null
-                    : DictationButton(dependencies: deps, onText: _dictated);
-                // Narrow panels give the text its own line above the actions.
-                if (box.maxWidth < 340) {
-                  return Column(mainAxisSize: MainAxisSize.min, children: [
-                    field,
-                    Row(children: [
-                      ...actions,
-                      const Spacer(),
-                      if (mic != null) mic,
-                      send
-                    ]),
-                  ]);
-                }
-                return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      ...actions,
-                      const SizedBox(width: 4),
-                      Expanded(child: field),
-                      const SizedBox(width: 4),
-                      if (mic != null) mic,
-                      send,
-                    ]);
-              }),
+              if (_voicePhase != null)
+                VoiceRecorderBar(
+                  phase: _voicePhase!,
+                  startedAt: _voiceStartedAt,
+                  level: () => _voiceRecorder?.level ?? 0,
+                  file: _voiceFile,
+                  onStop: () => unawaited(_stopVoiceForPreview()),
+                  onCancel: () => unawaited(_cancelVoiceMessage()),
+                  onSend: () => unawaited(_sendVoiceMessage()),
+                  onLimit: () => unawaited(_stopVoiceForPreview()),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: _composerHeight),
+                  child: inputRow,
+                ),
             ])));
     final deps = widget.dependencies;
     final banner = widget.suggestions && deps != null
@@ -1906,6 +2071,95 @@ class _RoomChatState extends State<RoomChat> {
         RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
       box,
     ]);
+  }
+
+  /// One-row bar: attach / mention, the text field, mic and send.
+  Widget _composerInputRow(ColorScheme scheme) {
+    final canAttach = !_sending;
+    final actions = [
+      _composerAction(Icons.add_rounded, 'Attach file',
+          canAttach ? (ctx) => _showAttachSheet(ctx) : null),
+      _composerAction(Icons.alternate_email_rounded, 'Mention an agent',
+          (ctx) => _pickMention(ctx)),
+    ];
+    final field = TextField(
+        controller: input,
+        enabled: !_sending,
+        onSubmitted: _submit,
+        onChanged: _typed,
+        minLines: 1,
+        maxLines: 5,
+        textInputAction: TextInputAction.send,
+        style: const TextStyle(fontSize: 15),
+        decoration: InputDecoration(
+            hintText: (_work?.questions.isNotEmpty ?? false)
+                ? 'Answer ${_work!.questions.first.agent}…'
+                : widget.hint,
+            hintMaxLines: 1,
+            filled: false,
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none));
+    // While agents work, an empty composer's button stops them.
+    final stop = _busy &&
+        !_sending &&
+        _editing == null &&
+        input.text.trim().isEmpty &&
+        _drafts.isEmpty;
+    final recordVoice = !stop && _canRecordVoice;
+    final Widget send;
+    if (stop) {
+      send = IconButton.filled(
+          tooltip: 'Stop the work in progress',
+          style: _composerSendStyle(
+              backgroundColor: scheme.error, foregroundColor: scheme.onError),
+          onPressed: (_work?.stopping ?? false) ? null : _stopWork,
+          icon: const Icon(Icons.stop_rounded, size: 20));
+    } else if (recordVoice) {
+      // Empty composer: filled mic records a voice note (not STT).
+      send = IconButton.filled(
+          tooltip: 'Record a voice message',
+          style: _composerSendStyle(),
+          onPressed: _sending ? null : () => unawaited(_startVoiceMessage()),
+          icon: const Icon(Icons.mic_rounded, size: 20));
+    } else {
+      send = IconButton.filled(
+          tooltip: 'Send',
+          style: _composerSendStyle(),
+          onPressed: _sending ? null : () => _submit(input.text),
+          icon: _sending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.send_rounded, size: 20));
+    }
+    final deps = widget.dependencies;
+    // Hide STT while the empty-composer mic means "voice note", so tapping
+    // the microphone always records a message instead of calling dictate.
+    final dictate = deps == null ||
+            _sending ||
+            _editing != null ||
+            recordVoice
+        ? null
+        : DictationButton(
+            dependencies: deps,
+            onText: _dictated,
+            style: _composerIconStyle(),
+          );
+    return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        spacing: _composerIconGap,
+        children: [
+          ...actions,
+          Expanded(child: field),
+          if (dictate != null) dictate,
+          send,
+        ]);
   }
 
   /// Puts dictated text where the cursor is; the person sends it.
@@ -1926,7 +2180,7 @@ class _RoomChatState extends State<RoomChat> {
       Builder(
           builder: (ctx) => IconButton(
               tooltip: tooltip,
-              visualDensity: VisualDensity.compact,
+              style: _composerIconStyle(),
               onPressed: onTap == null ? null : () => onTap(ctx),
               icon: Icon(icon, size: 20)));
 
@@ -2145,58 +2399,66 @@ class _RoomChatState extends State<RoomChat> {
   /// Caption markdown + AG-UI surface (if the body carries an `agui` fence).
   List<Widget> _agUiBody(
       BuildContext context, RoomMessage m, AppDependencies? deps, Color fg) {
-    final offered = parseReplies(m.body);
-    final parsed = parseAgUiBody(offered.text);
-    final out = <Widget>[];
-    if (parsed.caption.trim().isNotEmpty) {
-      out.add(RichPostContent(parsed.caption,
-          headers: deps?.service.authHeaders() ?? const {},
-          resolveUrl: deps?.service.resolveContentUrl,
-          onLinkTap: deps == null
-              ? null
-              : (link) => openWorkspaceLink(context, deps.service, link)));
-    }
-    final surface = parsed.surface;
-    if (surface != null && surface.root != null) {
-      out.add(Padding(
-        padding: EdgeInsets.only(top: parsed.caption.trim().isEmpty ? 0 : 8),
-        child: _withActions(
-          deps,
-          AgUiSurfaceView(
-            surface: surface,
-            onReply: widget.onSend == null
+    try {
+      final offered = parseReplies(m.body);
+      final parsed = parseAgUiBody(offered.text);
+      final out = <Widget>[];
+      if (parsed.caption.trim().isNotEmpty) {
+        out.add(RichPostContent(parsed.caption,
+            headers: deps?.service.authHeaders() ?? const {},
+            resolveUrl: deps?.service.resolveContentUrl,
+            onLinkTap: deps == null
                 ? null
-                : (value, {meta}) {
-                    widget.onSend!(value, const [], const [], replyTo: m.id);
-                  },
-          ),
-        ),
-      ));
-    } else if (parsed.caption.trim().isEmpty && offered.text.trim().isNotEmpty) {
-      // No fence — original markdown body.
-      out.add(RichPostContent(offered.text,
-          headers: deps?.service.authHeaders() ?? const {},
-          resolveUrl: deps?.service.resolveContentUrl,
-          onLinkTap: deps == null
-              ? null
-              : (link) => openWorkspaceLink(context, deps.service, link)));
-    }
-    if (offered.replies.isNotEmpty &&
-        m.id == _repliesFor &&
-        widget.onSend != null) {
-      out.add(Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final reply in offered.replies)
-            ActionChip(
-              label: Text(reply),
-              onPressed: () =>
-                  widget.onSend!(reply, const [], const [], replyTo: m.id),
+                : (link) => openWorkspaceLink(context, deps.service, link)));
+      }
+      final surface = parsed.surface;
+      if (surface != null && surface.root != null) {
+        out.add(Padding(
+          padding: EdgeInsets.only(top: parsed.caption.trim().isEmpty ? 0 : 8),
+          child: _withActions(
+            deps,
+            AgUiSurfaceView(
+              surface: surface,
+              onReply: widget.onSend == null
+                  ? null
+                  : (value, {meta}) {
+                      widget.onSend!(value, const [], const [], replyTo: m.id);
+                    },
             ),
-        ]),
-      ));
+          ),
+        ));
+      } else if (parsed.caption.trim().isEmpty &&
+          offered.text.trim().isNotEmpty) {
+        // No fence — original markdown body.
+        out.add(RichPostContent(offered.text,
+            headers: deps?.service.authHeaders() ?? const {},
+            resolveUrl: deps?.service.resolveContentUrl,
+            onLinkTap: deps == null
+                ? null
+                : (link) => openWorkspaceLink(context, deps.service, link)));
+      }
+      if (offered.replies.isNotEmpty &&
+          m.id == _repliesFor &&
+          widget.onSend != null) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final reply in offered.replies)
+              ActionChip(
+                label: Text(reply),
+                onPressed: () =>
+                    widget.onSend!(reply, const [], const [], replyTo: m.id),
+              ),
+          ]),
+        ));
+      }
+      return out;
+    } catch (_) {
+      // Never let one bad body grey out the whole message list.
+      final plain = m.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (plain.isEmpty) return const [];
+      return [Text(plain, style: TextStyle(color: fg, fontSize: 14, height: 1.4))];
     }
-    return out;
   }
 
   /// Gives governance cards (approvals, secrets, take-over, suggestions)
@@ -2221,11 +2483,19 @@ class _DraftAttachment {
     required this.name,
     required this.mime,
     required this.bytes,
+    this.voice = false,
+    this.durationMs = 0,
+    this.waveform = const [],
   });
 
   final String name;
   final String mime;
   final Uint8List bytes;
+
+  /// Direct voice note → `users.dm_file_upload` voice metadata.
+  final bool voice;
+  final int durationMs;
+  final List<int> waveform;
   bool uploading = false;
   bool uploaded = false;
   String fileId = '';

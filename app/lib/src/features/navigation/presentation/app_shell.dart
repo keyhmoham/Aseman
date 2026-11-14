@@ -24,6 +24,9 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   String _workspace = 'Home';
 
+  /// Space id when opening from chats (preferred over name).
+  String? _initialSpaceId;
+
   /// Room to select when the workspace page opens, from the home chats list.
   String? _initialRoom;
   String? _initialRoomId;
@@ -47,35 +50,44 @@ class _AppShellState extends State<AppShell> {
     // On a desktop where the person let agents use this computer, keep
     // answering them.
     hostAgentFor(widget.dependencies).restore().ignore();
-    unawaited(_firstDay());
+    // Expo has no proactive.first_day; setup uses proactive.setup_check.
+    unawaited(_setupCheck());
   }
 
-  /// On a person's first day the lead greets them in their home chat and
-  /// asks what they work on; the setup checklist then shows what is left.
-  /// The node runs it once, however often this asks.
-  Future<void> _firstDay() async {
+  /// Opens the setup checklist when the node still has unfinished setup items
+  /// (`proactive.setup_check` — Expo SOT).
+  Future<void> _setupCheck() async {
     try {
       final out = await widget.dependencies.service.invokeAction(
         'proactive',
-        'first_day',
+        'setup_check',
       );
-      if (!mounted || out is! Map || out['started'] != true) return;
+      if (!mounted || out is! Map) return;
+      final items = out['items'];
+      if (items is! List || items.isEmpty) return;
       await openPanel(context, SetupPanel(dependencies: widget.dependencies));
     } catch (_) {
       // No proactive work on this node.
     }
   }
 
-  void _openWorkspace(String name) {
+  void _openWorkspace(String name, {String spaceId = ''}) {
     _workspace = name;
+    _initialSpaceId = spaceId.isEmpty ? null : spaceId;
     _initialRoom = null;
     _initialRoomId = null;
     unawaited(_pushWorkspace());
   }
 
-  /// Opens [name] with the room from the home chats list already selected.
-  void _openWorkspaceRoom(String name, String roomName, String roomId) {
+  /// Opens a project (by id when known) with the room from the chats list.
+  void _openWorkspaceRoom(
+    String spaceId,
+    String name,
+    String roomName,
+    String roomId,
+  ) {
     _workspace = name;
+    _initialSpaceId = spaceId.isEmpty ? null : spaceId;
     _initialRoom = roomName;
     _initialRoomId = roomId;
     unawaited(_pushWorkspace());
@@ -108,9 +120,11 @@ class _AppShellState extends State<AppShell> {
           reverseTransitionDuration: Duration.zero,
           pageBuilder: (context, animation, secondaryAnimation) =>
               workspace_entry.workspaceScreen(
-            key: const ValueKey('workspace-desk'),
+            key: ValueKey(
+                'workspace-desk-${_initialSpaceId ?? _workspace}'),
             dependencies: widget.dependencies,
             initialWorkspace: _workspace,
+            initialSpaceId: _initialSpaceId,
             initialRoom: _initialRoom,
             initialRoomId: _initialRoomId,
             onBackToFeed: _popToHome,
@@ -150,7 +164,7 @@ class _AppShellState extends State<AppShell> {
       key: ValueKey('search-feed-$_workspace-$_mobileTab'),
       dependencies: widget.dependencies,
       workspace: _workspace,
-      onOpenWorkspace: _openWorkspace,
+      onOpenWorkspace: (name) => _openWorkspace(name),
       onOpenSpaceRoom: _openWorkspaceRoom,
       initialMobileTab: _mobileTab,
     );

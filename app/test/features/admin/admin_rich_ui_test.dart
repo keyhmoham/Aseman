@@ -83,9 +83,6 @@ void main() {
               {...project('space-3', 'Direct chat'), 'direct_key': 'a:b'},
             ]
           },
-          'spaces.admins_space_get': {
-            'space': {'id': 'space-1', 'name': 'Operations'}
-          },
           'admin.admins_list': {
             'admins': [
               {'id': 'a1', 'handle': 'ada'},
@@ -103,21 +100,11 @@ void main() {
       ),
     );
 
-    expect(find.text('Platform admins space'), findsOneWidget);
-    expect(find.textContaining('2 admins are members'), findsOneWidget);
-    expect(find.textContaining('Admins space · '), findsOneWidget);
-
-    await tester.tap(find.text('Change'));
-    await tester.pumpAndSettle();
-    final picker = find.byType(AlertDialog);
-    expect(find.text('Choose the admins space'), findsOneWidget);
-    // Direct conversations cannot take members.
-    expect(find.descendant(of: picker, matching: find.text('Direct chat')),
-        findsNothing);
-    await tester
-        .tap(find.descendant(of: picker, matching: find.text('Admins HQ')));
-    await tester.pumpAndSettle();
-    expect(calls, ['spaces.admins_space_set space-2']);
+    // Expo has no spaces.admins_space_*; projects list still renders.
+    expect(find.text('Platform admins space'), findsNothing);
+    expect(find.text('Operations'), findsOneWidget);
+    expect(find.text('Admins HQ'), findsOneWidget);
+    expect(calls, isEmpty);
   });
 
   testWidgets('finance overview presents KPIs and visual breakdown',

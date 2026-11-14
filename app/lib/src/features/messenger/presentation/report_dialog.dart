@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 
-/// Why something is reported, as `spaces.message_report` takes it.
+/// Why something is reported (`spaces.message_report` / `users.dm_report`).
+/// Expo DM reasons: spam|harassment|inappropriate|scam|other (no abuse).
 const reportReasons = <(String, String)>[
   ('spam', 'Spam'),
   ('harassment', 'Harassment or bullying'),
-  ('abuse', 'Abuse or threats'),
   ('scam', 'Scam or fraud'),
   ('inappropriate', 'Inappropriate content'),
   ('other', 'Something else')
@@ -15,17 +15,23 @@ const reportReasons = <(String, String)>[
 
 /// Asks why a message (or a whole chat, when [messageId] is empty) is being
 /// reported and sends the report to the node's admins. Returns whether a
-/// report was sent.
+/// report was sent. Direct chats use [peer] → `users.dm_report`.
 Future<bool> reportToAdmins(BuildContext context, AsemanService service,
-    {required String spaceId,
-    required String roomId,
+    {String spaceId = '',
+    String roomId = '',
+    String peer = '',
     String messageId = ''}) async {
   final result = await showAppDialog<(String, String)>(
       context: context, builder: (_) => _ReportDialog(chat: messageId.isEmpty));
   if (result == null || !context.mounted) return false;
   try {
-    await service.reportChat(spaceId, roomId,
-        messageId: messageId, reason: result.$1, note: result.$2);
+    if (peer.isNotEmpty) {
+      await service.reportDirect(peer,
+          messageId: messageId, reason: result.$1, note: result.$2);
+    } else {
+      await service.reportChat(spaceId, roomId,
+          messageId: messageId, reason: result.$1, note: result.$2);
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Reported. The admins will take a look.')));

@@ -16,11 +16,13 @@ class WorkspaceController extends ChangeNotifier {
   WorkspaceController({
     required this.dependencies,
     required String initialWorkspace,
+    this.initialSpaceId,
     this.initialRoom,
     this.initialRoomId,
     this.onWorkspaceChanged,
     this.onAttachGadgets,
   }) : workspace = initialWorkspace,
+       activeSpaceId = initialSpaceId ?? '',
        deskController = DeskController(
          DeskApi.of(dependencies.service),
        );
@@ -28,6 +30,9 @@ class WorkspaceController extends ChangeNotifier {
   static const hallRoom = 'Hall room';
 
   final AppDependencies dependencies;
+
+  /// Preferred id when opening a space (chats list). Wins over name lookup.
+  final String? initialSpaceId;
   final String? initialRoom;
   final String? initialRoomId;
   final ValueChanged<String>? onWorkspaceChanged;
@@ -39,6 +44,10 @@ class WorkspaceController extends ChangeNotifier {
   AsemanService get _service => dependencies.service;
 
   String workspace;
+
+  /// Id of the space currently shown; used so rooms/messages never bind to
+  /// another project that happens to share a name.
+  String activeSpaceId;
   String? room;
   int libraryTab = 0;
 
@@ -124,8 +133,21 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   Workspace? spaceFor(String name) {
+    if (activeSpaceId.isNotEmpty) {
+      for (final s in spaces) {
+        if (s.id == activeSpaceId) return s;
+      }
+    }
     for (final s in spaces) {
       if (s.name == name) return s;
+    }
+    return null;
+  }
+
+  Workspace? spaceById(String id) {
+    if (id.isEmpty) return null;
+    for (final s in spaces) {
+      if (s.id == id) return s;
     }
     return null;
   }
@@ -213,10 +235,8 @@ class WorkspaceController extends ChangeNotifier {
       final sp = await _service.fetchSpaces();
       if (_disposed) return;
       spaces = sp;
-      if (sp.isNotEmpty && !sp.any((s) => s.name == workspace)) {
-        final home = sp.firstWhere((s) => s.home, orElse: () => sp.first);
-        workspace = home.name;
-      }
+      await _resolveActiveSpace();
+      if (_disposed) return;
       _notify();
       onAttachGadgets?.call();
       await loadRooms();
@@ -225,6 +245,45 @@ class WorkspaceController extends ChangeNotifier {
     } catch (_) {
       // Spaces failed to load; the workspace keeps its current name.
     }
+  }
+
+  /// Bind [workspace] / [activeSpaceId] to the requested project. Prefer id
+  /// (from chats); only fall back to home when nothing was requested.
+  Future<void> _resolveActiveSpace() async {
+    final wantId = (activeSpaceId.isNotEmpty
+            ? activeSpaceId
+            : (initialSpaceId ?? ''))
+        .trim();
+    if (wantId.isNotEmpty) {
+      var match = spaceById(wantId);
+      if (match == null) {
+        // Not in the list (stale cache / kind gap): fetch that project alone.
+        try {
+          match = await _service.fetchSpace(wantId);
+          if (_disposed) return;
+          spaces = [...spaces.where((s) => s.id != match!.id), match];
+        } catch (_) {
+          match = null;
+        }
+      }
+      if (match != null) {
+        activeSpaceId = match.id;
+        workspace = match.name;
+        return;
+      }
+    }
+    final byName = spaces.where((s) => s.name == workspace).toList();
+    if (byName.isNotEmpty) {
+      activeSpaceId = byName.first.id;
+      return;
+    }
+    // No target matched — only then land on home / first. Never rewrite a
+    // successfully resolved id to another project.
+    if (spaces.isEmpty) return;
+    if (wantId.isNotEmpty) return;
+    final home = spaces.firstWhere((s) => s.home, orElse: () => spaces.first);
+    activeSpaceId = home.id;
+    workspace = home.name;
   }
 
   /// Refreshes the spaces list without switching workspace.
@@ -495,9 +554,22 @@ class WorkspaceController extends ChangeNotifier {
   }
 
   /// Applies a workspace switch after the screen has finished exit motion.
-  void selectWorkspace(String value) {
+  void selectWorkspace(String value, {String spaceId = ''}) {
     workspace = value;
+    if (spaceId.isNotEmpty) {
+      activeSpaceId = spaceId;
+    } else {
+      activeSpaceId = '';
+      for (final s in spaces) {
+        if (s.name == value) {
+          activeSpaceId = s.id;
+          break;
+        }
+      }
+    }
     room = null;
+    currentRooms = [];
+    roomThreads.clear();
     workingAgent = '';
     workingDetail = '';
     _notify();

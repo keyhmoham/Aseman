@@ -224,7 +224,7 @@ class ElpianFloatingActionButton {
       builder: (context) {
         final scheme = Theme.of(context).colorScheme;
         final fabTheme = Theme.of(context).floatingActionButtonTheme;
-        // Default matches app soft-mist FAB theme. `filled` stays saturated.
+        // M3 Expressive: default primary-container; `filled` = primary.
         final (Color bg, Color fg) = switch (node.props['variant']) {
           'secondary' => (
             scheme.secondaryContainer,
@@ -234,7 +234,7 @@ class ElpianFloatingActionButton {
           'surface' => (scheme.surfaceContainerHigh, scheme.primary),
           'filled' => (scheme.primary, scheme.onPrimary),
           _ => (
-            fabTheme.backgroundColor ?? AppFab.mistOf(scheme),
+            fabTheme.backgroundColor ?? AppFab.containerOf(scheme),
             fabTheme.foregroundColor ?? AppFab.inkOf(scheme),
           ),
         };

@@ -10,9 +10,9 @@ import '../../core/theme/theme_chrome.dart';
 
 /// The app's signature segmented pill tab control (the same component used by
 /// the search feed's Global / Following / People tabs). A rounded container
-/// hosts a [TabBar] whose indicator is a soft pill; icons render on wide
-/// screens and hide on compact ones. The controller is resolved from the
-/// enclosing [DefaultTabController] unless one is passed explicitly.
+/// hosts a [TabBar] whose indicator is M3 secondary-container; icons render
+/// on wide screens and hide on compact ones. The controller is resolved from
+/// the enclosing [DefaultTabController] unless one is passed explicitly.
 ///
 /// The pill sizes to its tabs and scrolls horizontally when they overflow, so
 /// captions always keep their natural size and every tab stays reachable.
@@ -69,7 +69,18 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
       return _own = TabController(
           length: widget.labels.length, initialIndex: index, vsync: this);
     }
-    if (own.index != index) own.animateTo(index);
+    // Never animate during build — chats poll updates unread labels
+    // ("All" → "All · 2") and a mid-build animateTo can trip the framework
+    // into an ErrorWidget under the filter row.
+    if (own.index != index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final live = _own;
+        if (live != null && live.index != index && live.length > index) {
+          live.animateTo(index);
+        }
+      });
+    }
     return own;
   }
 
@@ -158,7 +169,7 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             dividerColor: Colors.transparent,
             indicatorSize: TabBarIndicatorSize.tab,
             indicator: AppFab.tabIndicatorOf(scheme, tokens: tokens),
-            labelColor: scheme.primary,
+            labelColor: AppFab.tabIndicatorInkOf(scheme),
             unselectedLabelColor: scheme.onSurfaceVariant,
             labelStyle: selectedStyle,
             unselectedLabelStyle: unselectedStyle,

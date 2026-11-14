@@ -526,7 +526,27 @@ class _PlatformState extends _LoadedState<_Platform> {
   }
 
   @override
-  Future<_Json> fetch() => widget.service.developer('platform_catalog');
+  /// Expo has no developer.platform_catalog; list actions via admin.actions_list.
+  Future<_Json> fetch() async {
+    final raw = await widget.service.invokeAction('admin', 'actions_list');
+    final map = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    final namespaces = <Map<String, dynamic>>[];
+    for (final n in (map['namespaces'] as List? ?? const [])) {
+      if (n is! Map) continue;
+      final name = '${n['namespace'] ?? n['name'] ?? ''}';
+      final actions = <Map<String, dynamic>>[];
+      for (final a in (n['actions'] as List? ?? const [])) {
+        if (a is! Map) continue;
+        actions.add({
+          'name': '${a['name'] ?? ''}',
+          'summary': '${a['summary'] ?? ''}',
+          'path': '/v1/$name/${a['name'] ?? ''}',
+        });
+      }
+      namespaces.add({'name': name, 'actions': actions});
+    }
+    return {'namespaces': namespaces};
+  }
 
   @override
   Widget content(BuildContext context) {

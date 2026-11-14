@@ -34,15 +34,47 @@ void main() {
       expect(theme.cardTheme.color, theme.colorScheme.surface);
     });
 
-    test('$name FABs use soft mist wash with a hairline rim', () {
+    test('$name FABs use M3 primary-container, not mist wash', () {
       final scheme = theme.colorScheme;
       final fab = theme.floatingActionButtonTheme;
-      expect(fab.backgroundColor, AppFab.mistOf(scheme));
+      expect(fab.backgroundColor, scheme.primaryContainer);
+      expect(fab.foregroundColor, scheme.onPrimaryContainer);
+      expect(fab.backgroundColor, AppFab.containerOf(scheme));
       expect(fab.foregroundColor, AppFab.inkOf(scheme));
-      expect(fab.elevation, 0);
       expect(fab.shape, isA<RoundedRectangleBorder>());
+      expect(
+        (fab.shape! as RoundedRectangleBorder).side,
+        BorderSide.none,
+      );
       expect(fab.enableFeedback, isTrue);
       expect(fab.extendedIconLabelSpacing, 10);
+    });
+
+    test('$name filled buttons stay primary; elevated / outlined follow M3',
+        () {
+      final scheme = theme.colorScheme;
+      // Filled theme leaves colors to Material so FilledButton.tonal can use
+      // secondary-container; elevated / outlined set explicit roles.
+      expect(
+        theme.elevatedButtonTheme.style?.backgroundColor?.resolve({}),
+        scheme.surfaceContainerLow,
+      );
+      expect(
+        theme.elevatedButtonTheme.style?.foregroundColor?.resolve({}),
+        scheme.primary,
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.foregroundColor?.resolve({}),
+        scheme.onSurfaceVariant,
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.backgroundColor?.resolve({}),
+        Colors.transparent,
+      );
+      expect(
+        theme.textButtonTheme.style?.foregroundColor?.resolve({}),
+        scheme.primary,
+      );
     });
   }
 
@@ -62,7 +94,7 @@ void main() {
     );
   });
 
-  testWidgets('AppFab reads the soft mist floatingActionButtonTheme',
+  testWidgets('AppFab reads primary-container floatingActionButtonTheme',
       (tester) async {
     late Color bg;
     late Color fg;
@@ -79,11 +111,11 @@ void main() {
       ),
     );
     final scheme = AppTheme.lightWith(Colors.teal).colorScheme;
-    expect(bg, AppFab.mistOf(scheme));
-    expect(fg, AppFab.inkOf(scheme));
+    expect(bg, scheme.primaryContainer);
+    expect(fg, scheme.onPrimaryContainer);
   });
 
-  testWidgets('FloatingActionButton inherits soft mist shape and wash',
+  testWidgets('FloatingActionButton inherits primary-container fill',
       (tester) async {
     final theme = AppTheme.lightWith(Colors.teal);
     await tester.pumpWidget(
@@ -110,13 +142,15 @@ void main() {
       (material.shape! as RoundedRectangleBorder).borderRadius,
       const BorderRadius.all(Radius.circular(16)),
     );
-    expect(material.color, AppFab.mistOf(theme.colorScheme));
+    expect(material.color, theme.colorScheme.primaryContainer);
   });
 
-  testWidgets('SkyFab paints mist capsule with label', (tester) async {
+  testWidgets('SkyFab paints primary-container capsule with label',
+      (tester) async {
+    final theme = AppTheme.lightWith(Colors.teal);
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.lightWith(Colors.teal),
+        theme: theme,
         home: Scaffold(
           floatingActionButton: SkyFab(
             onPressed: () {},
@@ -128,6 +162,15 @@ void main() {
     );
     expect(find.text('Post'), findsOneWidget);
     expect(find.byIcon(Icons.edit_rounded), findsOneWidget);
+    final material = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(SkyFab),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(material.color, theme.colorScheme.primaryContainer);
   });
 
   test('glass panels read apart from the page in both themes', () {

@@ -170,7 +170,10 @@ class _SharePostSheetState extends State<SharePostSheet> {
           ),
         ),
       for (final c in _chats.where((c) => _chatKeys.contains(c.key)))
-        attempt(() => service.sendRoomMessage(c.spaceId, c.roomId, body)),
+        attempt(() => c.direct
+            ? service.sendDirectMessage(
+                c.peer?.id ?? c.roomId, body)
+            : service.sendRoomMessage(c.spaceId, c.roomId, body)),
     ]);
     if (!mounted) return;
     final done = results.where((ok) => ok).length;

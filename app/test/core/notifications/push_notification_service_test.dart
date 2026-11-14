@@ -18,6 +18,7 @@ class _RecordingService extends AsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     calls.add('$namespace.$action');
     bodies.add(body);

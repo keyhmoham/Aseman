@@ -137,12 +137,15 @@ func (a *applyAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.
 type activeAction struct{ s *Service }
 
 func (a *activeAction) Meta() api.ActionMeta {
-	return api.ActionMeta{Namespace: "themes", Name: "active", Summary: "Get the theme currently applied to your account"}
+	return api.ActionMeta{Namespace: "themes", Name: "active", Summary: "Get a theme just applied in this flow (not session theming — that lives in auth.session_metadata)"}
 }
 func (a *activeAction) Handle(ctx context.Context, req *api.ActionRequest) (*api.ActionResponse, error) {
 	if err := helper.RequireAuthenticated(req); err != nil {
 		return nil, err
 	}
+	// Account-level user_themes is only a write-through for themes.apply in
+	// the same client flow. Login / new sessions must not treat this as the
+	// session look — session theming starts empty.
 	row, err := a.s.Active(ctx, req.Caller.ID)
 	if err != nil {
 		return nil, err

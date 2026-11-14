@@ -109,9 +109,9 @@ class DesignLanguage {
     ),
     this.fab = const ControlRecipe(
       shape: ShapeKind.rounded,
-      fill: FillKind.gradient,
+      fill: FillKind.solid,
       radius: 16,
-      elevation: 0,
+      elevation: 3,
       ink: InkKind.ripple,
     ),
     this.navPill = const ControlRecipe(
@@ -749,10 +749,9 @@ class DesignLanguage {
             ),
             fab: ControlRecipe(
               shape: ShapeKind.rounded,
-              fill: FillKind.gradient,
+              fill: FillKind.solid,
               radius: 18,
-              borderWidth: 1,
-              borderAlpha: 0.35,
+              elevation: 3,
             ),
             toggle: ControlRecipe(
               shape: ShapeKind.stadium,
@@ -1057,7 +1056,7 @@ class GradientStopSpec {
 
   factory GradientStopSpec.fromJson(Map<String, dynamic> json) =>
       GradientStopSpec(
-        color: parseColor(json['color']) ?? const Color(0xFF8B7BFF),
+        color: parseColor(json['color']) ?? const Color(0xFF3B82F6),
         stop: json['stop'] == null ? null : parseDouble(json['stop'], 0),
       );
 }

@@ -18,12 +18,14 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/membership"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/permission"
+	"github.com/aseman/aseman/plugins/actions/support/helper"
 	"github.com/aseman/aseman/plugins/adapters/database/ports"
-	"github.com/aseman/aseman/plugins/adapters/vmm/ports"
+	vmm "github.com/aseman/aseman/plugins/adapters/vmm/ports"
 )
 
 // maxFileSize caps a single upload at 64MB (photos, gifs, audio, voice, short
@@ -118,6 +120,35 @@ func (s *Service) MessageSearch(ctx context.Context, spaceID identity.ID, query 
 	return out, nil
 }
 
+// agentMayReadDirectFile allows an agent turn to open a DM upload (no SpaceID)
+// once it has been linked to a message the agent or the person it works for
+// may open. Unsent uploads and strangers' files stay closed.
+func (s *Service) agentMayReadDirectFile(ctx context.Context, f *filedata.File) bool {
+	if f == nil || !f.SpaceID.IsZero() {
+		return false
+	}
+	var sent struct {
+		OwnerID   string `db:"owner_id"`
+		PeerID    string `db:"peer_id"`
+		MessageID string `db:"message_id"`
+	}
+	if s.R.GetString(ctx, "direct_attachments", f.ID.String(), &sent) != nil || sent.MessageID == "" {
+		return false
+	}
+	actor := helper.Actor(ctx)
+	if !actor.IsZero() && (sent.OwnerID == actor.String() || sent.PeerID == actor.String()) {
+		return true
+	}
+	if agentID, err := identity.Parse(vmm.ExecutionFrom(ctx).AgentID); err == nil {
+		var rec bot.Bot
+		if s.R.Get(ctx, "bots", agentID, &rec) == nil && !rec.AccountID.IsZero() &&
+			(sent.PeerID == rec.AccountID.String() || sent.OwnerID == rec.AccountID.String()) {
+			return true
+		}
+	}
+	return false
+}
+
 // CanReadFile verifies the caller may read the space/room a file lives in.
 func (s *Service) CanReadFile(ctx context.Context, fileID identity.ID, caller identity.ID) error {
 	f, err := s.GetFile(ctx, fileID)
@@ -126,6 +157,23 @@ func (s *Service) CanReadFile(ctx context.Context, fileID identity.ID, caller id
 	}
 	if f.Public || f.OwnerID == caller {
 		return nil
+	}
+	// A file sent in a direct message is for the person (or agent) it was sent to, once sent.
+	var sent struct {
+		ID        string    `db:"id"`
+		OwnerID   string    `db:"owner_id"`
+		PeerID    string    `db:"peer_id"`
+		MessageID string    `db:"message_id"`
+		Name      string    `db:"name"`
+		Mime      string    `db:"mime"`
+		Size      int64     `db:"size"`
+		CreatedAt time.Time `db:"created_at"`
+	}
+	if s.R.GetString(ctx, "direct_attachments", fileID.String(), &sent) == nil {
+		if sent.PeerID == caller.String() && sent.MessageID != "" {
+			return nil
+		}
+		return errs.Permission("file is not shared with this account")
 	}
 	if f.SpaceID.IsZero() {
 		var memberships []membership.Membership

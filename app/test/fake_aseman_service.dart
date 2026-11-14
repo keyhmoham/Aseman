@@ -42,6 +42,7 @@ class FakeAsemanService extends AsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     if (namespace == 'auth' && action == 'me') {
       return {'id': 'me', 'handle': 'test', 'is_admin': admin};
@@ -53,6 +54,21 @@ class FakeAsemanService extends AsemanService {
         'apple': false,
         'password_reset': true,
         'email_verify': true,
+      };
+    }
+    if (namespace == 'admin' && action == 'actions_list') {
+      return {
+        'namespaces': [
+          {
+            'namespace': 'spaces',
+            'actions': [
+              {
+                'name': 'message_send',
+                'summary': 'Send a message',
+              }
+            ],
+          }
+        ],
       };
     }
     return const <String, dynamic>{};
@@ -808,6 +824,33 @@ class FakeAsemanService extends AsemanService {
       createdAt: DateTime.now(),
     );
     _files.putIfAbsent(spaceId, () => []).add(f);
+    return f;
+  }
+
+  @override
+  Future<UploadedFile> dmFileUpload(
+    String peer, {
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+    bool voice = false,
+    int durationMs = 0,
+    List<int> waveform = const [],
+  }) async {
+    final id = 'file-${_fileSeq++}';
+    final f = UploadedFile(
+      id: id,
+      name: name,
+      mime: mime,
+      size: bytes.length,
+      contentUrl: '/v1/files/$id/content',
+      bytes: bytes,
+      createdAt: DateTime.now(),
+      voice: voice,
+      durationMs: durationMs,
+      waveform: waveform,
+    );
+    _files.putIfAbsent('dm:$peer', () => []).add(f);
     return f;
   }
 

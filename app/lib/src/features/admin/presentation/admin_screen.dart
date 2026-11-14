@@ -103,7 +103,6 @@ class _AppScreenState extends State<AdminScreen> {
         Icons.folder_rounded,
         calls: [
           _Call('spaces', 'space_list_all'),
-          _Call('spaces', 'admins_space_get'),
           _Call('admin', 'admins_list'),
         ],
         actions: [
@@ -111,7 +110,6 @@ class _AppScreenState extends State<AdminScreen> {
           _Call('spaces', 'admin_work_log'),
           _Call('spaces', 'admin_files'),
           _Call('spaces', 'space_delete'),
-          _Call('spaces', 'admins_space_set'),
           _Call('finance', 'budget_set'),
         ],
       ),
@@ -121,9 +119,9 @@ class _AppScreenState extends State<AdminScreen> {
         Icons.flag_outlined,
         Icons.flag_rounded,
         calls: [
-          _Call('spaces', 'admin_chat_reports', {'status': 'open'}),
+          _Call('users', 'admin_chat_reports', {'status': 'open'}),
         ],
-        actions: [_Call('spaces', 'admin_chat_report_resolve')],
+        actions: [_Call('users', 'admin_chat_report_resolve')],
       ),
       _Page(
         'Post reports',
@@ -693,7 +691,6 @@ class _AppScreenState extends State<AdminScreen> {
         'account_delete',
         'wallet_mint',
         'budget_set',
-        'admins_space_set',
         'purchases_label',
         'payout_resolve',
         'approve',

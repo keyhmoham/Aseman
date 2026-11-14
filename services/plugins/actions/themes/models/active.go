@@ -7,7 +7,8 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 )
 
-// ActiveTheme is the theme pack currently applied to a user account.
+// ActiveTheme is the legacy account-level apply row (themes.apply write-through).
+// Session look lives in that session's metadata theme/theming tree instead.
 type ActiveTheme struct {
 	entity.Entity
 	UserID    identity.ID `db:"user_id" json:"user_id"`

@@ -23,12 +23,14 @@ class _Service extends FakeAsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     final call = '$namespace.$action';
     if (call == 'spaces.computer') {
       final op = '${body['operation']}';
-      if (op != 'watch') operations.add(op);
-      if (op == 'wake') state = 'awake';
+      // Expo polls `status`; record mutating ops only.
+      if (op != 'status') operations.add(op);
+      if (op == 'provision' || op == 'wake') state = 'awake';
       if (op == 'sleep') state = 'asleep';
       return {
         'state': state,
@@ -74,7 +76,7 @@ class _Service extends FakeAsemanService {
         ],
       };
     }
-    return super.invokeAction(namespace, action, body: body, timeout: timeout);
+    return super.invokeAction(namespace, action, body: body, timeout: timeout, anonymous: anonymous);
   }
 
   @override
@@ -138,7 +140,7 @@ void main() {
 
     await tester.tap(find.text('Wake up'));
     await tester.pumpAndSettle();
-    expect(service.operations, ['wake']);
+    expect(service.operations, ['provision']);
     expect(find.text('Awake'), findsOneWidget);
     expect(find.text('Sleep'), findsOneWidget);
     expect(
@@ -149,7 +151,7 @@ void main() {
 
     await tester.tap(find.text('Sleep'));
     await tester.pumpAndSettle();
-    expect(service.operations, ['wake', 'sleep']);
+    expect(service.operations, ['provision', 'sleep']);
     expect(find.text('Wake up'), findsOneWidget);
 
     // Asleep, there is no live view to keep the computer awake for.
@@ -200,7 +202,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(service.operations, ['wake', 'keepalive']);
+    expect(service.operations, ['provision', 'keepalive']);
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);

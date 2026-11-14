@@ -22,7 +22,9 @@ void main() {
         calls.add('${m[1]}.${m[2]}');
       }
     }
-    expect(calls, contains('spaces.admins_space_get'));
+    expect(calls, contains('users.admin_chat_reports'));
+    expect(calls, isNot(contains('spaces.admins_space_get')));
+    expect(calls, isNot(contains('spaces.admin_chat_reports')));
     final missing = calls.where((c) {
       final [namespace, action] = c.split('.');
       return !BackendCapabilities.contains(namespace, action);

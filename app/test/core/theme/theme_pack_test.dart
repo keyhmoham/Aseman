@@ -29,7 +29,7 @@ void main() {
     expect(again.shell.home.phoneTabs, contains(FeatureSlots.homeChats));
     expect(again.language.id, DesignLanguage.materialExpressive);
     expect(again.palettes, isNotEmpty);
-    expect(again.palettes.first.id, 'violet');
+    expect(again.palettes.first.id, 'blue');
   });
 
   test('each builtin pack proposes dedicated palette options', () {

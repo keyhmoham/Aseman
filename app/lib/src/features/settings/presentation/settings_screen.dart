@@ -23,6 +23,7 @@ import '../../account/presentation/account_panel.dart';
 import '../../assistant/assistant.dart';
 import '../../market/presentation/bots_store_screen.dart';
 import '../../marketing/marketing_links.dart';
+import 'widgets/devices_panel.dart';
 import 'widgets/notify_prefs_panel.dart';
 import 'widgets/privacy_settings_panel.dart';
 
@@ -651,11 +652,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.key_outlined,
                       title: 'Passkeys and two-factor authentication',
                     ),
-                    const _SettingsTile(
-                      icon: Icons.devices_outlined,
-                      title: 'Active sessions',
-                      subtitle: 'Review devices signed into your account',
-                    ),
+                    if (widget.dependencies != null)
+                      _SettingsTile(
+                        icon: Icons.devices_outlined,
+                        title: 'Active sessions',
+                        subtitle: 'Review devices signed into your account',
+                        onTap: () => showDevicesPanel(
+                          context,
+                          widget.dependencies!,
+                        ),
+                      ),
                     const _SettingsTile(
                       icon: Icons.download_outlined,
                       title: 'Export your data',

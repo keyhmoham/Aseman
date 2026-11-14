@@ -66,14 +66,17 @@ func (s *Service) joinRun(ctx context.Context) (context.Context, func()) {
 	return joined, leave
 }
 
-func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID identity.ID, body string) {
+func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID identity.ID, body string, atts []vmm.FileAttachment) {
 	if ctx.Err() != nil {
 		return // its run was stopped
 	}
 	var reply string
+	if atts == nil {
+		atts = []vmm.FileAttachment{}
+	}
 	// Agents and apps are both asked through the spaces namespace, which
 	// knows which one the bot is.
-	err := bridge.Invoke(ctx, s.K, "spaces", "AskDirect", []any{ctx, from, botID, body, []vmm.FileAttachment(nil)}, &reply)
+	err := bridge.Invoke(ctx, s.K, "spaces", "AskDirect", []any{ctx, from, botID, body, atts}, &reply)
 	if err != nil {
 		if s.L != nil {
 			s.L.Warn("direct message to agent failed", "bot", botID.String(), "error", err)
@@ -98,6 +101,29 @@ func (s *Service) deliverDirect(ctx context.Context, from, agentAccount, botID i
 // mirrorDirect posts a direct message into the pair's direct conversation
 // room (the spaces namespace), where the messenger shows it. directID links
 // the room row back to users.directs for react / hide / keep.
+// fileAttachments turns direct_attachment ids into the tag-only descriptors
+// AskDirect / agent turns expect (agents file_read for content).
+func (s *Service) fileAttachments(ctx context.Context, ids []string) []vmm.FileAttachment {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]vmm.FileAttachment, 0, len(ids))
+	for _, id := range ids {
+		var row directAttachment
+		if s.R.GetString(ctx, "direct_attachments", id, &row) != nil {
+			continue
+		}
+		out = append(out, vmm.FileAttachment{
+			ID:   row.ID,
+			Name: row.Name,
+			Mime: row.Mime,
+			Size: row.Size,
+			URL:  "/v1/files/" + row.ID + "/content",
+		})
+	}
+	return out
+}
+
 func (s *Service) mirrorDirect(ctx context.Context, from, to identity.ID, body string) {
 	s.mirrorDirectID(ctx, from, to, body, identity.ID{})
 }

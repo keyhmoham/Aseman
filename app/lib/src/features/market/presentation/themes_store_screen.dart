@@ -65,6 +65,10 @@ class _ThemesStoreScreenState extends State<ThemesStoreScreen> {
   Future<void> _applyBuiltin(ThemePack pack) async {
     final packs = ThemePackScope.of(context);
     await packs.applyBuiltin(pack.id);
+    // Drop the account-level store apply so login cannot restore it.
+    try {
+      await widget.dependencies.service.uninstallActiveTheme();
+    } catch (_) {}
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Applied “${pack.meta.name}”')),

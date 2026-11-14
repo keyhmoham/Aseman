@@ -3,17 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_dependencies.dart';
+import 'core/deferred/deferred_loader.dart';
 import 'core/platform/platform_mode.dart';
 import 'core/settings/app_settings.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/halo_ring_cache.dart';
+import 'core/theme/session_theme_sync.dart';
 import 'core/theme/theme_pack_controller.dart';
 import 'core/theme/theme_runtime_scope.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/calls/call_overlay.dart';
 import 'features/gadgets/presentation/gadgets_overlay.dart';
 import 'features/navigation/presentation/app_shell.dart';
-import 'core/deferred/deferred_loader.dart';
 import 'features/platform/platform_home.dart' deferred as platform;
 
 /// A platform's own home (its published frontend), loaded on first use.
@@ -38,6 +39,11 @@ class AsemanApp extends StatefulWidget {
 class _AsemanAppState extends State<AsemanApp> {
   final settings = AppSettingsController();
   final themePacks = ThemePackController();
+  late final SessionThemeSync _sessionTheme = SessionThemeSync(
+    service: widget.dependencies.service,
+    settings: settings,
+    packs: themePacks,
+  );
 
   @override
   void initState() {
@@ -46,11 +52,24 @@ class _AsemanAppState extends State<AsemanApp> {
     // light or dark choice does not flash the default on startup.
     WidgetsBinding.instance.deferFirstFrame();
     themePacks.addListener(_onThemePackChanged);
+    settings.addListener(_onAppearanceChanged);
     unawaited(_restoreTheme());
   }
 
   void _onThemePackChanged() {
     settings.syncPaletteToPack(themePacks.pack);
+    // Builtin Sky (etc.): drop legacy account-level `user_themes` so
+    // `themes.active` cannot leak an old pack into unrelated flows.
+    if (themePacks.pack.meta.builtin ||
+        themePacks.pack.id.startsWith('builtin.')) {
+      unawaited(_sessionTheme.clearServerActiveTheme());
+    }
+    _onAppearanceChanged();
+  }
+
+  void _onAppearanceChanged() {
+    if (!widget.dependencies.sessionController.isLoggedIn) return;
+    _sessionTheme.schedulePush();
   }
 
   Future<void> _restoreTheme() async {
@@ -71,6 +90,7 @@ class _AsemanAppState extends State<AsemanApp> {
   @override
   void dispose() {
     themePacks.removeListener(_onThemePackChanged);
+    settings.removeListener(_onAppearanceChanged);
     settings.dispose();
     themePacks.dispose();
     super.dispose();

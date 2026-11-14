@@ -442,44 +442,66 @@ String forwardedPostMarkup({
       'body': body,
     })}';
 
+/// Caps nested `:::post` / forward expansion so a hostile or cyclic body
+/// cannot blow the stack while a chat-list tile is building (release
+/// ErrorWidget = grey box under the Chats chrome).
+const _markupPreviewMaxDepth = 6;
+
 /// A one-line, plain-text summary of a markup [source] for chat lists and
 /// notifications: directives become words ("Forwarded post", "Chart") and
 /// markup characters are dropped.
-String markupPreview(String source) {
-  final parts = <String>[];
-  for (final b in parseRichMarkdown(source)) {
-    final text = switch (b.kind) {
-      BlockKind.forward => () {
-          final d = b.data ?? const {};
-          final who = '${d['name'] ?? ''}'.isNotEmpty
-              ? '${d['name']}'
-              : '${d['handle'] ?? ''}'.isNotEmpty
-                  ? '@${d['handle']}'
-                  : '';
-          final inner = markupPreview('${d['body'] ?? ''}');
-          return [
-            'Forwarded post${who.isEmpty ? '' : ' from $who'}',
-            if (inner.isNotEmpty) inner,
-          ].join(': ');
-        }(),
-      BlockKind.chart => 'Chart',
-      BlockKind.image => 'Photo',
-      BlockKind.video => 'Video',
-      BlockKind.audio => 'Audio',
-      BlockKind.card => b.card?.target ?? '',
-      BlockKind.divider => '',
-      BlockKind.code => b.code ?? '',
-      BlockKind.table => [
-          for (final row in b.rows ?? const <List<InlineToken>>[])
-            row.map((t) => t.text).join(' '),
-        ].join(' '),
-      _ => [
-          for (final run in b.inline) run.map((t) => t.text).join(),
-        ].join(' '),
-    };
-    if (text.trim().isNotEmpty) parts.add(text.trim());
+///
+/// Never throws: chat tiles call this during [State.build], and an exception
+/// here becomes Flutter's grey [ErrorWidget] for the whole list row.
+String markupPreview(String source, {int depth = 0}) {
+  if (depth > _markupPreviewMaxDepth) {
+    return _plainPreviewFallback(source);
   }
-  return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  try {
+    final parts = <String>[];
+    for (final b in parseRichMarkdown(source)) {
+      final text = switch (b.kind) {
+        BlockKind.forward => () {
+            final d = b.data ?? const {};
+            final who = '${d['name'] ?? ''}'.isNotEmpty
+                ? '${d['name']}'
+                : '${d['handle'] ?? ''}'.isNotEmpty
+                    ? '@${d['handle']}'
+                    : '';
+            final inner =
+                markupPreview('${d['body'] ?? ''}', depth: depth + 1);
+            return [
+              'Forwarded post${who.isEmpty ? '' : ' from $who'}',
+              if (inner.isNotEmpty) inner,
+            ].join(': ');
+          }(),
+        BlockKind.chart => 'Chart',
+        BlockKind.image => 'Photo',
+        BlockKind.video => 'Video',
+        BlockKind.audio => 'Audio',
+        BlockKind.card => b.card?.target ?? '',
+        BlockKind.divider => '',
+        BlockKind.code => b.code ?? '',
+        BlockKind.table => [
+            for (final row in b.rows ?? const <List<InlineToken>>[])
+              row.map((t) => t.text).join(' '),
+          ].join(' '),
+        _ => [
+            for (final run in b.inline) run.map((t) => t.text).join(),
+          ].join(' '),
+      };
+      if (text.trim().isNotEmpty) parts.add(text.trim());
+    }
+    return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  } catch (_) {
+    return _plainPreviewFallback(source);
+  }
+}
+
+String _plainPreviewFallback(String source) {
+  var text = source.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text.length > 160) text = '${text.substring(0, 160)}…';
+  return text;
 }
 
 /// The readable text of a markup [source], one block per paragraph, for

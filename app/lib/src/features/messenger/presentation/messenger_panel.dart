@@ -74,9 +74,13 @@ class MessengerPanel extends StatefulWidget {
 
   /// Opens a project's room on the workspace page (its desk, chat, and the
   /// rest). Set on the home chats list. When null, a room still opens as a
-  /// chat — the floating messenger.
-  final void Function(String spaceName, String roomName, String roomId)?
-  onOpenSpaceRoom;
+  /// chat — the floating messenger. [spaceId] is preferred for loading rooms.
+  final void Function(
+    String spaceId,
+    String spaceName,
+    String roomName,
+    String roomId,
+  )? onOpenSpaceRoom;
 
   /// Opens a newly created space on the workspace page (same as picking it
   /// in the workspace switcher). Set on the home chats list.
@@ -159,7 +163,8 @@ class _DepthObserver extends NavigatorObserver {
       _set(depth - 1);
 }
 
-enum _Filter { all, direct, spaces }
+/// Expo Home segments: All | Rooms | Personal (saved/Decillion excluded).
+enum _Filter { all, personal, rooms }
 
 class _ChatList extends StatefulWidget {
   const _ChatList({
@@ -185,8 +190,12 @@ class _ChatList extends StatefulWidget {
   final double topContentInset;
 
   /// See [MessengerPanel.onOpenSpaceRoom].
-  final void Function(String spaceName, String roomName, String roomId)?
-  onOpenSpaceRoom;
+  final void Function(
+    String spaceId,
+    String spaceName,
+    String roomName,
+    String roomId,
+  )? onOpenSpaceRoom;
 
   /// See [MessengerPanel.onOpenWorkspace].
   final ValueChanged<String>? onOpenWorkspace;
@@ -230,10 +239,14 @@ class _ChatListState extends State<_ChatList> {
     if (_refreshing) return;
     _refreshing = true;
     try {
-      final chats = await _service.fetchChats();
+      // Expo: Personal = users.dm_threads (minus saved); Rooms = spaces.space_list.
+      final results = await Future.wait([
+        _service.fetchChats(),
+        _service.fetchProjectChats(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _chats = chats;
+        _chats = [...results[0], ...results[1]];
         _loading = false;
         _error = null;
       });
@@ -259,8 +272,10 @@ class _ChatListState extends State<_ChatList> {
     // A project's room, from the home chats list, opens that room in its
     // workspace. Direct chats, and rooms in the floating messenger, open here.
     final openRoom = widget.onOpenSpaceRoom;
-    if (!chat.direct && openRoom != null && chat.spaceName.isNotEmpty) {
-      openRoom(chat.spaceName, chat.roomName, chat.roomId);
+    if (!chat.direct &&
+        openRoom != null &&
+        (chat.spaceId.isNotEmpty || chat.spaceName.isNotEmpty)) {
+      openRoom(chat.spaceId, chat.spaceName, chat.roomName, chat.roomId);
       return;
     }
     await showChat(context, widget.dependencies, chat);
@@ -309,9 +324,15 @@ class _ChatListState extends State<_ChatList> {
     if (picked == null || !mounted) return;
     try {
       if (picked == 'pin') {
-        await _service.pinChat(chat.spaceId, chat.roomId, !chat.pinned);
+        if (chat.direct) {
+          final peer = chat.peer?.id ?? chat.roomId;
+          await _service.pinChat(peer, !chat.pinned);
+        } else {
+          await _service.pinProject(chat.spaceId, !chat.pinned);
+        }
       } else {
-        await _service.clearChat(chat.spaceId);
+        final peer = chat.peer?.id ?? chat.roomId;
+        await _service.clearChat(peer);
       }
       await _load();
     } catch (e) {
@@ -350,6 +371,12 @@ class _ChatListState extends State<_ChatList> {
   Future<void> _newSpace() async {
     final created = await promptCreateWorkspace(context, widget.dependencies);
     if (created == null || !mounted) return;
+    // Prefer id so the desk loads this project, not a name collision / home.
+    final openRoom = widget.onOpenSpaceRoom;
+    if (openRoom != null && created.id.isNotEmpty) {
+      openRoom(created.id, created.name, '', '');
+      return;
+    }
     final open = widget.onOpenWorkspace;
     if (open != null) {
       open(created.name);
@@ -401,41 +428,27 @@ class _ChatListState extends State<_ChatList> {
     }
   }
 
-  /// Direct chats stay one row each. Every room of a project folds into a
-  /// single space row, ordered like the chats they replace: pinned first,
-  /// then most recently active. Home Aseman is only the Direct row — never
-  /// also a Spaces project row for the same space id.
+  /// Expo Home: Personal DMs one row each; Rooms = one row per project
+  /// (from space_list). Saved/Aseman is not in this list.
   List<_ChatEntry> get _shown {
     final q = _search.text.trim().toLowerCase();
     final directs = <_DirectEntry>[];
-    final bySpace = <String, _SpaceEntry>{};
-    final asemanSpaceIds = {
-      for (final c in _chats)
-        if (c.isAseman) c.spaceId,
-    };
+    final rooms = <_SpaceEntry>[];
     for (final chat in _chats) {
-      if (_filter == _Filter.direct && !chat.direct) continue;
-      if (_filter == _Filter.spaces && chat.direct) continue;
+      if (chat.isAseman || chat.home) continue;
+      if (_filter == _Filter.personal && !chat.direct) continue;
+      if (_filter == _Filter.rooms && chat.direct) continue;
       if (chat.direct) {
         if (_chatMatches(chat, q)) directs.add(_DirectEntry(chat));
         continue;
       }
-      // Home is the Aseman Direct; skip a leftover project listing for it.
-      if (asemanSpaceIds.contains(chat.spaceId) || chat.home) continue;
-      bySpace
-          .putIfAbsent(chat.spaceId, () => _SpaceEntry(chat.spaceId))
-          .rooms
-          .add(chat);
-    }
-    final spaces = <_SpaceEntry>[];
-    for (final entry in bySpace.values) {
-      final nameHit = q.isEmpty || entry.name.toLowerCase().contains(q);
-      if (!nameHit) {
-        entry.rooms.retainWhere((room) => _chatMatches(room, q));
+      if (!_chatMatches(chat, q) &&
+          !(q.isEmpty || chat.spaceName.toLowerCase().contains(q))) {
+        continue;
       }
-      if (entry.rooms.isNotEmpty) spaces.add(entry);
+      rooms.add(_SpaceEntry(chat.spaceId)..rooms.add(chat));
     }
-    final entries = <_ChatEntry>[...directs, ...spaces];
+    final entries = <_ChatEntry>[...directs, ...rooms];
     entries.sort(_newerFirst);
     return entries;
   }
@@ -502,10 +515,10 @@ class _ChatListState extends State<_ChatList> {
       icon: Icons.forum_outlined,
       title: _search.text.isNotEmpty
           ? 'No matching chats'
-          : _filter == _Filter.spaces
-          ? 'No spaces yet'
+          : _filter == _Filter.rooms
+          ? 'No rooms yet'
           : 'No chats yet',
-      body: _filter == _Filter.spaces
+      body: _filter == _Filter.rooms
           ? 'Projects you belong to show up here.'
           : 'Start one with a person or an agent.',
       expand: expand,
@@ -536,7 +549,7 @@ class _ChatListState extends State<_ChatList> {
           ? (unreadAll == 1
               ? '1 unread across your chats'
               : '$unreadAll unread across your chats')
-          : 'People, agents & your spaces',
+          : 'People, agents & your rooms',
       dense: dense,
       compact: compact,
       search: _search,
@@ -546,8 +559,8 @@ class _ChatListState extends State<_ChatList> {
       onFilter: (i) => setState(() => _filter = _Filter.values[i]),
       filterLabels: [
         _label('All', unreadAll),
-        _label('Direct', _unread(true)),
-        _label('Spaces', _unread(false)),
+        _label('Personal', _unread(true)),
+        _label('Rooms', _unread(false)),
       ],
       onCompose: _composeMenu,
       onClose: widget.onClose,
@@ -1181,7 +1194,16 @@ class _ChatTile extends StatelessWidget {
 }
 
 String _chatPreview(ChatSummary chat, String me) {
-  final body = markupPreview(chat.lastBody);
+  // markupPreview is already fail-soft; keep a local catch so a future
+  // regression cannot grey-box the whole chats list (ErrorWidget in a
+  // ListView expands into the blank panel under the chrome).
+  String body;
+  try {
+    body = markupPreview(chat.lastBody);
+  } catch (_) {
+    body = chat.lastBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (body.length > 160) body = '${body.substring(0, 160)}…';
+  }
   final text = body.isNotEmpty
       ? body
       : chat.lastAttachments > 0

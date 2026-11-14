@@ -14,6 +14,14 @@ class Workspace {
     this.home = false,
     this.role = '',
     this.avatar = '',
+    this.spaceKind = '',
+    this.working = false,
+    this.seenAt,
+    this.lastRoomId = '',
+    this.lastBody = '',
+    this.lastSenderId = '',
+    this.lastSenderName = '',
+    this.lastAt,
   });
 
   final String id;
@@ -35,16 +43,56 @@ class Workspace {
   /// The workspace's picture: a stored file's id, "" when it has none.
   final String avatar;
 
-  factory Workspace.fromJson(Map<String, dynamic> json) => Workspace(
-        id: json['id'] as String? ?? '',
-        ownerId: json['owner_id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        description: json['description'] as String? ?? '',
-        public: json['public'] as bool? ?? false,
-        home: json['home'] as bool? ?? false,
-        role: json['role'] as String? ?? '',
-        avatar: '${json['avatar'] ?? (json['profile'] is Map ? json['profile']['avatar'] : null) ?? ''}',
-      );
+  /// Expo `space_kind`: `workspace` | `room` | `direct` (directs omitted from list).
+  final String spaceKind;
+
+  /// From `activity.working` on `spaces.space_list`.
+  final bool working;
+
+  /// How far the caller has read this project (`seen_at`).
+  final DateTime? seenAt;
+
+  /// Latest conversation activity from `activity.last_message` (Home Rooms row).
+  final String lastRoomId;
+  final String lastBody;
+  final String lastSenderId;
+  final String lastSenderName;
+  final DateTime? lastAt;
+
+  factory Workspace.fromJson(Map<String, dynamic> json) {
+    final profile =
+        json['profile'] is Map ? (json['profile'] as Map).cast<String, dynamic>() : const {};
+    final activity =
+        json['activity'] is Map ? (json['activity'] as Map).cast<String, dynamic>() : const {};
+    final last = activity['last_message'] is Map
+        ? (activity['last_message'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final sender = last['sender'] is Map
+        ? (last['sender'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final senderName = '${sender['display_name'] ?? ''}'.trim().isNotEmpty
+        ? '${sender['display_name']}'.trim()
+        : '${sender['handle'] ?? ''}'.trim();
+    return Workspace(
+      id: json['id'] as String? ?? '',
+      ownerId: json['owner_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      public: json['public'] as bool? ?? false,
+      home: json['home'] as bool? ?? false,
+      role: json['role'] as String? ?? '',
+      avatar:
+          '${json['avatar'] ?? profile['avatar'] ?? ''}',
+      spaceKind: '${json['space_kind'] ?? ''}',
+      working: activity['working'] == true,
+      seenAt: DateTime.tryParse('${json['seen_at'] ?? ''}')?.toLocal(),
+      lastRoomId: '${last['room_id'] ?? ''}',
+      lastBody: '${last['body'] ?? ''}',
+      lastSenderId: '${sender['id'] ?? ''}',
+      lastSenderName: senderName,
+      lastAt: DateTime.tryParse('${last['created_at'] ?? ''}')?.toLocal(),
+    );
+  }
 
   /// The same workspace with another avatar.
   Workspace withAvatar(String avatar) => Workspace(
@@ -56,6 +104,14 @@ class Workspace {
         home: home,
         role: role,
         avatar: avatar,
+        spaceKind: spaceKind,
+        working: working,
+        seenAt: seenAt,
+        lastRoomId: lastRoomId,
+        lastBody: lastBody,
+        lastSenderId: lastSenderId,
+        lastSenderName: lastSenderName,
+        lastAt: lastAt,
       );
 
   String get initials {
@@ -257,10 +313,16 @@ class RoomMessage {
         id: json['id'] as String? ?? '',
         spaceId: json['space_id'] as String? ?? '',
         roomId: json['room_id'] as String? ?? '',
-        senderId: json['sender_id'] as String? ?? '',
-        body: json['body'] as String? ?? '',
+        // Expo DirectMessage uses from_id; room messages use sender_id / sender.
+        senderId: json['sender_id'] as String? ??
+            json['from_id'] as String? ??
+            '',
+        body: json['deleted'] == true ? '' : (json['body'] as String? ?? ''),
         kind: json['kind'] as String? ?? 'message',
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        createdAt: DateTime.tryParse(
+                json['created_at'] as String? ??
+                    json['sent_at'] as String? ??
+                    '') ??
             DateTime.now(),
         mentions: _strings(json['mentions']),
         attachments: _attachments(json['attachments']),
@@ -307,13 +369,15 @@ class RoomMessage {
   }
 
   static List<UploadedFile> _attachments(dynamic raw) {
-    if (raw is List) {
-      return raw
-          .whereType<Map<String, dynamic>>()
-          .map(UploadedFile.fromJson)
-          .toList();
+    if (raw is! List) return const [];
+    final out = <UploadedFile>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      try {
+        out.add(UploadedFile.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {}
     }
-    return const [];
+    return out;
   }
 }
 
@@ -402,8 +466,8 @@ class ChatPeer {
       );
 }
 
-/// One conversation of the messenger (`spaces.chat_list`): a direct chat (a
-/// one-room space shared by two accounts) or a room of one of the caller's
+/// One conversation of the messenger (`users.dm_threads` for directs, or a
+/// project room): a direct chat with a peer, or a room of one of the caller's
 /// projects, with its latest message.
 class ChatSummary {
   const ChatSummary({
@@ -527,31 +591,53 @@ class ChatSummary {
     final peer = json['peer'] is Map
         ? ChatPeer.fromJson((json['peer'] as Map).cast<String, dynamic>())
         : null;
+    // Decillion Expo `users.dm_threads` rows are DirectThread: peer + last
+    // (from_id/to_id, no space_id/room_id). Treat those as directs.
+    final isDirectThread = peer != null &&
+        '${json['space_id'] ?? ''}'.isEmpty &&
+        '${json['room_id'] ?? ''}'.isEmpty &&
+        json['kind'] != 'room';
+    final direct = json['kind'] == 'direct' || isDirectThread;
+    final peerId = peer?.id ?? '';
+    // Expo may send a file list, a count, or omit the field — never `as num?`
+    // on an arbitrary JSON value (that throws and blanked the chats list).
+    final lastAttachments = switch (last['attachments']) {
+      final List<dynamic> list => list.length,
+      final num n => n.toInt(),
+      final String s => int.tryParse(s.trim()) ?? 0,
+      _ => 0,
+    };
+    final lastAt = DateTime.tryParse(
+            '${last['created_at'] ?? last['sent_at'] ?? json['updated_at'] ?? ''}')
+        ?.toLocal();
     return ChatSummary(
+      // Expo DMs have no space/room: key the chat by peer id.
       spaceId: '${json['space_id'] ?? ''}',
-      roomId: '${json['room_id'] ?? ''}',
-      direct: json['kind'] == 'direct',
+      roomId: '${json['room_id'] ?? (direct ? peerId : '')}',
+      direct: direct,
       spaceName: '${json['space_name'] ?? ''}',
       spaceAvatar: '${json['space_avatar'] ?? ''}',
       roomName: '${json['room_name'] ?? ''}',
       peer: peer,
       lastBody: '${last['body'] ?? ''}',
-      lastSenderId: '${sender['id'] ?? ''}',
-      lastSenderName: ChatPeer.fromJson(sender).displayName,
-      lastAttachments: (last['attachments'] as num?)?.toInt() ?? 0,
-      updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
+      lastSenderId: '${sender['id'] ?? last['from_id'] ?? ''}',
+      lastSenderName: sender.isNotEmpty
+          ? ChatPeer.fromJson(sender).displayName
+          : '',
+      lastAttachments: lastAttachments,
+      updatedAt: lastAt,
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       working: json['working'] == true,
       role: '${json['role'] ?? ''}',
       pinnedAt: DateTime.tryParse('${json['pinned_at'] ?? ''}')?.toLocal(),
       saved: json['saved'] == true ||
-          (json['kind'] == 'direct' &&
+          (direct &&
               ('${json['space_name'] ?? ''}' == 'Aseman' ||
                   '${json['space_name'] ?? ''}' == 'Saved Messages')),
       home: json['home'] == true,
       blocked: json['blocked'] == true,
       canSend: json['can_send'] != false,
-      typing: json['typing'] == true,
+      typing: json['typing'] == true || json['peer_typing'] == true,
     );
   }
 }
@@ -608,8 +694,8 @@ class MessageEditHistory {
   }
 }
 
-/// A room's conversation as `spaces.message_list` reads it for a chat: its
-/// messages, the agent working in it, who is typing and, for a direct chat,
+/// A conversation as `spaces.message_list` (rooms) or `users.dm_list`
+/// (directs) reads it: messages, who is working/typing and, for a direct chat,
 /// how far the other side has read and whether anyone can write.
 class RoomChatPage {
   const RoomChatPage({
@@ -662,26 +748,44 @@ class RoomChatPage {
       );
 
   factory RoomChatPage.fromJson(Map<String, dynamic> json) => RoomChatPage(
-        messages: (json['messages'] as List? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            // Widgets agents once posted into the chat (kind "ui"): tools'
-            // interfaces now open on the room's desk instead.
-            .where((m) => m['kind'] != 'ui')
-            .map(RoomMessage.fromJson)
-            .toList(),
-        working: json['working'] as String? ?? '',
+        messages: _messages(json['messages']),
+        working: json['working'] as String? ??
+            ((json['agents_working'] is List &&
+                    (json['agents_working'] as List).isNotEmpty)
+                ? 'working'
+                : ''),
         workingDetail: json['working_detail'] as String? ?? '',
         typing: [
           for (final t in json['typing'] as List? ?? const [])
             if (t is Map)
-              ChatPeer.fromJson(t.cast<String, dynamic>()).displayName
+              ChatPeer.fromJson(t.cast<String, dynamic>()).displayName,
+          // Expo DirectConversation: peer_typing bool, not a typing list.
+          if (json['peer_typing'] == true) '…',
         ],
-        peerSeenAt: DateTime.tryParse('${json['peer_seen_at'] ?? ''}'),
+        peerSeenAt: DateTime.tryParse(
+            '${json['peer_seen_at'] ?? json['peer_read_at'] ?? ''}'),
         blocked: json['blocked'] == true,
         canSend: json['can_send'] != false,
         saved: json['saved'] == true,
         hasMore: json['has_more'] == true,
       );
+
+  /// Skip a bad row instead of blanking the whole DM (one throw → grey
+  /// [ErrorWidget] over the message list in release).
+  static List<RoomMessage> _messages(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <RoomMessage>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      // Widgets agents once posted into the chat (kind "ui"): tools'
+      // interfaces now open on the room's desk instead.
+      if (item['kind'] == 'ui') continue;
+      try {
+        out.add(RoomMessage.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {}
+    }
+    return out;
+  }
 }
 
 /// Sorts room messages oldest→newest (id as tiebreaker), matching the chat UI.

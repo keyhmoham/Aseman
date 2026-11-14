@@ -125,7 +125,12 @@ func (s *Service) apply(ctx context.Context, user, themeID, listingID identity.I
 	return s.R.CreateID(ctx, "user_themes", id, row)
 }
 
-// Active returns the user's applied theme, if any.
+// Active returns the legacy account-level applied theme row, if any.
+//
+// Theme look for a device is session-scoped (auth session metadata
+// theme/theming). A new session starts with an empty tree and must not
+// inherit this row — clients hydrate from session metadata, not here.
+// This remains for themes.apply → themes.active in the same install flow.
 func (s *Service) Active(ctx context.Context, user identity.ID) (*themesmodel.ActiveTheme, error) {
 	var existing []themesmodel.ActiveTheme
 	if err := s.R.List(ctx, "user_themes", database.Filter{

@@ -6,7 +6,9 @@ import '../../../app_dependencies.dart';
 import '../../../core/auth/federated_sign_in.dart';
 import '../../../core/network/session_controller.dart';
 import '../../../core/platform/platform_mode.dart';
+import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_shape.dart';
+import '../../../core/theme/session_theme_sync.dart';
 import '../../../core/theme/theme_pack_controller.dart';
 import '../../../data/services/aseman_service.dart' show AuthConfig;
 import '../../../shared/widgets/app_brand.dart';
@@ -73,22 +75,32 @@ class _AuthGateState extends State<AuthGate> {
     }
     if (_themeSyncedFor != accountId) {
       _themeSyncedFor = accountId;
-      unawaited(_pullActiveTheme());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_pullActiveTheme());
+      });
     }
   }
 
   Future<void> _pullActiveTheme() async {
-    try {
-      final active = await widget.dependencies.service.fetchActiveTheme();
-      if (!mounted || active == null) return;
-      final packs = ThemePackScope.maybeOf(context);
-      if (packs == null) return;
-      await packs.syncFromServer(
-        next: active.pack,
-        listing: active.listingId.isEmpty ? null : active.listingId,
-        botId: active.themeId,
-      );
-    } catch (_) {}
+    if (!mounted) return;
+    // Read scopes without registering an InheritedWidget dependency from
+    // this async path (dependOnInheritedWidget outside build races rebuilds).
+    final settings = context
+        .getInheritedWidgetOfExactType<AppSettingsScope>()
+        ?.notifier;
+    final packs =
+        context.getInheritedWidgetOfExactType<ThemePackScope>()?.notifier;
+    if (settings == null || packs == null) {
+      // Scopes not ready yet — allow a retry on the next session notify.
+      _themeSyncedFor = null;
+      return;
+    }
+    final sync = SessionThemeSync(
+      service: widget.dependencies.service,
+      settings: settings,
+      packs: packs,
+    );
+    await sync.syncFromServer();
   }
 
   @override
@@ -379,6 +391,7 @@ class _AuthScreenState extends State<AuthScreen>
         'auth',
         'password_forgot',
         body: {'email': email.trim(), ...PlatformMode.authField},
+        anonymous: true,
       );
       if (!mounted) return;
       final code = await _textDialog(title: 'Verification code', label: 'Code');
@@ -398,6 +411,7 @@ class _AuthScreenState extends State<AuthScreen>
           'password': password,
           ...PlatformMode.authField,
         },
+        anonymous: true,
       );
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(

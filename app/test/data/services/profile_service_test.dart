@@ -75,7 +75,7 @@ class _ProfileStubClient extends AsemanApiClient {
           'file_count': 5,
           'am_member': false,
         });
-      case 'room_profile':
+      case 'room_get':
         return const ApiResponse(200, {
           'id': 'r-1',
           'name': 'general',

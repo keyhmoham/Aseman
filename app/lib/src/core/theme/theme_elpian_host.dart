@@ -171,18 +171,16 @@ class ThemeElpianHost {
           },
         };
       case 'agents':
-        return _coreCall({
-          ...req,
-          'namespace': 'bots',
-          'action': 'list',
-          'body': req['body'] ?? const <String, dynamic>{},
-        });
+        // Same as the page API `_decillion/api/agents` → spaces.bots_list,
+        // filtered to agent members and reshaped to {agents:…}.
+        return _spaceAgentsAlias(req);
       case 'tools':
+        // Same as the page API `_decillion/api/tools` → spaces.tools_list.
         return _coreCall({
           ...req,
-          'namespace': 'users',
-          'action': 'brain_tools',
-          'body': req['body'] ?? const <String, dynamic>{},
+          'namespace': 'spaces',
+          'action': 'tools_list',
+          'body': _spaceScopedBody(req),
         });
       default:
         // Treat op as "namespace.action" or pass through body.namespace.
@@ -212,6 +210,53 @@ class ThemeElpianHost {
               'theme panels: use target "core" with {namespace,action}, or decillion op "ns.action"',
         };
     }
+  }
+
+  /// Body for space-scoped page-API aliases; [spaceId]/[roomId] win over req.
+  Map<String, dynamic> _spaceScopedBody(Map<String, dynamic> req) {
+    final fromReq = req['body'] is Map
+        ? Map<String, dynamic>.from(req['body'] as Map)
+        : <String, dynamic>{};
+    return {
+      ...fromReq,
+      'space': spaceId,
+      if (roomId.isNotEmpty) 'room': roomId,
+    };
+  }
+
+  /// Page-API `agents` shape over `spaces.bots_list` (agents only).
+  Future<Map<String, dynamic>> _spaceAgentsAlias(
+      Map<String, dynamic> req) async {
+    final resp = await _coreCall({
+      ...req,
+      'namespace': 'spaces',
+      'action': 'bots_list',
+      'body': _spaceScopedBody(req),
+    });
+    if (resp['ok'] != true) return resp;
+    final data = resp['data'];
+    final bots = data is Map ? data['bots'] : null;
+    final agents = <Map<String, dynamic>>[];
+    if (bots is List) {
+      for (final raw in bots) {
+        if (raw is! Map) continue;
+        final b = Map<String, dynamic>.from(raw);
+        if ('${b['kind'] ?? ''}' != 'agent') continue;
+        final id = '${b['id'] ?? ''}'.trim();
+        if (id.isEmpty) continue;
+        agents.add({
+          'id': id,
+          'name': b['name'] ?? '',
+          'description': b['description'] ?? '',
+          'status': b['status'] ?? '',
+        });
+      }
+    }
+    return {
+      'ok': true,
+      'status': resp['status'] ?? 200,
+      'data': {'agents': agents},
+    };
   }
 
   Future<Map<String, dynamic>> _httpFetch(Map<String, dynamic> req) async {

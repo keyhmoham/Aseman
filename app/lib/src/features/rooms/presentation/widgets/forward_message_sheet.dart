@@ -147,8 +147,16 @@ class _ForwardMessageSheetState extends State<ForwardMessageSheet> {
       for (final c in targets)
         () async {
           try {
-            await service.sendRoomMessage(c.spaceId, c.roomId, body,
-                attachments: attachments);
+            if (c.direct) {
+              await service.sendDirectMessage(
+                c.peer?.id ?? c.roomId,
+                body,
+                attachments: attachments,
+              );
+            } else {
+              await service.sendRoomMessage(c.spaceId, c.roomId, body,
+                  attachments: attachments);
+            }
             return true;
           } catch (_) {
             return false;

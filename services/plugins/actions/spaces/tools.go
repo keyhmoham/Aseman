@@ -596,9 +596,10 @@ func (s *Service) readFileForAgent(ctx context.Context, spaceID identity.ID, arg
 	if err != nil {
 		return "", err
 	}
-	// The agent is a member of the space; it may only read files that belong to
-	// this space (files travel with the chat messages the agent sees).
-	if f.SpaceID != spaceID {
+	// Space files stay in the project the agent is working on. Direct-message
+	// uploads have no space: allow ones already sent in a chat the agent (or
+	// the person it works for) may open.
+	if f.SpaceID != spaceID && !s.agentMayReadDirectFile(ctx, f) {
 		return "", errs.Permission("file is not in this space")
 	}
 	maxChars := in.MaxChars

@@ -579,25 +579,14 @@ class _BrokersAdmin extends _Form {
 
 class _BrokersAdminState extends _FormState<_BrokersAdmin> {
   @override
-  Future<Map<String, dynamic>> fetch() async => jsonMap(
-        await widget.deps.service.invokeAction('tools', 'broker_presets'),
-      );
+  /// Expo has no tools.broker_presets / broker_add.
+  Future<Map<String, dynamic>> fetch() async => const {'brokers': <dynamic>[]};
 
   Future<void> _add(Map<String, dynamic> b) async {
-    final url = await askText(
-      context,
-      '${b['name']} MCP address',
-      hint: '${b['url_hint']}',
-    );
-    if (url == null || url.trim().isEmpty || !mounted) return;
-    final key = await askText(context, '${b['name']} API key', obscure: true);
-    if (key == null || key.isEmpty || !mounted) return;
-    await call(
-      'tools',
-      'broker_add',
-      {'broker': b['id'], 'url': url.trim(), 'api_key': key},
-      '${b['name']} added: its tools appear under Apps, each person connecting their own accounts there',
-    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Connector hubs are not on this Decillion API'),
+    ));
   }
 
   @override

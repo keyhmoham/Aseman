@@ -63,10 +63,14 @@ class SearchFeedScreen extends StatefulWidget {
   final String workspace;
   final ValueChanged<String>? onOpenWorkspace;
 
-  /// Opens [spaceName] on the workspace page with [roomName] / [roomId]
+  /// Opens a project on the workspace page with [roomName] / [roomId]
   /// already selected (desk, chat, and the rest of that room).
-  final void Function(String spaceName, String roomName, String roomId)?
-  onOpenSpaceRoom;
+  final void Function(
+    String spaceId,
+    String spaceName,
+    String roomName,
+    String roomId,
+  )? onOpenSpaceRoom;
 
   /// Which phone tab to show on mount. Chats on first land and when the
   /// workspace Home button returns here.
@@ -167,8 +171,9 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     if (mounted) open(name);
   }
 
-  /// Opens [name] with [roomName] selected, once the feed's panels have left.
+  /// Opens a project with [roomName] selected, once the feed's panels have left.
   Future<void> _enterWorkspaceRoom(
+    String spaceId,
     String name,
     String roomName,
     String roomId,
@@ -176,7 +181,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     final open = widget.onOpenSpaceRoom;
     if (open == null || motion.isAnimating) return;
     await motion.reverse();
-    if (mounted) open(name, roomName, roomId);
+    if (mounted) open(spaceId, name, roomName, roomId);
   }
 
   bool get _compact => MediaQuery.sizeOf(context).width < 820;
@@ -618,10 +623,12 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
               dependencies: widget.dependencies,
               showAdmin: widget.dependencies.sessionController.isAdmin,
               showMessages: false,
-              onSelect: (action) => dispatchProfileAction(
-                context,
-                widget.dependencies,
-                action,
+              onSelect: (action) => unawaited(
+                dispatchProfileAction(
+                  context,
+                  widget.dependencies,
+                  action,
+                ),
               ),
             ),
           ),
@@ -769,7 +776,7 @@ class _HeroContent extends StatelessWidget {
 }
 
 /// Floating pill of captioned tabs for the phone home. The bar itself is a
-/// capsule; the selected tab is a rounded pill surface behind its icon and
+/// capsule; the selected tab is an M3 secondary-container indicator behind its
 /// caption. You uses the signed-in account's avatar instead of a glyph.
 class HomeTabBar extends StatelessWidget {
   const HomeTabBar({
@@ -960,7 +967,8 @@ class _HomeTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final color =
+        selected ? AppFab.tabIndicatorInkOf(scheme) : scheme.onSurfaceVariant;
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
     final avatarR = (iconSize * .5).clamp(9.0, 14.0);
     return Semantics(

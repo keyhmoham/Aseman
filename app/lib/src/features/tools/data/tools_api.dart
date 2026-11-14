@@ -92,6 +92,7 @@ class ToolsApi {
       {required String spaceId,
       String roomId = '',
       ShownResult? shown}) async {
+    // Expo tools.frontend_get: bot, space, room? only.
     final body = _map(await _call(
         'tools',
         'frontend_get',
@@ -99,7 +100,6 @@ class ToolsApi {
           'bot': botId,
           'space': spaceId,
           if (roomId.isNotEmpty) 'room': roomId,
-          ...?shown?.toJson(),
         },
         timeout: generationTimeout));
     return ToolFrontendPayload.fromJson(body);

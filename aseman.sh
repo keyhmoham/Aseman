@@ -71,8 +71,11 @@ case "$cmd" in
       DECILLION_API_HOST="${DECILLION_API_HOST%%:*}"
       export DECILLION_API_URL DECILLION_API_HOST
       # One app on the web port: this stack's own client steps aside.
+      # --force-recreate: compose otherwise keeps a running web-decillion even
+      # after --build when its config hash is unchanged (and a container that
+      # lost its network endpoint would never get a host port again).
       docker compose stop web >/dev/null 2>&1 || true
-      docker compose --profile decillion up -d --build web-decillion
+      docker compose --profile decillion up -d --build --force-recreate web-decillion
       echo
       echo "Flutter client:   http://localhost:${WEB_PORT:-3000} (release build)"
       echo "Decillion API:    $DECILLION_API_URL (through the client's own origin)"

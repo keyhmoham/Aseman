@@ -813,10 +813,12 @@ void main() {
     await tester.pumpAndSettle();
     await openAtlas(tester);
 
-    // Open the designer from the composer.
-    await tester.tap(find.byTooltip('Design a message'));
+    // Open the designer from the composer's "+" menu.
+    await tester.tap(find.byTooltip('Attach file'));
     await tester.pumpAndSettle();
-    expect(find.text('Design a message'), findsOneWidget);
+    await tester.tap(find.text('Design a message'));
+    await tester.pumpAndSettle();
+    expect(find.text('Design a message'), findsWidgets);
 
     // Author markdown and send it to the chat.
     await tester.enterText(

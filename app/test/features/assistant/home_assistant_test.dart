@@ -20,6 +20,7 @@ class _Node extends FakeAsemanService {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? timeout,
+    bool anonymous = false,
   }) async {
     calls.add('$namespace.$action');
     switch ('$namespace.$action') {
@@ -56,7 +57,7 @@ class _Node extends FakeAsemanService {
           'approval': {'status': 'approved'},
         };
     }
-    return super.invokeAction(namespace, action, body: body, timeout: timeout);
+    return super.invokeAction(namespace, action, body: body, timeout: timeout, anonymous: anonymous);
   }
 }
 

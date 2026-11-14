@@ -218,6 +218,9 @@ const _templates = <String, List<_FieldTemplate>>{
     _FieldTemplate('model'),
     _FieldTemplate('cost', type: BackendFieldType.object),
     _FieldTemplate('descriptor', type: BackendFieldType.object),
+    _FieldTemplate('descriptor_patch',
+        type: BackendFieldType.object,
+        hint: 'Partial descriptor merge (avatar, description, …)'),
   ],
   'bots.bot_delete': [_FieldTemplate('bot', required: true, hint: 'Agent ID')],
   'market.publish': [

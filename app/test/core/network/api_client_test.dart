@@ -1,10 +1,34 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/core/network/api_client.dart';
 
 void main() {
+  test('empty body is sent as {} so Decode and signatures match the node',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final done = Completer<String>();
+    final subscription = server.listen((request) async {
+      final body = await utf8.decoder.bind(request).join();
+      request.response.headers.contentType = ContentType.json;
+      request.response.write('{"ok":true}');
+      await request.response.close();
+      done.complete(body);
+    });
+    final client =
+        AsemanApiClient(baseUrl: 'http://127.0.0.1:${server.port}');
+    try {
+      await client.call('auth', 'config');
+      expect(await done.future, '{}');
+    } finally {
+      client.dispose();
+      await subscription.cancel();
+      await server.close(force: true);
+    }
+  });
+
   test(
       'explicit request timeout supports a long action without changing other deadlines',
       () async {

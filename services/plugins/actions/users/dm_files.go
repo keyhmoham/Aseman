@@ -13,6 +13,7 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/errs"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/message/models/message"
 	"github.com/aseman/aseman/plugins/actions/spaces/models/filedata"
 	"github.com/aseman/aseman/plugins/actions/support/fileref"
@@ -149,6 +150,12 @@ func (s *Service) dmFileUpload(ctx context.Context, req *api.ActionRequest) (*ap
 	if err != nil {
 		return nil, err
 	}
+	// Prefer the bot's account id when `to` is a bot record id, so the upload
+	// matches the account thread dm_send stores under.
+	var botRec bot.Bot
+	if s.R.Get(ctx, "bots", to, &botRec) == nil && !botRec.AccountID.IsZero() {
+		to = botRec.AccountID
+	}
 	if err := s.canSendFiles(ctx, req.Caller.ID, to); err != nil {
 		return nil, err
 	}
@@ -186,8 +193,8 @@ func (s *Service) dmFileUpload(ctx context.Context, req *api.ActionRequest) (*ap
 	return helper.JSON(row.view())
 }
 
-// canSendFiles says whether `from` may send files to `to`: a person on this node
-// who has not blocked them (or the sender's own notes), not an agent.
+// canSendFiles says whether `from` may send files to `to`: a person or agent
+// account on this node who has not blocked them (or the sender's own notes).
 func (s *Service) canSendFiles(ctx context.Context, from, to identity.ID) error {
 	if blocked, byMe, err := s.directBlocked(ctx, from, to); err != nil {
 		return err
@@ -198,9 +205,6 @@ func (s *Service) canSendFiles(ctx context.Context, from, to identity.ID) error 
 	}
 	if err := s.messageAllowed(ctx, from, to); err != nil {
 		return err
-	}
-	if _, agent := s.agentAccount(ctx, to); agent {
-		return errs.InvalidArgument("agents can't open files in a direct chat yet")
 	}
 	var acc account.Account
 	if err := s.R.Get(ctx, "accounts", to, &acc); err != nil {

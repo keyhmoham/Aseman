@@ -488,7 +488,7 @@ class AdminFakeService extends FakeAsemanService {
 
   @override
   Future<dynamic> invokeAction(String namespace, String action,
-      {Map<String, dynamic> body = const {}, Duration? timeout}) async {
+      {Map<String, dynamic> body = const {}, Duration? timeout, bool anonymous = false}) async {
     return fixtures['$namespace.$action'] ?? const <String, dynamic>{};
   }
 

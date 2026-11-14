@@ -16,7 +16,7 @@ class _LiveService extends FakeAsemanService {
 
   @override
   Future<dynamic> invokeAction(String namespace, String action,
-      {Map<String, dynamic> body = const {}, Duration? timeout}) async {
+      {Map<String, dynamic> body = const {}, Duration? timeout, bool anonymous = false}) async {
     final label = '$namespace.$action';
     final gate = held[label];
     if (gate != null) await gate.future;
@@ -113,8 +113,9 @@ class _FailingService extends _LiveService {
 
   @override
   Future<dynamic> invokeAction(String namespace, String action,
-      {Map<String, dynamic> body = const {}, Duration? timeout}) async {
+      {Map<String, dynamic> body = const {}, Duration? timeout, bool anonymous = false}) async {
     if (failing) throw Exception('offline');
-    return super.invokeAction(namespace, action, body: body, timeout: timeout);
+    return super.invokeAction(namespace, action,
+        body: body, timeout: timeout, anonymous: anonymous);
   }
 }

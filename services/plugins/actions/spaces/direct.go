@@ -190,6 +190,30 @@ func (s *Service) isBuiltinDirectPeer(ctx context.Context, peer identity.ID) boo
 	return err == nil && rec.IsBuiltin()
 }
 
+// conversationDesk is the direct chat a person is looking at with peer (an
+// agent account). Messenger turns must open windows there. The computer
+// stays the person's own (computerOf); this is only the desk.
+func (s *Service) conversationDesk(ctx context.Context, person, peer identity.ID) (identity.ID, identity.ID, bool) {
+	if person.IsZero() || peer.IsZero() || s.isBotAccount(ctx, person) {
+		return identity.ID{}, identity.ID{}, false
+	}
+	peer = s.botAccountOf(ctx, peer)
+	sp := s.findDirect(ctx, directKey(person, peer))
+	if sp == nil || !sp.Direct {
+		return identity.ID{}, identity.ID{}, false
+	}
+	room, err := s.generalRoom(ctx, sp.ID)
+	if err != nil {
+		return identity.ID{}, identity.ID{}, false
+	}
+	if _, err := s.SpaceMembership(ctx, sp.ID, peer); err != nil {
+		if err := s.AddBot(ctx, person, sp.ID, identity.ID{}, peer); err != nil {
+			return identity.ID{}, identity.ID{}, false
+		}
+	}
+	return sp.ID, room.ID, true
+}
+
 func (s *Service) findDirect(ctx context.Context, key string) *space.Space {
 	var list []space.Space
 	if err := s.R.List(ctx, "spaces", database.Filter{Equal: map[string]any{"direct_key": key}, Limit: 1}, &list); err != nil || len(list) == 0 {

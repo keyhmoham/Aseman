@@ -1023,6 +1023,7 @@ class _DockedHere extends StatelessWidget {
     final tileCorners = ThemeChrome.softCardCorners(context);
     final ringOuter = context.avatarBorderRadius(56);
     final ringInner = context.avatarBorderRadius(48);
+    final paper = ThemeChrome.isPaper(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1057,8 +1058,10 @@ class _DockedHere extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius: ringOuter,
                           border: Border.all(
-                            color: accent.withValues(alpha: .2),
-                            width: 1.5,
+                            color: paper
+                                ? scheme.outlineVariant
+                                : accent.withValues(alpha: .2),
+                            width: paper ? 1 : 1.5,
                           ),
                         ),
                       ),
@@ -1067,14 +1070,22 @@ class _DockedHere extends StatelessWidget {
                         height: 48,
                         decoration: BoxDecoration(
                           borderRadius: ringInner,
-                          gradient: SweepGradient(
-                            colors: [
-                              accent,
-                              accent.withValues(alpha: .25),
-                              AppColors.cyanOf(context).withValues(alpha: .8),
-                              accent,
-                            ],
-                          ),
+                          color: paper ? scheme.surface : null,
+                          border: paper
+                              ? Border.all(color: scheme.outline)
+                              : null,
+                          gradient: paper
+                              ? null
+                              : SweepGradient(
+                                  colors: [
+                                    accent,
+                                    accent.withValues(alpha: .25),
+                                    AppColors.cyanOf(context).withValues(
+                                      alpha: .8,
+                                    ),
+                                    accent,
+                                  ],
+                                ),
                         ),
                         padding: const EdgeInsets.all(2.5),
                         child: ClipRRect(

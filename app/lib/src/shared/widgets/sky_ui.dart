@@ -304,20 +304,29 @@ class HaloRing extends StatelessWidget {
     // Unified packs: one halo accent (alpha variants only). Legacy multi-hue
     // identity rings stay only when the pack opts out of unified colouring.
     final tokens = AsemanTokens.maybeOf(context);
+    // Paper is flat print: no sweep, and no leftover stroke that still reads
+    // as a ring. Cached packs may still say halo_style "ring".
+    if (ThemeChrome.isPaper(context)) return child;
     final haloAccent = accent ??
         ThemeRoles.partAccent(context, ThemePartId.halo);
     final haloSecondary =
         ThemeRoles.partSecondary(context, ThemePartId.halo);
-    final colors = (tokens != null &&
-            !tokens.unifiedAccent &&
-            identity.trim().isNotEmpty)
-        ? HaloRingCache.colorsFor(identity)
-        : _accentSweep(haloAccent, haloSecondary);
+    final halo = tokens?.haloStyle ?? 'ring';
+    final solid = halo == 'solid' || halo == 'flat';
+    final colors = solid
+        ? const <Color>[]
+        : (tokens != null &&
+                !tokens.unifiedAccent &&
+                identity.trim().isNotEmpty)
+            ? HaloRingCache.colorsFor(identity)
+            : _accentSweep(haloAccent, haloSecondary);
     final corners = borderRadius ?? context.avatarBorderRadius(48);
+    final scheme = Theme.of(context).colorScheme;
     return CustomPaint(
       painter: _HaloRingPainter(
         colors: colors,
-        stroke: pad,
+        solidColor: solid ? scheme.outline : null,
+        stroke: solid ? 1.25 : pad,
         borderRadius: corners,
       ),
       child: Padding(
@@ -340,14 +349,19 @@ class _HaloRingPainter extends CustomPainter {
     required this.colors,
     required this.stroke,
     required this.borderRadius,
+    this.solidColor,
   });
   final List<Color> colors;
   final double stroke;
   final BorderRadius borderRadius;
 
+  /// Flat hairline. When set, the sweep gradient is not painted.
+  final Color? solidColor;
+
   @override
   void paint(Canvas canvas, Size size) {
-    if (colors.isEmpty || size.shortestSide <= stroke) return;
+    if (solidColor == null && colors.isEmpty) return;
+    if (size.shortestSide <= stroke) return;
     final inset = stroke / 2;
     final rect = Rect.fromLTWH(
       inset,
@@ -358,10 +372,14 @@ class _HaloRingPainter extends CustomPainter {
     if (rect.width <= 0 || rect.height <= 0) return;
     final circular = borderRadius.topLeft.x >= rect.shortestSide / 2 - 0.5;
     final paint = Paint()
-      ..shader = SweepGradient(colors: colors).createShader(rect)
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..isAntiAlias = true;
+    if (solidColor != null) {
+      paint.color = solidColor!;
+    } else {
+      paint.shader = SweepGradient(colors: colors).createShader(rect);
+    }
     if (circular) {
       canvas.drawCircle(rect.center, rect.shortestSide / 2, paint);
     } else {
@@ -374,6 +392,7 @@ class _HaloRingPainter extends CustomPainter {
   bool shouldRepaint(covariant _HaloRingPainter old) =>
       old.stroke != stroke ||
       old.borderRadius != borderRadius ||
+      old.solidColor != solidColor ||
       !_sameColors(old.colors, colors);
 
   static bool _sameColors(List<Color> a, List<Color> b) {

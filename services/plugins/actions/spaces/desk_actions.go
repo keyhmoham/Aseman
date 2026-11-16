@@ -156,6 +156,10 @@ func (a *deskGetAction) Handle(ctx context.Context, req *api.ActionRequest) (*ap
 	if err != nil {
 		return nil, err
 	}
+	// A direct chat's desk is per person. The signed-in caller is that person;
+	// the request context does not otherwise name them, so a read would miss
+	// the windows an agent opened on their desk.
+	ctx = helper.WithActor(ctx, req.Caller.ID)
 	d, err := a.s.Desk(ctx, spaceID, roomID)
 	if err != nil {
 		return nil, err
@@ -187,6 +191,7 @@ func (a *deskUpdateAction) Handle(ctx context.Context, req *api.ActionRequest) (
 	if err != nil {
 		return nil, err
 	}
+	ctx = helper.WithActor(ctx, req.Caller.ID)
 	if err := a.s.resolveDeskOpens(ctx, spaceID, in.Ops); err != nil {
 		return nil, err
 	}

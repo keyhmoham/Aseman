@@ -186,9 +186,9 @@ class _ChatPageState extends State<ChatPage> {
       } catch (_) {}
     }
     if (!mounted) return;
-    if (_showDualTabs && chat.spaceId.isNotEmpty) {
-      _desk.attach(chat.spaceId, chat.roomId);
-    }
+    // Wide windows show the desk beside the chat; phones show it as a tab.
+    // Both read the same desk, so bind it whenever this direct chat has one.
+    _bindDesk();
     if (_isAiChat) {
       _voice = BrainVoiceClient(_service)..addListener(_onVoice);
       unawaited(_bootAvatar());
@@ -782,6 +782,12 @@ class _ChatPageState extends State<ChatPage> {
     ];
   }
 
+  /// Loads this direct chat's desk. Safe to call again: the same room is a no-op.
+  void _bindDesk() {
+    if (!chat.direct || chat.spaceId.isEmpty) return;
+    _desk.attach(chat.spaceId, chat.roomId);
+  }
+
   void _selectSurface(int value) {
     if (_surface == value) return;
     setState(() => _surface = value);
@@ -996,6 +1002,13 @@ class _ChatPageState extends State<ChatPage> {
             box.maxWidth >= 900 &&
             !AppHeightClass.fromHeight(box.maxHeight).isCompact;
         _deskBeside = beside;
+        if (beside &&
+            chat.spaceId.isNotEmpty &&
+            (_desk.spaceId != chat.spaceId || _desk.room != chat.roomId)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _bindDesk();
+          });
+        }
         return _buildChat(context, box);
       },
     );
@@ -1286,7 +1299,6 @@ class _ChatPageState extends State<ChatPage> {
                               ? Icons.close_rounded
                               : Icons.arrow_back_rounded),
                         ),
-                  onRoom: _showDualTabs ? _openLibrary : null,
                   onCustomize: _isAiChat ? _editAvatar : null,
                   actions: _directHeaderActions(),
                   menu: _menu(),
@@ -1306,6 +1318,21 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ),
               ],
+            ),
+          ),
+          // Below the app bar, same glass control as a workspace room.
+          Positioned(
+            top: topPad + _avatarHeaderHeight + 12,
+            left: 12,
+            child: GlassSurface(
+              alpha: AppSurfaces.overlayAlphaOf(context),
+              blur: AppSurfaces.blurSigmaOf(context),
+              borderRadius: AppShape.borderRadius(context, 24),
+              child: IconButton(
+                tooltip: 'Library',
+                onPressed: _openLibrary,
+                icon: const Icon(Icons.menu_rounded),
+              ),
             ),
           ),
           if (_isAiChat)

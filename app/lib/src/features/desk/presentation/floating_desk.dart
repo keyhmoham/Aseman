@@ -156,6 +156,12 @@ class _FloatingDeskState extends State<FloatingDesk>
     if (!mounted || _handling) return;
     _handling = true;
     try {
+      // A shelved or dismissed card must not keep the rect it last flew to
+      // (the dock). Coming back from that rect leaves the card undraggable.
+      _live.removeWhere(
+        (id, _) =>
+            c.isMinimized(id) || (widget.onlyPresented && !c.isPresented(id)),
+      );
       final now = {for (final w in c.state.windows) w.id: w};
       final scope = '${c.spaceId}/${c.room}';
       if (scope != _scope) {
@@ -607,6 +613,7 @@ class _FloatingDeskState extends State<FloatingDesk>
             curve: leaving ? Curves.easeIn : _curve,
             child: CardWindow(
               window: w,
+              chromeOverlayTooltip: false,
               front: front && !hidden,
               pinned: c.isPinned(w),
               maximized: maximized == w.id,
@@ -637,9 +644,14 @@ class _FloatingDeskState extends State<FloatingDesk>
                 );
               }),
               onResizeEnd: () => _commit(w.id),
-              onClose: () => c.close(w.id),
+              // A card over the widget board is only a view of that widget.
+              // Close puts the card away. Minimize shelves it for the dock.
+              // Neither deletes the widget.
+              onClose: () =>
+                  widget.onlyPresented ? c.dismiss(w.id) : c.close(w.id),
               onPin: () => c.togglePin(w),
-              onMinimize: () => c.minimize(w.id),
+              onMinimize: () =>
+                  widget.onlyPresented ? c.shelve(w.id) : c.minimize(w.id),
               onMaximize: () => c.toggleMaximized(w.id),
               child: KeyedSubtree(
                 key: ValueKey('content-${w.id}'),

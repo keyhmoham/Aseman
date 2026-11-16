@@ -1,9 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:aseman/src/core/theme/app_theme.dart';
+import 'package:aseman/src/core/theme/default_theme_packs.dart';
 import 'package:aseman/src/features/desk/data/desk_api.dart';
 import 'package:aseman/src/features/desk/presentation/desk_controller.dart';
+import 'package:aseman/src/features/desk/presentation/card_window.dart';
 import 'package:aseman/src/features/desk/presentation/floating_desk.dart';
+
+Finder windowChrome(String tooltip) => find.byWidgetPredicate(
+  (widget) => widget is WindowChromeButton && widget.tooltip == tooltip,
+);
 
 /// A node keeping one desk, applying ops roughly as spaces/desktop.go does.
 class _Node {
@@ -144,14 +151,21 @@ void main() {
         isFalse,
         reason: 'the dock restores that tool’s minimized windows',
       );
+      expect(
+        c.focusTool,
+        isNull,
+        reason: 'restoring does not gather the windows or lock dragging',
+      );
+      c.focusOn('wx');
       expect(c.focusTool, 'wx');
       c.minimize('a');
       c.focusOn('wx');
       expect(
         c.focusTool,
-        'wx',
-        reason: 'restoring minimized windows does not toggle focus off',
+        isNull,
+        reason: 'restoring a minimized window leaves it draggable',
       );
+      expect(c.isPresented('a'), isTrue);
       c.restore('a'); // already restored by focusOn
       expect(c.isMinimized('a'), isFalse);
 
@@ -298,7 +312,7 @@ void main() {
           _window('c', 'mk', 'Markets', 560, 40, title: 'Markets', z: 2),
         ]),
       );
-      expect(find.byTooltip('Minimize'), findsNWidgets(2));
+      expect(windowChrome('Minimize'), findsNWidgets(2));
       await tester.tap(find.byIcon(Icons.minimize_rounded).last);
       await tester.pumpAndSettle();
       expect(c.isMinimized('c'), isTrue);
@@ -320,6 +334,7 @@ void main() {
       await tester.tap(find.byTooltip('Markets · 1 window'));
       await tester.pumpAndSettle();
       expect(c.isMinimized('c'), isFalse);
+      expect(c.focusTool, isNull);
       expect(
         tester
             .widget<IgnorePointer>(
@@ -333,6 +348,24 @@ void main() {
             .ignoring,
         isFalse,
       );
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('c'))),
+        const Offset(560, 40),
+        reason: 'the window comes back where it was',
+      );
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Markets').first),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 8; i++) {
+        await gesture.moveBy(const Offset(18, 12));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final moved = tester.getTopLeft(find.byKey(const ValueKey('c')));
+      expect(moved.dx, greaterThan(560));
+      expect(moved.dy, greaterThan(40));
       c.dispose();
     });
 
@@ -420,6 +453,74 @@ void main() {
       expect(find.textContaining('content of w'), findsOneWidget);
       c.dispose();
     });
+
+    testWidgets(
+      'closing or minimizing a floated card leaves the desk widget',
+      (tester) async {
+        final (c, node) = await pump(
+          tester,
+          _Node([
+            _window('a', 'wx', 'Weather', 40, 40),
+            _window('c', 'mk', 'Markets', 420, 60, z: 2),
+          ]),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: FloatingDesk(
+                controller: c,
+                onlyPresented: true,
+                captureSurface: false,
+                showDock: false,
+                windowContent: (context, w) => Text('content of ${w.id}'),
+                pinPreview: (_) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        );
+        c.present('a');
+        await tester.pumpAndSettle();
+        await tester.tap(windowChrome('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('content of a'), findsNothing);
+        expect(c.isPresented('a'), isFalse);
+        expect(c.isMinimized('a'), isFalse);
+        expect(c.state.windows.map((w) => w.id), contains('a'));
+        expect(node.ops.where((o) => o['op'] == 'close'), isEmpty);
+
+        c.present('a');
+        await tester.pumpAndSettle();
+        await tester.tap(windowChrome('Minimize'));
+        await tester.pumpAndSettle();
+        expect(find.text('content of a'), findsNothing);
+        expect(c.isPresented('a'), isFalse);
+        expect(c.isMinimized('a'), isTrue);
+        expect(c.state.windows.map((w) => w.id), contains('a'));
+        expect(node.ops.where((o) => o['op'] == 'close'), isEmpty);
+
+        c.focusOn('wx');
+        await tester.pumpAndSettle();
+        expect(c.isMinimized('a'), isFalse);
+        expect(c.isPresented('a'), isTrue);
+        expect(c.focusTool, isNull);
+        expect(find.text('content of a'), findsOneWidget);
+        final before = tester.getTopLeft(find.byKey(const ValueKey('a')));
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.text('Weather').first),
+          kind: PointerDeviceKind.mouse,
+        );
+        for (var i = 0; i < 8; i++) {
+          await gesture.moveBy(const Offset(16, 10));
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        final after = tester.getTopLeft(find.byKey(const ValueKey('a')));
+        expect(after.dx, greaterThan(before.dx));
+        expect(after.dy, greaterThan(before.dy));
+        c.dispose();
+      },
+    );
 
     testWidgets('the pinned desk shows pinned windows and opens them again', (
       tester,
@@ -510,5 +611,60 @@ void main() {
         c.dispose();
       },
     );
+
+    testWidgets('hovering window chrome does not crash', (tester) async {
+      final errors = <Object>[];
+      final previous = FlutterError.onError;
+      FlutterError.onError = (details) {
+        errors.add(details.exception);
+        previous?.call(details);
+      };
+      addTearDown(() => FlutterError.onError = previous);
+      final node = _Node([
+        _window('a', 'wx', 'Weather', 40, 40, title: 'Weather'),
+      ]);
+      final c = DeskController(node.api, pollEvery: const Duration(hours: 1));
+      c.attach('s1', 'r1');
+      await tester.runAsync(() => c.refresh(force: true));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.fromPack(DefaultThemePacks.paper, Brightness.light),
+          home: Scaffold(
+            body: OverlayPortal(
+              controller: OverlayPortalController()..show(),
+              overlayLocation: OverlayChildLocation.rootOverlay,
+              overlayChildBuilder: (context) => Overlay.wrap(
+                child: FloatingDesk(
+                  controller: c,
+                  captureSurface: false,
+                  onlyPresented: true,
+                  showDock: false,
+                  windowContent: (context, w) => Text('content of ${w.id}'),
+                  pinPreview: (_) => const SizedBox.shrink(),
+                ),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+      c.present('a');
+      await tester.pumpAndSettle();
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      for (final tip in ['Minimize', 'Maximize', 'Close', 'Pin to the pinned desk']) {
+        final box = tester.getRect(windowChrome(tip));
+        await gesture.moveTo(box.topLeft + const Offset(2, 2));
+        await tester.pump();
+        await gesture.moveTo(box.center);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.text('content of a'), findsOneWidget);
+        await gesture.moveTo(const Offset(4, 4));
+        await tester.pump();
+      }
+      expect(errors, isEmpty);
+      c.dispose();
+    });
   });
 }

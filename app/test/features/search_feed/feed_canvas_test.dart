@@ -11,6 +11,10 @@ import 'package:aseman/src/features/search_feed/presentation/feed_canvas.dart';
 
 import '../../fake_aseman_service.dart';
 
+Finder windowChrome(String tooltip) => find.byWidgetPredicate(
+  (widget) => widget is WindowChromeButton && widget.tooltip == tooltip,
+);
+
 FeedPinSource heatmap() => const FeedPinSource(
   spaceId: FakeAsemanService.atlasId,
   spaceName: 'Atlas Collective',
@@ -139,10 +143,10 @@ void main() {
 
     expect(find.text('Heatmap'), findsWidgets);
     expect(find.text('Empty AG-UI surface'), findsOneWidget);
-    expect(find.byTooltip('Compact widget'), findsOneWidget);
-    expect(find.byTooltip('Minimize'), findsOneWidget);
-    expect(find.byTooltip('Maximize'), findsOneWidget);
-    expect(find.byTooltip('Remove'), findsOneWidget);
+    expect(windowChrome('Compact widget'), findsOneWidget);
+    expect(windowChrome('Minimize'), findsOneWidget);
+    expect(windowChrome('Maximize'), findsOneWidget);
+    expect(windowChrome('Remove'), findsOneWidget);
     expect(find.byTooltip('Toolbox'), findsOneWidget);
 
     final before = tester.getTopLeft(find.byType(CardWindow));
@@ -152,7 +156,7 @@ void main() {
     expect(after.dx, greaterThan(before.dx + 20));
     expect(after.dy, greaterThan(before.dy + 16));
 
-    await tester.tap(find.byTooltip('Compact widget'));
+    await tester.tap(windowChrome('Compact widget'));
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsNothing);
     expect(find.text('Empty AG-UI surface'), findsNothing);
@@ -176,13 +180,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Maximize'));
+    await tester.tap(windowChrome('Maximize'));
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(CardWindow)).width, greaterThan(900));
-    await tester.tap(find.byTooltip('Restore'));
+    await tester.tap(windowChrome('Restore'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Minimize'));
+    await tester.tap(windowChrome('Minimize'));
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsNothing);
 
@@ -190,7 +194,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CardWindow), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Remove'));
+    await tester.tap(windowChrome('Remove'));
     await tester.pumpAndSettle();
     expect(find.text('Your desk'), findsOneWidget);
     expect(find.text('Heatmap'), findsNothing);
@@ -202,8 +206,8 @@ void main() {
     await pumpDesk(tester, mobile: true, size: const Size(390, 844));
 
     expect(find.byType(CardWindow), findsNothing);
-    expect(find.byTooltip('Compact widget'), findsNothing);
-    expect(find.byTooltip('Maximize'), findsNothing);
+    expect(windowChrome('Compact widget'), findsNothing);
+    expect(windowChrome('Maximize'), findsNothing);
     expect(find.text('Heatmap'), findsWidgets);
 
     await tester.tap(find.byTooltip('App options'));

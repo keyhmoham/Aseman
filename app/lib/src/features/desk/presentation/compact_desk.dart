@@ -26,9 +26,10 @@ const double compactDeskWidth = 600;
 /// that opens the full frontend in a bottom sheet when tapped. Widgets are
 /// arranged by dragging (long-press, then move); the menu of each sets its
 /// size (small 1×1, medium 2×1, large 2×2 cells) and shape (card, squircle,
-/// pill, circle, leaf), pins or deletes it. Closing the sheet minimizes the
-/// window to the dock. The arrangement is kept on the node with the window
-/// (its `compact`), so it follows the person.
+/// pill, circle, leaf), pins or deletes it. Putting the sheet away leaves
+/// the widget on the board; only Delete in its menu removes it. The
+/// arrangement is kept on the node with the window (its `compact`), so it
+/// follows the person.
 class CompactDesk extends StatefulWidget {
   const CompactDesk({
     super.key,
@@ -266,9 +267,11 @@ class CompactDeskState extends State<CompactDesk> {
 
   List<DeskWindow> _windows() {
     final focus = c.focusTool;
+    // A minimized card is only the floating window put away. The widget
+    // stays on the board until it is deleted from its menu.
     final board = [
       for (final w in c.state.boardOrder)
-        if (!c.isMinimized(w.id) && (focus == null || w.tool == focus)) w,
+        if (focus == null || w.tool == focus) w,
     ];
     final order = _dragOrder;
     if (order == null) return board;
@@ -823,10 +826,7 @@ class _WindowSheet extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: 'Minimize',
-                    onPressed: () {
-                      controller.minimize(w.id);
-                      Navigator.of(context).maybePop();
-                    },
+                    onPressed: () => Navigator.of(context).maybePop(),
                     icon: const Icon(Icons.minimize_rounded),
                   ),
                 ],

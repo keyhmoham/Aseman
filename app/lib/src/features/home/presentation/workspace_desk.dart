@@ -53,16 +53,10 @@ class _CenterDesk extends StatelessWidget {
         window: w,
       );
 
-  Widget _pinPreview(DeskPin p) => p.isWeb
+  Widget _pinPreview(DeskPin p) => p.isAgui || p.isHtmlReport || p.isElpianReport
+      ? DeskKindPreview(pin: p)
+      : p.isWeb
       ? _WebPinPreview(title: p.label)
-      : p.isAgui
-      ? CompactSummaryView(
-          summary: CompactSummary(
-            title: p.label.isEmpty ? 'Visualization' : p.label,
-            caption: 'AG-UI',
-            icon: 'dashboard',
-          ),
-        )
       : p.isComputer
       ? const CompactSummaryView(
           summary: CompactSummary(
@@ -248,34 +242,19 @@ class DeskSurfaceContent extends StatelessWidget {
                 ),
         );
 
-  Widget _agui(BuildContext context, DeskWindow w) {
-    if (FrontendPresentation.isCompact(context)) {
-      return CompactSummaryView(
-        summary: CompactSummary(
-          title: w.label.isEmpty ? 'Visualization' : w.label,
-          caption: 'AG-UI · tap to open',
-          icon: 'dashboard',
-        ),
-      );
-    }
-    final raw = w.aguiSurface;
-    if (raw == null) {
-      return const Center(child: Text('Empty AG-UI surface'));
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: AgUiSurfaceView(
-        key: ValueKey('agui-${w.id}'),
-        surface: AgUiSurface.fromJson(raw),
-        compact: false,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final w = window;
-    return w.isWeb
+    return w.isAgui
+        ? DeskAgUiView(window: w)
+        : w.isHtmlReport || w.isElpianReport
+        ? DeskReportView(
+            service: dependencies.service,
+            window: w,
+            spaceId: spaceId,
+            roomId: roomId,
+          )
+        : w.isWeb
         ? _page(
             context,
             w.id,
@@ -284,8 +263,6 @@ class DeskSurfaceContent extends StatelessWidget {
             elpian: w.elpian,
             widget: w.widget,
           )
-        : w.isAgui
-        ? _agui(context, w)
         : w.isComputer
         ? (FrontendPresentation.isCompact(context)
               ? const CompactSummaryView(
@@ -550,7 +527,11 @@ class _DeskWindowPortalState extends State<_DeskWindowPortal> {
     return OverlayPortal(
       controller: _portal,
       overlayLocation: OverlayChildLocation.rootOverlay,
-      overlayChildBuilder: (context) => widget.layer,
+      // A nested overlay so tooltips and menus inside a card do not
+      // target the root theater. From inside this portal that walk
+      // asserts node.depth > theater.depth and the page behind the
+      // card becomes the red error screen.
+      overlayChildBuilder: (context) => Overlay.wrap(child: widget.layer),
       child: widget.child,
     );
   }

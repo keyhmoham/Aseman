@@ -8,6 +8,7 @@ import '../../desk/domain/desk_models.dart';
 import '../../desk/presentation/compact_desk.dart';
 import '../../desk/presentation/compact_summary.dart';
 import '../../desk/presentation/desk_controller.dart';
+import '../../desk/presentation/desk_report_view.dart';
 import '../../desk/presentation/floating_desk.dart';
 import '../../desk/presentation/frontend_presentation.dart';
 import '../../files/presentation/file_viewer.dart';
@@ -52,6 +53,9 @@ class DmDeskPanel extends StatelessWidget {
       );
 
   Widget _pinPreview(DeskPin p) {
+    if (p.isAgui || p.isHtmlReport || p.isElpianReport) {
+      return DeskKindPreview(pin: p);
+    }
     if (p.isWeb) {
       return CompactSummaryView(
         summary: CompactSummary(
@@ -139,7 +143,7 @@ class DmDeskPanel extends StatelessWidget {
               );
       },
     );
-    return ElpianMediaScope(
+    final surface = ElpianMediaScope(
       resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,
       child: bottomInset <= 0
           ? desk
@@ -147,6 +151,61 @@ class DmDeskPanel extends StatelessWidget {
               padding: EdgeInsets.only(bottom: bottomInset),
               child: desk,
             ),
+    );
+    // The widget grid asks the controller to present a card. Without this
+    // layer nothing draws it, so a tap looks like it did nothing.
+    if (!board) return surface;
+    final pad = MediaQuery.paddingOf(context);
+    return _DmWindowPortal(
+      layer: ElpianMediaScope(
+        resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,
+        child: FloatingDesk(
+          controller: controller,
+          topInset: pad.top,
+          bottomInset: pad.bottom,
+          captureSurface: false,
+          onlyPresented: true,
+          showDock: false,
+          windowContent: _windowContent,
+          pinPreview: (_) => const SizedBox.shrink(),
+        ),
+      ),
+      child: surface,
+    );
+  }
+}
+
+/// Floating cards over the whole window, the way a room desk opens a widget.
+class _DmWindowPortal extends StatefulWidget {
+  const _DmWindowPortal({required this.layer, required this.child});
+
+  final Widget layer;
+  final Widget child;
+
+  @override
+  State<_DmWindowPortal> createState() => _DmWindowPortalState();
+}
+
+class _DmWindowPortalState extends State<_DmWindowPortal> {
+  final OverlayPortalController _portal = OverlayPortalController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _portal.show();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OverlayPortal(
+      controller: _portal,
+      overlayLocation: OverlayChildLocation.rootOverlay,
+      // See the workspace desk portal: tooltips in a root-overlay card
+      // need their own overlay or hovering the chrome crashes the page.
+      overlayChildBuilder: (context) => Overlay.wrap(child: widget.layer),
+      child: widget.child,
     );
   }
 }
@@ -181,6 +240,15 @@ class _DmWindowContent extends StatelessWidget {
         key: ValueKey('computer-${w.id}'),
         service: dependencies.service,
         spaceId: spaceId,
+      );
+    }
+    if (w.isAgui) return DeskAgUiView(window: w);
+    if (w.isHtmlReport || w.isElpianReport) {
+      return DeskReportView(
+        service: dependencies.service,
+        window: w,
+        spaceId: spaceId,
+        roomId: roomId,
       );
     }
     if (w.isFile) {

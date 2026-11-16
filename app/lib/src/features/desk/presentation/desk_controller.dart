@@ -72,6 +72,33 @@ class DeskController extends ChangeNotifier {
     unawaited(raise(id));
   }
 
+  /// Puts away the floating card of [id] on this screen. The window stays
+  /// open on the node and on the widget board; only the card goes.
+  void dismiss(String id) {
+    var changed = false;
+    if (_maximized == id) {
+      _maximized = null;
+      changed = true;
+    }
+    if (_presented.remove(id)) changed = true;
+    if (changed) _notify();
+  }
+
+  /// Puts the floating card of [id] away so the dock can bring it back.
+  /// The widget stays on the board; the card is not left in the gathered,
+  /// non-draggable focus layout.
+  void shelve(String id) {
+    if (!_state.windows.any((w) => w.id == id)) return;
+    var changed = false;
+    if (_maximized == id) {
+      _maximized = null;
+      changed = true;
+    }
+    if (_presented.remove(id)) changed = true;
+    if (_minimized.add(id)) changed = true;
+    if (changed) _notify();
+  }
+
   /// Shows the desk of [room] (a room id, or `home`) in [space].
   void attach(String space, String room) {
     room = room.isEmpty ? 'home' : room;
@@ -377,8 +404,9 @@ class DeskController extends ChangeNotifier {
   );
 
   /// Shows only [tool]'s windows, gathered; the same tool again (or null)
-  /// shows every window where it was. Tapping a tool also restores its
-  /// minimized windows from the dock (without toggling focus away).
+  /// shows every window where it was. Tapping a tool with cards put away
+  /// brings those cards back where they were and leaves them draggable:
+  /// restore never gathers them.
   void focusOn(String? tool) {
     _pinnedOpen = false;
     _maximized = null;
@@ -387,15 +415,18 @@ class DeskController extends ChangeNotifier {
       _notify();
       return;
     }
-    final hadMinimized = _state.windows.any(
-      (w) => w.tool == tool && _minimized.contains(w.id),
-    );
-    _minimized.removeWhere(
-      (id) => _state.windows.any((w) => w.id == id && w.tool == tool),
-    );
-    if (hadMinimized) {
-      _focusTool = tool;
+    final restoring = [
+      for (final w in _state.windows)
+        if (w.tool == tool && _minimized.contains(w.id)) w.id,
+    ];
+    if (restoring.isNotEmpty) {
+      for (final id in restoring) {
+        _minimized.remove(id);
+        _presented.add(id);
+      }
+      _focusTool = null;
       _notify();
+      unawaited(raise(restoring.last));
       return;
     }
     _focusTool = tool == _focusTool ? null : tool;

@@ -38,6 +38,11 @@ class ThemePackController extends ChangeNotifier {
       if (next == null && id != null && id.isNotEmpty) {
         next = DefaultThemePacks.byId(id);
       }
+      // Built-in packs follow the app, not a snapshot saved before a change.
+      if (next != null && (listingId == null || listingId!.isEmpty)) {
+        final live = DefaultThemePacks.byId(next.id);
+        if (live.id == next.id) next = live;
+      }
       if (next != null && epoch == _epoch) {
         pack = next;
         notifyListeners();
@@ -75,16 +80,22 @@ class ThemePackController extends ChangeNotifier {
     String? listing,
     String? botId,
   }) async {
-    if (next.id == pack.id &&
+    var resolved = next;
+    final listingEmpty = listing == null || listing.isEmpty;
+    if (listingEmpty) {
+      final live = DefaultThemePacks.byId(resolved.id);
+      if (live.id == resolved.id) resolved = live;
+    }
+    if (resolved.id == pack.id &&
         listing == listingId &&
         botId == themeBotId &&
         listEquals(
-          utf8.encode(next.encode()),
+          utf8.encode(resolved.encode()),
           utf8.encode(pack.encode()),
         )) {
       return;
     }
-    await apply(next, listing: listing, botId: botId);
+    await apply(resolved, listing: listing, botId: botId);
   }
 
   Future<void> flush() => _save ?? Future<void>.value();

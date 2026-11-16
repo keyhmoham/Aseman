@@ -657,6 +657,20 @@ func (s *Service) AskDirect(ctx context.Context, caller, botID identity.ID, body
 	if !isAgentRuntime(rec) {
 		return "", errs.InvalidArgument(rec.Name + " is not an agent or an app")
 	}
+	// The desk the person is looking at is this direct chat, not a project
+	// hall and not the personal computer. Shell and files still follow
+	// computerOf onto the person's computer.
+	if !s.isBotAccount(ctx, caller) {
+		if spaceID, roomID, ok := s.conversationDesk(ctx, caller, rec.AccountID); ok {
+			if err := s.Bots.EnsureFunds(ctx, caller, rec.ID); err != nil {
+				return "", err
+			}
+			ctx, done := s.activityWriter(ctx, roomID)
+			defer done()
+			ctx = vmm.WithRequestIntent(vmm.WithRoom(helper.WithActor(ctx, caller), roomID.String()), body, atts)
+			return s.directTurn(ctx, caller, spaceID, roomID, rec, body, atts)
+		}
+	}
 	if run := vmm.ExecutionFrom(ctx); run.SpaceID != "" && run.RoomID != "" {
 		ids, perr := parseIDs(run.SpaceID, run.RoomID)
 		if perr == nil {

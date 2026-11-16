@@ -267,14 +267,61 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   }
 
   /// Lift the Post button above the home tab pill. The pill overlays tab
-  /// content and does not reserve layout space; the scaffold already insets
-  /// the button by 16.
+  /// content and does not reserve layout space; the button's own margin is 16.
   double _fabNavLift(BuildContext context) {
     const margin = 16.0;
     const gap = 12.0;
     return (HomeTabBar.occupied(context) + gap - margin).clamp(
       0.0,
       double.infinity,
+    );
+  }
+
+  bool _feedComposerVisible(bool phone) {
+    if (themeSlotDisabled(context, FeatureSlots.homeComposer) ||
+        themeSlotDisabled(context, ThemeChromeSlots.feedComposer)) {
+      return false;
+    }
+    if (!phone) return true;
+    return shellOf(context).home.composerOn.contains(FeatureSlots.homeExplore);
+  }
+
+  Widget _feedComposerButton() => ThemeSlotHost(
+    slot: FeatureSlots.homeComposer,
+    child: ThemeSlotHost(
+      slot: ThemeChromeSlots.feedComposer,
+      child: SkyFab(
+        heroTag: 'feed-composer',
+        onPressed: _openComposer,
+        icon: Icons.edit_rounded,
+        label: 'Post',
+        tooltip: 'New post',
+      ),
+    ),
+  );
+
+  /// Posts column with the composer pinned to that pane, not the scaffold.
+  ///
+  /// [phone] is the home tab layout. The search chrome stays compact in both
+  /// the phone Explore tab and the wide posts pane.
+  Widget _feedPane({required bool phone, required double topInset}) {
+    final showComposer = _feedComposerVisible(phone);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _feedScroll(
+          compact: true,
+          topInset: topInset,
+          phone: phone,
+          reserveComposer: showComposer,
+        ),
+        if (showComposer)
+          PositionedDirectional(
+            end: 16,
+            bottom: phone ? 16 + _fabNavLift(context) : 16,
+            child: _feedComposerButton(),
+          ),
+      ],
     );
   }
 
@@ -325,12 +372,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final compact = _compact;
-    final homeShell = shellOf(context).home;
-    final mobileSlot = _mobileSlot;
-    final showComposer =
-        (!compact || homeShell.composerOn.contains(mobileSlot)) &&
-        !themeSlotDisabled(context, FeatureSlots.homeComposer) &&
-        !themeSlotDisabled(context, ThemeChromeSlots.feedComposer);
     final appBarInset = FloatingAppBarLayout.contentInsetOf(context, compact);
     return Scaffold(
       extendBody: compact,
@@ -385,10 +426,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                           animation: motion,
                           hiddenOffset: WorkspacePanelMotions.mobileOffset,
                           scaleFrom: WorkspacePanelMotions.mobileScale,
-                          child: _feedScroll(
-                            compact: true,
-                            topInset: appBarInset,
-                          ),
+                          child: _feedPane(phone: true, topInset: appBarInset),
                         );
                       }
                       if (slot == FeatureSlots.homeYou) {
@@ -454,7 +492,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                                 hiddenOffset: WorkspacePanelMotions.left,
                                 child: AppPane(
                                   width: metrics.feed,
-                                  child: _feedScroll(compact: true, topInset: 0),
+                                  child: _feedPane(phone: false, topInset: 0),
                                 ),
                               ),
                               const PaneDivider(),
@@ -520,56 +558,41 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
             ),
         ],
       ),
-      floatingActionButton: !showComposer
-          ? null
-          : ThemeSlotHost(
-              slot: FeatureSlots.homeComposer,
-              child: ThemeSlotHost(
-                slot: ThemeChromeSlots.feedComposer,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: compact ? _fabNavLift(context) : 0,
-                  ),
-                  child: SkyFab(
-                    heroTag: 'feed-composer',
-                    onPressed: _openComposer,
-                    icon: Icons.edit_rounded,
-                    label: 'Post',
-                    tooltip: 'New post',
-                  ),
-                ),
-              ),
-            ),
     );
   }
 
   /// Compact search bar over the posts. [topInset] is reserved
   /// inside the scroll so the first paint clears the floating app bar and
   /// later scroll passes under it.
-  Widget _feedScroll({required bool compact, required double topInset}) =>
-      LayoutBuilder(
-        builder: (context, box) {
-          final horizontalPad = math.max(16.0, (box.maxWidth - 760) / 2);
-          return CustomScrollView(
-            controller: scrollController,
-            slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: topInset)),
-              SliverPersistentHeader(
-                pinned: false,
-                delegate: _SearchHeroDelegate(
-                  compact: compact,
-                  model: model,
-                  onSearch: _openExplore,
-                ),
-              ),
-              ..._feedSlivers(
-                horizontalPad,
-                bottom: compact ? 16 + HomeTabBar.occupied(context) : 32,
-              ),
-            ],
-          );
-        },
+  Widget _feedScroll({
+    required bool compact,
+    required double topInset,
+    required bool phone,
+    required bool reserveComposer,
+  }) => LayoutBuilder(
+    builder: (context, box) {
+      final horizontalPad = math.max(16.0, (box.maxWidth - 760) / 2);
+      // Clear the tab pill, and the Post button pinned in this pane.
+      final bottom = phone
+          ? 16 + HomeTabBar.occupied(context) + (reserveComposer ? 64.0 : 0.0)
+          : (reserveComposer ? 88.0 : 32.0);
+      return CustomScrollView(
+        controller: scrollController,
+        slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: topInset)),
+          SliverPersistentHeader(
+            pinned: false,
+            delegate: _SearchHeroDelegate(
+              compact: compact,
+              model: model,
+              onSearch: _openExplore,
+            ),
+          ),
+          ..._feedSlivers(horizontalPad, bottom: bottom),
+        ],
       );
+    },
+  );
 
   Widget _workspaceBar(
     BuildContext context,

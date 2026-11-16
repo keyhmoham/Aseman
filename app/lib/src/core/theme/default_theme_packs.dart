@@ -644,7 +644,7 @@ abstract final class DefaultThemePacks {
         ),
         graphics: const ThemeGraphics(
           atmosphere: 'flat',
-          haloStyle: 'ring',
+          haloStyle: 'solid',
           iconTreatment: 'rounded',
           backdropStyle: 'solid',
         ),

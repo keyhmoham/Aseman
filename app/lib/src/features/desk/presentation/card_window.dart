@@ -34,6 +34,7 @@ class CardWindow extends StatefulWidget {
     this.onSwapCompact,
     this.showPin = true,
     this.closeTooltip = 'Close',
+    this.chromeOverlayTooltip = true,
   });
 
   final DeskWindow window;
@@ -65,6 +66,11 @@ class CardWindow extends StatefulWidget {
 
   /// The close control's name (`Remove` on the feed desk).
   final String closeTooltip;
+
+  /// Hover labels via [Tooltip]. Off for cards hosted in the root overlay:
+  /// that portal cannot host another one, and the page behind the card
+  /// becomes the red error screen.
+  final bool chromeOverlayTooltip;
 
   @override
   State<CardWindow> createState() => _CardWindowState();
@@ -185,7 +191,8 @@ class _CardWindowState extends State<CardWindow>
                 ),
               ),
               if (widget.showPin)
-                _ChromeButton(
+                WindowChromeButton(
+                  overlayTooltip: widget.chromeOverlayTooltip,
                   tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
                   icon:
                       widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -193,24 +200,28 @@ class _CardWindowState extends State<CardWindow>
                   onPressed: widget.onPin,
                 ),
               if (widget.onSwapCompact != null)
-                _ChromeButton(
+                WindowChromeButton(
+                  overlayTooltip: widget.chromeOverlayTooltip,
                   tooltip: 'Compact widget',
                   icon: Icons.widgets_outlined,
                   onPressed: widget.onSwapCompact,
                 ),
-              _ChromeButton(
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
                 tooltip: 'Minimize',
                 icon: Icons.minimize_rounded,
                 onPressed: widget.onMinimize,
               ),
-              _ChromeButton(
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
                 tooltip: widget.maximized ? 'Restore' : 'Maximize',
                 icon: widget.maximized
                     ? Icons.close_fullscreen_rounded
                     : Icons.open_in_full_rounded,
                 onPressed: widget.onMaximize,
               ),
-              _ChromeButton(
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
                 tooltip: widget.closeTooltip,
                 icon: Icons.close_rounded,
                 danger: true,
@@ -269,36 +280,90 @@ class _CardWindowState extends State<CardWindow>
   }
 }
 
-class _ChromeButton extends StatelessWidget {
-  const _ChromeButton({
+class WindowChromeButton extends StatefulWidget {
+  const WindowChromeButton({
     required this.tooltip,
     required this.icon,
     this.onPressed,
     this.selected = false,
     this.danger = false,
+    this.overlayTooltip = true,
   });
 
   final String tooltip;
+  final bool overlayTooltip;
   final IconData icon;
   final VoidCallback? onPressed;
   final bool selected;
   final bool danger;
 
   @override
+  State<WindowChromeButton> createState() => _WindowChromeButtonState();
+}
+
+class _WindowChromeButtonState extends State<WindowChromeButton> {
+  bool _hover = false;
+  bool _want = false;
+  bool _queued = false;
+
+  /// IconButton applies its hover ink inside the mouse-tracker update. On
+  /// this scaled card that reenters the tracker and the framework replaces
+  /// the whole window with the red error screen. Hover is applied on the
+  /// next frame instead, and the ink never leaves this box.
+  void _hoverTo(bool value) {
+    _want = value;
+    if (_queued) return;
+    _queued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _queued = false;
+      if (!mounted || _hover == _want) return;
+      setState(() => _hover = _want);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      visualDensity: VisualDensity.compact,
-      iconSize: 18,
-      style: IconButton.styleFrom(
-        foregroundColor: selected ? scheme.primary : scheme.onSurfaceVariant,
-        hoverColor: danger ? scheme.errorContainer : null,
-        highlightColor: danger ? scheme.error.withValues(alpha: .2) : null,
+    final fg = widget.danger
+        ? scheme.error
+        : widget.selected
+        ? scheme.primary
+        : scheme.onSurfaceVariant;
+    final button = Semantics(
+      button: true,
+      tooltip: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => _hoverTo(true),
+        onExit: (_) => _hoverTo(false),
+        cursor: widget.onPressed == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _hover
+                    ? (widget.danger
+                          ? scheme.error.withValues(alpha: .14)
+                          : scheme.primary.withValues(alpha: .10))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(widget.icon, size: 18, color: fg),
+            ),
+          ),
+        ),
       ),
-      icon: Icon(icon),
     );
+    // A tooltip is an overlay portal. Cards on the root overlay cannot
+    // host one: hovering asserts node.depth > theater.depth and the page
+    // behind the card turns into the red error screen.
+    if (!widget.overlayTooltip) return button;
+    return Tooltip(message: widget.tooltip, child: button);
   }
 }
 

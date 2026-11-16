@@ -147,6 +147,9 @@ void main() {
     await tester.tap(find.byTooltip('Minimize'));
     await tester.pumpAndSettle();
     expect(find.text('Window a: sheet'), findsNothing);
+    expect(find.text('Window a: compact'), findsOneWidget,
+        reason: 'putting the sheet away leaves the widget on the board');
+    expect(c.isMinimized('a'), isFalse);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });

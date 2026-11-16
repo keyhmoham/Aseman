@@ -33,6 +33,39 @@ void main() {
     final p = DeskPin.fromJson({'id': 'p1', 'tool': 'pages', 'kind': 'web', 'args': {'page': _page}});
     expect(p.isWeb, isTrue);
     expect(p.page, _page);
+    expect(w.isHtmlReport, isFalse);
+    expect(w.isElpianReport, isFalse);
+  });
+
+  test('a report window keeps its html or elpian source', () {
+    final web = DeskWindow.fromJson({
+      'id': 'w2',
+      'tool': 'pages',
+      'kind': 'web',
+      'title': 'Brief',
+      'args': {'html': '<h1>Brief</h1>'},
+      'x': 0, 'y': 0, 'w': 720, 'h': 560,
+    });
+    expect(web.isHtmlReport, isTrue);
+    expect(web.isElpianReport, isFalse);
+    expect(web.page, isEmpty);
+    expect(web.reportHtml, '<h1>Brief</h1>');
+    final board = DeskWindow.fromJson({
+      'id': 'w3',
+      'tool': 'pages',
+      'kind': 'web',
+      'args': {'program': "Text('hi')"},
+      'x': 0, 'y': 0, 'w': 720, 'h': 560,
+    });
+    expect(board.isElpianReport, isTrue);
+    expect(board.isHtmlReport, isFalse);
+    final pin = DeskPin.fromJson({
+      'id': 'p2',
+      'tool': 'pages',
+      'kind': 'web',
+      'args': {'html': '<p>x</p>'},
+    });
+    expect(pin.isHtmlReport, isTrue);
   });
 
   test('openPage opens a web window on the desk', () async {

@@ -28,12 +28,17 @@ class ElpianAppView extends StatefulWidget {
     this.spaceId = '',
     this.roomId = '',
     this.title = '',
+    this.code = '',
     this.onAsleep,
   });
 
   final AsemanService service;
   final String page;
   final String entry;
+
+  /// The program itself, when the desk is showing a report rather than an
+  /// app the computer is serving. Empty: [entry] is fetched from [page].
+  final String code;
   final String spaceId;
   final String roomId;
   final String title;
@@ -68,7 +73,11 @@ class _ElpianAppViewState extends State<ElpianAppView> {
   @override
   void didUpdateWidget(ElpianAppView old) {
     super.didUpdateWidget(old);
-    if (old.page != widget.page || old.entry != widget.entry) _load();
+    if (old.page != widget.page ||
+        old.entry != widget.entry ||
+        old.code != widget.code) {
+      _load();
+    }
   }
 
   @override
@@ -129,9 +138,10 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       _error = null;
     });
     _host?.dispose();
+    final page = widget.page.trim().isEmpty ? 'desk://report' : widget.page;
     _host = ElpianAppHost(
       baseUrl: _base,
-      page: widget.page,
+      page: page,
       headers: widget.service.authHeaders,
       env: () => _env,
       settle: (result) =>
@@ -140,6 +150,15 @@ class _ElpianAppViewState extends State<ElpianAppView> {
       onExpand: () => FrontendPresentation.maybeOf(context)?.onExpand?.call(),
       onAsleep: widget.onAsleep,
     );
+    final inline = widget.code.trim();
+    if (inline.isNotEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _code = inline;
+        _envSent = jsonEncode(_env);
+      });
+      return;
+    }
     try {
       final page = widget.page.endsWith('/') ? widget.page : '${widget.page}/';
       final entry = widget.entry.replaceFirst(RegExp(r'^/+'), '');

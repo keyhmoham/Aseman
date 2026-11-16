@@ -52,6 +52,7 @@ void main() {
     expect(pack.language.fab.elevation, lessThanOrEqualTo(1));
     expect(pack.language.shadow.alpha, 0);
     expect(pack.graphics.atmosphere, 'flat');
+    expect(pack.graphics.haloStyle, 'solid');
     expect(pack.tokens.light.blurSigma, 0);
     expect(pack.tokens.dark.blurSigma, 0);
     expect(pack.tokens.light.labelWeight, 500);
@@ -144,6 +145,41 @@ void main() {
     final sky = AppTheme.fromPack(DefaultThemePacks.sky, Brightness.light);
     expect(sky.extension<AsemanTokens>()!.atmosphere, 'mist');
     expect(sky.extension<AsemanTokens>()!.blurSigma, greaterThan(0));
+  });
+
+  testWidgets('paper avatars drop the gradient halo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.fromPack(DefaultThemePacks.paper, Brightness.light),
+        home: const HaloRing(
+          child: SizedBox(width: 40, height: 40, key: Key('face')),
+        ),
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(HaloRing),
+        matching: find.byType(CustomPaint),
+      ),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('face')), findsOneWidget);
+  });
+
+  testWidgets('sky avatars keep the gradient halo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.fromPack(DefaultThemePacks.sky, Brightness.light),
+        home: const HaloRing(child: SizedBox(width: 40, height: 40)),
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(HaloRing),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('paper backdrop skips the sky atmosphere wash', (tester) async {

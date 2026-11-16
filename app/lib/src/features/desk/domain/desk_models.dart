@@ -140,6 +140,17 @@ class DeskWindow {
   /// The gateway path a web page window shows.
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
 
+  /// An inline HTML report (`desk_show` ui web). Empty for a served page.
+  String get reportHtml => isWeb ? '${args['html'] ?? ''}' : '';
+
+  /// An inline Elpian report (`desk_show` ui elpian). Empty for a served app.
+  String get reportProgram => isWeb ? '${args['program'] ?? ''}' : '';
+
+  /// The source is in the window, not a preview the computer is serving.
+  bool get isElpianReport => isWeb && reportProgram.trim().isNotEmpty;
+  bool get isHtmlReport =>
+      isWeb && !isElpianReport && reportHtml.trim().isNotEmpty;
+
   /// An Elpian app's program in its app (`elpian/app.js`): the window runs
   /// it natively rather than showing a web page ('' for a web page).
   String get elpian => isWeb ? '${args['elpian'] ?? ''}' : '';
@@ -278,6 +289,11 @@ class DeskPin {
   /// A web page (a preview of the space).
   bool get isWeb => kind == webKind;
   String get page => isWeb ? '${args['page'] ?? ''}' : '';
+  String get reportHtml => isWeb ? '${args['html'] ?? ''}' : '';
+  String get reportProgram => isWeb ? '${args['program'] ?? ''}' : '';
+  bool get isElpianReport => isWeb && reportProgram.trim().isNotEmpty;
+  bool get isHtmlReport =>
+      isWeb && !isElpianReport && reportHtml.trim().isNotEmpty;
   String get elpian => isWeb ? '${args['elpian'] ?? ''}' : '';
 
   /// A workspace file.

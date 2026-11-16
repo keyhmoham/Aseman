@@ -1,0 +1,23 @@
+# Flutter web client as the Decillion frontend.
+# Render Dashboard → New → Blueprint, and point it at this repository.
+# Docker context is app/ (the Flutter project). The image builds `flutter build
+# web` and nginx serves it. API calls stay on this origin; nginx forwards
+# /v1, /fed and /healthz to DECILLION_API_URL.
+services:
+  - type: web
+    name: decillion-web
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./app/Dockerfile
+    dockerContext: ./app
+    healthCheckPath: /
+    envVars:
+      - key: DECILLION_API_URL
+        value: https://preview.decillionai.com
+      # Optional. Hostname is derived from DECILLION_API_URL when unset.
+      # - key: DECILLION_API_HOST
+      #   value: preview.decillionai.com
+      # Build-time only (Docker build args of app/Dockerfile). Empty means the
+      # full Aseman client, not one platform's published frontend.
+      # Set these in the dashboard under Docker Build Args if you need them:
+      #   DEVELOPER_API_BASE, DECILLION_PLATFORM, WEB_RENDERER

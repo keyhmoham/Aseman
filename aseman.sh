@@ -69,7 +69,10 @@ case "$cmd" in
       DECILLION_API_HOST="${DECILLION_API_URL#*://}"
       DECILLION_API_HOST="${DECILLION_API_HOST%%/*}"
       DECILLION_API_HOST="${DECILLION_API_HOST%%:*}"
-      export DECILLION_API_URL DECILLION_API_HOST
+      # Public DNS: Render has no Docker resolver at 127.0.0.11, and this
+      # default keeps `./aseman.sh up --decillion` on the same template.
+      DECILLION_API_RESOLVER="${DECILLION_API_RESOLVER:-1.1.1.1 8.8.8.8}"
+      export DECILLION_API_URL DECILLION_API_HOST DECILLION_API_RESOLVER
       # One app on the web port: this stack's own client steps aside.
       # --force-recreate: compose otherwise keeps a running web-decillion even
       # after --build when its config hash is unchanged (and a container that

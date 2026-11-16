@@ -2,6 +2,12 @@
 # Aseman web app (Flutter web build) served by nginx. nginx also proxies the
 # node's API on the same origin, so the app is built with
 # API_BASE_URL=same-origin.
+#
+# Render.com (Blueprint: ../render.yaml):
+#   Docker context = this directory (app/), Dockerfile = Dockerfile.
+#   Runtime env DECILLION_API_URL = the Decillion node
+#   (https://preview.decillionai.com). Render's PORT is what nginx listens on.
+# Optional build args: DEVELOPER_API_BASE, DECILLION_PLATFORM, WEB_RENDERER.
 ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
 FROM ${FLUTTER_IMAGE} AS build
 # Optional extra CA for building behind a TLS-intercepting proxy:
@@ -44,10 +50,17 @@ RUN if [ "$WEB_RENDERER" = "wasm" ]; then \
     fi
 
 FROM nginx:1.29-alpine
+# Render sets PORT (commonly 10000) and routes to it. Local compose publishes
+# container port 80 and does not set PORT, so the default stays 80.
+ENV PORT=80
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-# The API the app's origin forwards to: the stack's node. `./aseman.sh up
-# --decillion` mounts deploy/api.decillion.conf.template, which the image's
-# entrypoint renders over this file (a Decillion node elsewhere).
+# Default API proxy: this stack's own node (`aseman:8080`). When
+# DECILLION_API_URL is set, the entrypoint replaces it with the Decillion
+# proxy (same origin). `./aseman.sh up --decillion` still mounts the template
+# for the nginx image's own envsubst.
 COPY deploy/api.local.conf /etc/nginx/aseman-api.conf
+COPY deploy/api.decillion.conf.template /etc/nginx/aseman-api.decillion.template
+COPY deploy/docker-entrypoint.d/15-aseman-web.sh /docker-entrypoint.d/15-aseman-web.sh
+RUN chmod 755 /docker-entrypoint.d/15-aseman-web.sh
 COPY --from=build /src/build/web /usr/share/nginx/html
 EXPOSE 80

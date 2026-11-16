@@ -101,7 +101,6 @@ void main() {
     expect(roles.tertiary, isNot(roles.primary));
     expect(roles.surfaceContainer, isNot(roles.surface));
     expect(roles.surfaceTint, roles.primary);
-    expect(roles.surface, isNot(light.colorScheme.surface));
     expect(roles.tertiary.b, greaterThan(roles.tertiary.r));
     expect(blue.chipTheme.selectedColor, roles.secondaryContainer);
     expect(blue.chipTheme.secondarySelectedColor, roles.secondaryContainer);
@@ -125,6 +124,7 @@ void main() {
     expect(lightTokens.blurSigma, 0);
     expect(light.scaffoldBackgroundColor, light.colorScheme.surface);
     expect(light.colorScheme.surface, isNot(pack.tokens.light.scaffold));
+    expect(roles.surface, isNot(light.colorScheme.surface));
     expect(
       light.navigationRailTheme.selectedLabelTextStyle?.fontWeight,
       FontWeight.w500,

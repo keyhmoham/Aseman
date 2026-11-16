@@ -1,12 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/theme_chrome.dart';
 import '../../core/theme/theme_roles.dart';
-import '../../core/theme/app_surfaces.dart';
 import '../../data/models/app_notification.dart';
 import 'avatar.dart';
 import 'avatar_face.dart';
@@ -16,8 +14,8 @@ import 'segmented_tab_bar.dart';
 import 'skeleton.dart';
 import 'sky_ui.dart';
 
-/// Opens the latest notifications, anchored at the app bar's left edge: on
-/// desktop a floating popup like the profile menu, on phones a bottom sheet.
+/// Opens the latest notifications. On desktop it is a full-height sheet stuck
+/// to the leading edge; on phones it is a bottom sheet.
 /// Opening it marks them read. The sheet is tabbed: **All** for notifications,
 /// **Invites** for pending project invitations. Tapping a message notification
 /// opens its space through [onOpenSpace] (by name); tapping an invite
@@ -27,7 +25,7 @@ Future<void> showNotificationsMenu(
   AppDependencies dependencies, {
   ValueChanged<String>? onOpenSpace,
 }) async {
-  final compact = MediaQuery.sizeOf(context).width < 820;
+  final compact = MediaQuery.sizeOf(context).width < Breakpoints.expanded;
   final AppNotification? picked;
   if (compact) {
     picked = await showAppSheet<AppNotification>(
@@ -46,37 +44,15 @@ Future<void> showNotificationsMenu(
       isScrollControlled: true,
     );
   } else {
-    final size = MediaQuery.sizeOf(context);
-    final width = math.min(392.0, size.width - 32);
-    picked = await showGeneralDialog<AppNotification>(
+    picked = await showDockedPanel<AppNotification>(
       context: context,
-      barrierDismissible: true,
+      width: 400,
+      edge: DockedEdge.leading,
       barrierLabel: 'Close notifications',
-      barrierColor: AppSurfaces.barrierOf(context),
-      transitionDuration: const Duration(milliseconds: 420),
-      pageBuilder: (dialogContext, _, __) => SafeArea(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 66, 16, 16),
-            child: FloatingPanelSurface(
-              elevation: 6,
-              child: SizedBox(
-                width: width,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: size.height * .7),
-                  child: _NotificationsBody(
-                    dependencies: dependencies,
-                    onSelect: (n) => Navigator.pop(dialogContext, n),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      builder: (panelContext) => _NotificationsBody(
+        dependencies: dependencies,
+        onSelect: (n) => Navigator.pop(panelContext, n),
       ),
-      transitionBuilder: (routeContext, animation, __, child) =>
-          desktopFloatingPanelTransition(routeContext, animation, child),
     );
   }
   if (picked == null || !context.mounted) return;

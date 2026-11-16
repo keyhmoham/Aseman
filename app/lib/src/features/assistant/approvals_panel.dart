@@ -7,8 +7,15 @@ import '../../shared/widgets/glass_surface.dart';
 /// Approvals waiting on the person, and the standing "always allow" grants
 /// they gave (each revocable).
 class ApprovalsPanel extends StatelessWidget {
-  const ApprovalsPanel({super.key, required this.dependencies});
+  const ApprovalsPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
+
+  /// Draw the grants in the settings page instead of their own screen.
+  final bool embedded;
 
   Future<Map<String, dynamic>> _load() async {
     final service = dependencies.service;
@@ -29,6 +36,7 @@ class ApprovalsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LoadedPanel(
     title: 'Approvals',
+    embedded: embedded,
     load: _load,
     build: (context, data, reload) {
       final approvals = jsonList(data['approvals']);
@@ -44,8 +52,7 @@ class ApprovalsPanel extends StatelessWidget {
         if (out != null) await reload();
       }
 
-      return ListView(
-        children: [
+      final children = <Widget>[
           PanelSection(
             title: 'Waiting on you',
             subtitle:
@@ -145,8 +152,14 @@ class ApprovalsPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 32),
-        ],
-      );
+      ];
+      if (embedded) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        );
+      }
+      return ListView(children: children);
     },
   );
 }

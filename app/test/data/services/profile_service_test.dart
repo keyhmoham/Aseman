@@ -13,6 +13,7 @@ class _ProfileStubClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     switch (action) {
       case 'account_get':

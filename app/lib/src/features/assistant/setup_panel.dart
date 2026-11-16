@@ -13,8 +13,12 @@ class SetupPanel extends StatelessWidget {
     super.key,
     required this.dependencies,
     this.notifications = '',
+    this.embedded = false,
   });
   final AppDependencies dependencies;
+
+  /// Draw the checklist in the settings page instead of its own screen.
+  final bool embedded;
 
   /// What this device says of its notification permission: granted,
   /// denied, or empty when not asked.
@@ -23,6 +27,7 @@ class SetupPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LoadedPanel(
     title: 'Setup',
+    embedded: embedded,
     load: () async => jsonMap(
       await dependencies.service.invokeAction(
         'proactive',
@@ -35,8 +40,7 @@ class SetupPanel extends StatelessWidget {
       final required = items.where((i) => i['optional'] != true).toList();
       final optional = items.where((i) => i['optional'] == true).toList();
       final ready = required.where((i) => i['status'] == 'ready').length;
-      return ListView(
-        children: [
+      final children = <Widget>[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: LinearProgressIndicator(
@@ -53,8 +57,14 @@ class SetupPanel extends StatelessWidget {
               children: [for (final i in optional) _SetupTile(item: i)],
             ),
           const SizedBox(height: 32),
-        ],
-      );
+      ];
+      if (embedded) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        );
+      }
+      return ListView(children: children);
     },
   );
 }

@@ -255,10 +255,16 @@ class _CartesianChartState extends State<CartesianChart> {
       child: SizedBox(
         height: spec.height,
         child: LayoutBuilder(builder: (context, box) {
-          final size = Size(box.maxWidth, spec.height);
+          // A chat bubble's column does not always pass a tight width.
+          // An infinite width makes the plot rectangle unusable.
+          final width = box.maxWidth.isFinite ? box.maxWidth : 280.0;
+          final size = Size(width, spec.height);
           final geo = _Geo(spec, size, p);
           final hit = _hit;
-          return MouseRegion(
+          return SizedBox(
+            width: width,
+            height: spec.height,
+            child: MouseRegion(
             onHover: (e) => _move(geo, e.localPosition),
             onExit: (_) => setState(() {
               _pointer = null;
@@ -288,6 +294,7 @@ class _CartesianChartState extends State<CartesianChart> {
                 ],
               ),
             ),
+          ),
           );
         }),
       ),

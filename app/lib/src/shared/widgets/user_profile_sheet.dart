@@ -25,9 +25,16 @@ import 'sky_ui.dart';
 /// shows the signed-in account, the stats reflect the live wallet/bots/posts,
 /// and the composer publishes a real post.
 class UserProfileSheet extends StatefulWidget {
-  const UserProfileSheet({super.key, required this.dependencies});
+  const UserProfileSheet({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
 
   final AppDependencies dependencies;
+
+  /// Draw the profile in the settings page instead of a floating sheet.
+  final bool embedded;
 
   @override
   State<UserProfileSheet> createState() => _UserProfileSheetState();
@@ -148,6 +155,8 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
     return ListView(
+      shrinkWrap: widget.embedded,
+      physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg - 4, AppSpacing.md, AppSpacing.lg - 4, AppSpacing.xl),
       children: [

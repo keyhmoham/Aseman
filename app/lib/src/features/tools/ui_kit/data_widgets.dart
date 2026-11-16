@@ -226,7 +226,11 @@ class StatTile extends StatelessWidget {
     final size = '${props['size'] ?? 'default'}';
     final hero = size == 'hero';
     final compact = size == 'compact';
-    final raw = props['value'];
+    final raw = props['value'] ??
+        props['text'] ??
+        props['content'] ??
+        props['amount'] ??
+        props['reading'];
     final format = looseStr(props['format']);
     final value = format == null && raw is num && raw.abs() >= 10000
         ? formatCompact(raw)
@@ -240,7 +244,7 @@ class StatTile extends StatelessWidget {
         (status != null ? p.status(status) : p.accent);
     final goodDown = props['goodDirection'] == 'down';
     final label = Text(
-      asText(props['label']),
+      asText(props['label'] ?? props['title'] ?? props['name']),
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
       style: p.font(
@@ -756,26 +760,37 @@ class KeyValueList extends StatelessWidget {
       return Text(formatValue(v, format), style: style);
     }
 
-    final list = props['items'];
-    if (list is List) {
-      for (final item in list) {
-        final m = asMap(item);
-        items.add((
-          asText(m['label'] ?? m['key']),
-          valueOf(m['value'], looseStr(m['format']), looseStr(m['type']))
-        ));
-      }
-    } else {
-      final data = asMap(props['data']);
-      final formats = asMap(props['formats']);
-      for (final e in data.entries) {
-        if (e.value is Map) continue;
-        items.add((
-          asText(asMap(props['labels'])[e.key] ?? _humanize(e.key)),
-          valueOf(e.value, looseStr(formats[e.key]), null)
-        ));
+    // A facts card is one KeyValue per row: {label, value} on the node
+    // itself, not a list under items.
+    var raw = props['items'] ??
+        props['fields'] ??
+        props['pairs'] ??
+        props['entries'] ??
+        props['facts'] ??
+        props['metrics'] ??
+        props['rows'] ??
+        props['data'];
+    if (raw == null) {
+      final label = props['label'] ?? props['title'] ?? props['name'];
+      final value = props['value'] ??
+          props['text'] ??
+          props['content'] ??
+          props['subtitle'] ??
+          props['amount'];
+      if (label != null || value != null) {
+        raw = [
+          {'label': label ?? '', 'value': value ?? ''}
+        ];
       }
     }
+    for (final pair in recordPairs(
+      raw,
+      labels: props['labels'] is Map ? asMap(props['labels']) : null,
+      formats: props['formats'] is Map ? asMap(props['formats']) : null,
+    )) {
+      items.add((pair.label, valueOf(pair.value, pair.format, pair.type)));
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
     final columns = asInt(props['columns'], 1).clamp(1, 4);
     final vertical = props['layout'] == 'vertical' || columns > 1;
     Widget entry((String, Widget) e) => vertical
@@ -821,14 +836,6 @@ class KeyValueList extends StatelessWidget {
       );
     });
   }
-}
-
-String _humanize(String field) {
-  final s = field
-      .replaceAll(RegExp(r'[_\-.]'), ' ')
-      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
-      .trim();
-  return s.isEmpty ? field : s[0].toUpperCase() + s.substring(1);
 }
 
 /// A vertical timeline of events: a dot per event (its status color and

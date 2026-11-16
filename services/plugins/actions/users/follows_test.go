@@ -11,7 +11,9 @@ import (
 	"github.com/aseman/aseman/internal/plugins/identity"
 	"github.com/aseman/aseman/pkg/logger"
 	"github.com/aseman/aseman/plugins/actions/auth/models/account"
+	"github.com/aseman/aseman/plugins/actions/bots/models/bot"
 	"github.com/aseman/aseman/plugins/actions/support/metasvc"
+	"github.com/aseman/aseman/plugins/actions/support/models/metadata"
 	"github.com/aseman/aseman/plugins/actions/support/repo"
 	"github.com/aseman/aseman/plugins/adapters/database/memory"
 	dbmodel "github.com/aseman/aseman/plugins/testutil"
@@ -80,6 +82,53 @@ func mustID(t *testing.T, s string) identity.ID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// The chats list reads publicRef. An agent peer must carry the same bot id,
+// picture and platform humanoid the open conversation uses, or the list draws
+// a different face.
+func TestPublicRefCarriesAgentLook(t *testing.T) {
+	s, ctx := followHarness(t)
+	alice := mustID(t, "00000000000000010000000000000001")
+	agentID := mustID(t, "00000000000000010000000000000003")
+	botID := mustID(t, "00000000000000010000000000000081")
+	agent := &account.Account{Entity: entity.Entity{ID: agentID}, Handle: "ada", Kind: account.KindBot, Status: account.StatusActive}
+	if err := s.R.CreateID(ctx, "accounts", agent.ID, agent); err != nil {
+		t.Fatal(err)
+	}
+	rec := &bot.Bot{Entity: entity.Entity{ID: botID}, AccountID: agentID, Kind: bot.KindAgent, VMType: bot.VMTypeHarness, Name: "Ada"}
+	if err := s.R.CreateID(ctx, "bots", rec.ID, rec); err != nil {
+		t.Fatal(err)
+	}
+	look := map[string]any{"skin": 4, "hair": 3, "accent": 0xFF112233}
+	meta := &metadata.Record{
+		ID: agentID.String(), Owner: agentID.String(),
+		Tree: metadata.Tree{"profile": map[string]any{
+			"avatar": "file-ada", "humanoid": look,
+		}},
+		Version: 1,
+	}
+	if err := s.R.CreateID(ctx, "metadatas", agentID, meta); err != nil {
+		t.Fatal(err)
+	}
+	ref := s.publicRef(ctx, alice, agentID)
+	if ref["bot_id"] != botID.String() {
+		t.Fatalf("bot_id = %v, want %s", ref["bot_id"], botID)
+	}
+	if ref["avatar"] != "file-ada" {
+		t.Fatalf("avatar = %v", ref["avatar"])
+	}
+	h, _ := ref["humanoid"].(map[string]any)
+	if h["skin"] != 4 || h["hair"] != 3 {
+		t.Fatalf("humanoid = %v", ref["humanoid"])
+	}
+	person := s.publicRef(ctx, alice, mustID(t, "00000000000000010000000000000002"))
+	if _, ok := person["bot_id"]; ok {
+		t.Fatal("a person peer has no bot id")
+	}
+	if _, ok := person["humanoid"]; ok {
+		t.Fatal("a person peer has no humanoid")
+	}
 }
 
 // Agents and apps have accounts too, but people lists only ever show people.

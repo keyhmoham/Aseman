@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/theme_roles.dart';
@@ -757,7 +758,7 @@ class _AppScreenState extends State<AdminScreen> {
     builder: (context) {
       final scheme = Theme.of(context).colorScheme;
       final width = MediaQuery.sizeOf(context).width;
-      final compact = width < 820;
+      final compact = width < Breakpoints.expanded;
       final actions = [
         IconButton(
           tooltip: 'Search',

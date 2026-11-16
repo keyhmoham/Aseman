@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../layout/app_layout.dart';
 import 'app_shape.dart';
 import 'app_surfaces.dart';
 import 'aseman_tokens.dart';
@@ -10,33 +11,31 @@ import 'theme_pack.dart';
 
 abstract final class AppTheme {
   static ThemeData get dark =>
-      fromPack(DefaultThemePacks.sky, Brightness.dark);
+      fromPack(DefaultThemePacks.paper, Brightness.dark);
   static ThemeData get light =>
-      fromPack(DefaultThemePacks.sky, Brightness.light);
+      fromPack(DefaultThemePacks.paper, Brightness.light);
 
   static ThemeData darkWith(
     Color accent, {
     ThemePack? pack,
     String? paletteId,
-  }) =>
-      fromPack(
-        pack ?? DefaultThemePacks.sky,
-        Brightness.dark,
-        accent: accent,
-        paletteId: paletteId,
-      );
+  }) => fromPack(
+    pack ?? DefaultThemePacks.paper,
+    Brightness.dark,
+    accent: accent,
+    paletteId: paletteId,
+  );
 
   static ThemeData lightWith(
     Color accent, {
     ThemePack? pack,
     String? paletteId,
-  }) =>
-      fromPack(
-        pack ?? DefaultThemePacks.sky,
-        Brightness.light,
-        accent: accent,
-        paletteId: paletteId,
-      );
+  }) => fromPack(
+    pack ?? DefaultThemePacks.paper,
+    Brightness.light,
+    accent: accent,
+    paletteId: paletteId,
+  );
 
   /// Builds Material [ThemeData] + [AsemanTokens] from an installable pack.
   ///
@@ -53,81 +52,127 @@ abstract final class AppTheme {
     final baseTokens = pack.tokens.forBrightness(brightness);
     final palette = _resolvePalette(pack, paletteId: paletteId, accent: accent);
     final tokens = baseTokens.overlayPalette(palette);
-    final seed = palette.accent;
-    final surface = tokens.surface ??
+    final paperPack = pack.id == DefaultThemePacks.paperId;
+    final surface =
+        tokens.surface ??
         (dark ? const Color(0xFF111119) : const Color(0xFFF7F7F9));
-    final pageScaffold = tokens.scaffold ??
+    final pageScaffold =
+        tokens.scaffold ??
         (dark ? const Color(0xFF08080D) : const Color(0xFFF1F0F4));
-    final surfaceHigh = tokens.surfaceHigh ??
+    final surfaceHigh =
+        tokens.surfaceHigh ??
         Color.alphaBlend(
-          (dark ? Colors.white : Colors.black).withValues(alpha: dark ? .06 : .04),
+          (dark ? Colors.white : Colors.black).withValues(
+            alpha: dark ? .06 : .04,
+          ),
           surface,
         );
-    // Seed only the accent roles — keep surfaces neutral so the whole UI
-    // does not wash pink/violet/teal when a colourful palette is selected.
-    final seeded = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: brightness,
-      surface: surface,
-    );
-    final onSurf = seeded.onSurface;
-    Color nest(double a) =>
-        Color.alphaBlend(onSurf.withValues(alpha: a), surface);
-    final unified = pack.parts.unified || pack.parts.overrides.isEmpty;
-    // Unified packs: one brand accent for primary + secondary decorative roles.
-    final secondary = unified
-        ? seed
-        : (tokens.secondaryAccent ?? seeded.secondary);
-    final scheme = seeded.copyWith(
-      primary: seed,
-      secondary: secondary,
-      error: tokens.danger ?? seeded.error,
-      surface: surface,
-      surfaceTint: Colors.transparent,
-      surfaceContainerLowest: pageScaffold,
-      surfaceContainerLow: nest(dark ? .04 : .03),
-      surfaceContainer: nest(dark ? .06 : .045),
-      surfaceContainerHigh: surfaceHigh,
-      surfaceContainerHighest: nest(dark ? .10 : .07),
-      // M3 Expressive container roles: soft accent tonal in light, quieter
-      // mid-tone in dark (FAB default = primary-container; tonal buttons /
-      // nav indicators = secondary-container). Never full primary wash.
-      primaryContainer: Color.alphaBlend(
-        seed.withValues(alpha: dark ? .26 : .14),
-        surface,
-      ),
-      onPrimaryContainer: dark
+    // Sky and the other packs keep a single brand accent on neutral surfaces.
+    // Paper builds every role from the accent's own hue: darker primary,
+    // lighter containers, and accent-tinted surface steps. Tertiary stays on
+    // that hue (a deeper tone) so it does not jump to a complementary color.
+    late final ColorScheme scheme;
+    late final Color seed;
+    if (paperPack) {
+      final tonal = ColorScheme.fromSeed(
+        seedColor: palette.accent,
+        brightness: brightness,
+        dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      );
+      final dangerSeed = tokens.danger ?? tonal.error;
+      final danger = ColorScheme.fromSeed(
+        seedColor: dangerSeed,
+        brightness: brightness,
+      );
+      seed = tonal.primary;
+      final deeper = Color.lerp(
+        tonal.primary,
+        dark ? tonal.primaryFixedDim : tonal.onPrimaryContainer,
+        dark ? .35 : .4,
+      )!;
+      scheme = tonal.copyWith(
+        surfaceTint: tonal.primary,
+        tertiary: deeper,
+        onTertiary: dark ? tonal.onPrimary : tonal.onPrimaryContainer,
+        tertiaryContainer: tonal.primaryContainer,
+        onTertiaryContainer: tonal.onPrimaryContainer,
+        tertiaryFixed: tonal.primaryFixed,
+        tertiaryFixedDim: tonal.primaryFixedDim,
+        onTertiaryFixed: tonal.onPrimaryFixed,
+        onTertiaryFixedVariant: tonal.onPrimaryFixedVariant,
+        error: danger.error,
+        onError: danger.onError,
+        errorContainer: danger.errorContainer,
+        onErrorContainer: danger.onErrorContainer,
+      );
+    } else {
+      seed = palette.accent;
+      final seeded = ColorScheme.fromSeed(
+        seedColor: seed,
+        brightness: brightness,
+        surface: surface,
+      );
+      final onSurf = seeded.onSurface;
+      Color nest(double a) =>
+          Color.alphaBlend(onSurf.withValues(alpha: a), surface);
+      final unified = pack.parts.unified || pack.parts.overrides.isEmpty;
+      // Unified packs: one brand accent for primary + secondary decorative roles.
+      final secondary = unified
           ? seed
-          : Color.alphaBlend(seed.withValues(alpha: .72), onSurf),
-      secondaryContainer: Color.alphaBlend(
-        secondary.withValues(alpha: dark ? .26 : .14),
-        surface,
-      ),
-      onSecondaryContainer: dark
-          ? secondary
-          : Color.alphaBlend(secondary.withValues(alpha: .72), onSurf),
-      tertiaryContainer: Color.alphaBlend(
-        (tokens.success ?? seeded.tertiary).withValues(alpha: dark ? .26 : .14),
-        surface,
-      ),
-      onTertiaryContainer: dark
-          ? (tokens.success ?? seeded.tertiary)
-          : Color.alphaBlend(
-              (tokens.success ?? seeded.tertiary).withValues(alpha: .72),
-              onSurf,
-            ),
-      errorContainer: Color.alphaBlend(
-        (tokens.danger ?? seeded.error).withValues(alpha: dark ? .26 : .14),
-        surface,
-      ),
-      onErrorContainer: dark
-          ? (tokens.danger ?? seeded.error)
-          : Color.alphaBlend(
-              (tokens.danger ?? seeded.error).withValues(alpha: .72),
-              onSurf,
-            ),
-    );
-    final extension = AsemanTokens.fromTokens(
+          : (tokens.secondaryAccent ?? seeded.secondary);
+      scheme = seeded.copyWith(
+        primary: seed,
+        secondary: secondary,
+        error: tokens.danger ?? seeded.error,
+        surface: surface,
+        surfaceTint: Colors.transparent,
+        surfaceContainerLowest: pageScaffold,
+        surfaceContainerLow: nest(dark ? .04 : .03),
+        surfaceContainer: nest(dark ? .06 : .045),
+        surfaceContainerHigh: surfaceHigh,
+        surfaceContainerHighest: nest(dark ? .10 : .07),
+        // M3 Expressive container roles: soft accent tonal in light, quieter
+        // mid-tone in dark (FAB default = primary-container; tonal buttons /
+        // nav indicators = secondary-container). Never full primary wash.
+        primaryContainer: Color.alphaBlend(
+          seed.withValues(alpha: dark ? .26 : .14),
+          surface,
+        ),
+        onPrimaryContainer: dark
+            ? seed
+            : Color.alphaBlend(seed.withValues(alpha: .72), onSurf),
+        secondaryContainer: Color.alphaBlend(
+          secondary.withValues(alpha: dark ? .26 : .14),
+          surface,
+        ),
+        onSecondaryContainer: dark
+            ? secondary
+            : Color.alphaBlend(secondary.withValues(alpha: .72), onSurf),
+        tertiaryContainer: Color.alphaBlend(
+          (tokens.success ?? seeded.tertiary).withValues(
+            alpha: dark ? .26 : .14,
+          ),
+          surface,
+        ),
+        onTertiaryContainer: dark
+            ? (tokens.success ?? seeded.tertiary)
+            : Color.alphaBlend(
+                (tokens.success ?? seeded.tertiary).withValues(alpha: .72),
+                onSurf,
+              ),
+        errorContainer: Color.alphaBlend(
+          (tokens.danger ?? seeded.error).withValues(alpha: dark ? .26 : .14),
+          surface,
+        ),
+        onErrorContainer: dark
+            ? (tokens.danger ?? seeded.error)
+            : Color.alphaBlend(
+                (tokens.danger ?? seeded.error).withValues(alpha: .72),
+                onSurf,
+              ),
+      );
+    }
+    var extension = AsemanTokens.fromTokens(
       packId: pack.id,
       tokens: tokens,
       language: pack.language,
@@ -139,6 +184,10 @@ abstract final class AppTheme {
       ui: pack.ui,
       accent: seed,
     );
+    if (paperPack) {
+      // Decorative "cyan" spots take the secondary tone, not a copy of primary.
+      extension = extension.copyWith(cyan: scheme.secondary, accent: seed);
+    }
     final baseText = (dark ? ThemeData.dark() : ThemeData.light()).textTheme;
     FontWeight titleW = FontWeight.w800;
     FontWeight labelW = FontWeight.w700;
@@ -152,8 +201,7 @@ abstract final class AppTheme {
         orElse: () => FontWeight.w700,
       );
     } catch (_) {}
-    final family =
-        tokens.fontFamily.isEmpty ? null : tokens.fontFamily;
+    final family = tokens.fontFamily.isEmpty ? null : tokens.fontFamily;
     TextStyle? styled(TextStyle? s, {FontWeight? weight, double? ls}) =>
         s?.copyWith(
           fontWeight: weight,
@@ -162,30 +210,42 @@ abstract final class AppTheme {
           height: s.height,
         );
     final textTheme = baseText.copyWith(
-      displaySmall: styled(baseText.displaySmall,
-          weight: titleW, ls: tokens.letterSpacingDisplay)
-          ?.copyWith(height: 1.1),
-      headlineMedium: styled(baseText.headlineMedium,
-          weight: titleW, ls: tokens.letterSpacingDisplay * .75)
-          ?.copyWith(height: 1.12),
-      headlineSmall: styled(baseText.headlineSmall,
-          weight: titleW, ls: tokens.letterSpacingTitle)
-          ?.copyWith(height: 1.15),
-      titleLarge: styled(baseText.titleLarge,
-          weight: titleW, ls: tokens.letterSpacingTitle)
-          ?.copyWith(height: 1.2),
-      titleMedium: styled(baseText.titleMedium,
-          weight: labelW, ls: tokens.letterSpacingTitle * .6)
-          ?.copyWith(height: 1.25),
-      titleSmall: styled(baseText.titleSmall,
-          weight: labelW, ls: tokens.letterSpacingTitle * .4)
-          ?.copyWith(height: 1.25),
+      displaySmall: styled(
+        baseText.displaySmall,
+        weight: titleW,
+        ls: tokens.letterSpacingDisplay,
+      )?.copyWith(height: 1.1),
+      headlineMedium: styled(
+        baseText.headlineMedium,
+        weight: titleW,
+        ls: tokens.letterSpacingDisplay * .75,
+      )?.copyWith(height: 1.12),
+      headlineSmall: styled(
+        baseText.headlineSmall,
+        weight: titleW,
+        ls: tokens.letterSpacingTitle,
+      )?.copyWith(height: 1.15),
+      titleLarge: styled(
+        baseText.titleLarge,
+        weight: titleW,
+        ls: tokens.letterSpacingTitle,
+      )?.copyWith(height: 1.2),
+      titleMedium: styled(
+        baseText.titleMedium,
+        weight: labelW,
+        ls: tokens.letterSpacingTitle * .6,
+      )?.copyWith(height: 1.25),
+      titleSmall: styled(
+        baseText.titleSmall,
+        weight: labelW,
+        ls: tokens.letterSpacingTitle * .4,
+      )?.copyWith(height: 1.25),
       bodyLarge: styled(baseText.bodyLarge)?.copyWith(height: 1.4),
       bodyMedium: styled(baseText.bodyMedium)?.copyWith(height: 1.4),
       labelLarge: styled(baseText.labelLarge, weight: labelW),
     );
-    final inputFill = tokens.inputFill ??
-        (dark ? const Color(0xFF181822) : Colors.white);
+    final inputFill =
+        tokens.inputFill ?? (dark ? const Color(0xFF181822) : Colors.white);
     final controlR = tokens.radiusControl;
     final cardR = tokens.radiusCard;
     return _expressive(
@@ -193,7 +253,7 @@ abstract final class AppTheme {
         useMaterial3: true,
         brightness: brightness,
         colorScheme: scheme,
-        scaffoldBackgroundColor: pageScaffold,
+        scaffoldBackgroundColor: paperPack ? scheme.surface : pageScaffold,
         applyElevationOverlayColor: false,
         textTheme: textTheme,
         extensions: [extension],
@@ -206,26 +266,33 @@ abstract final class AppTheme {
           fillColor: inputFill,
           hintStyle: TextStyle(color: scheme.onSurfaceVariant),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(controlR == AppShape.control
-                  ? 24
-                  : controlR),
-              borderSide: BorderSide(color: scheme.outlineVariant)),
+            borderRadius: BorderRadius.circular(
+              controlR == AppShape.control ? 24 : controlR,
+            ),
+            borderSide: BorderSide(color: scheme.outlineVariant),
+          ),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(controlR == AppShape.control
-                  ? 24
-                  : controlR),
-              borderSide: BorderSide(color: scheme.outlineVariant)),
+            borderRadius: BorderRadius.circular(
+              controlR == AppShape.control ? 24 : controlR,
+            ),
+            borderSide: BorderSide(color: scheme.outlineVariant),
+          ),
         ),
         dividerTheme: DividerThemeData(
-            color: scheme.outlineVariant.withValues(alpha: .55), space: 1),
+          color: scheme.outlineVariant.withValues(alpha: .55),
+          space: 1,
+        ),
         cardTheme: CardThemeData(
-            color: AppSurfaces.card(scheme, tokens: extension),
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(cardR),
-                side: BorderSide(
-                    color: AppSurfaces.cardBorder(scheme)))),
+          color: pack.id == DefaultThemePacks.paperId
+              ? surface
+              : AppSurfaces.card(scheme, tokens: extension),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(cardR),
+            side: BorderSide(color: AppSurfaces.cardBorder(scheme)),
+          ),
+        ),
       ),
       tokens: extension,
     );
@@ -246,11 +313,7 @@ ThemePaletteOption _resolvePalette(
     for (final opt in pack.selectablePalettes) {
       if (opt.accent.toARGB32() == accent.toARGB32()) return opt;
     }
-    return ThemePaletteOption(
-      id: 'custom',
-      label: 'Custom',
-      accent: accent,
-    );
+    return ThemePaletteOption(id: 'custom', label: 'Custom', accent: accent);
   }
   return pack.defaultPalette;
 }
@@ -273,14 +336,17 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
   final nav = tokens.control('nav_pill');
   final slider = tokens.control('slider');
   final overlay = AppSurfaces.overlay(scheme, tokens: tokens);
+  final paper = tokens.packId == DefaultThemePacks.paperId;
+  final menuFill = paper ? scheme.surfaceContainerHigh : overlay;
+  final navFill = paper ? scheme.surfaceContainer : overlay;
+  final quiet = paper ? FontWeight.w500 : FontWeight.w700;
   final borderColor = AppSurfaces.cardBorder(scheme);
   final buttonShape = button.border(sideColor: scheme.outline);
   final menuStyle = MenuStyle(
-    backgroundColor: WidgetStatePropertyAll(overlay),
+    backgroundColor: WidgetStatePropertyAll(menuFill),
     surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
     elevation: WidgetStatePropertyAll(menu.elevation),
-    shape: WidgetStatePropertyAll(
-        menu.border(sideColor: borderColor)),
+    shape: WidgetStatePropertyAll(menu.border(sideColor: borderColor)),
   );
   final filledStyle = ThemeChrome.filledButtonStyle(base, tokens: tokens);
   final elevatedStyle = ThemeChrome.elevatedButtonStyle(base, tokens: tokens);
@@ -291,7 +357,9 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
         borderRadius: input.borderRadius,
         borderSide: BorderSide(
           color: color,
-          width: width > 0 ? width : (input.borderWidth <= 0 ? 1 : input.borderWidth),
+          width: width > 0
+              ? width
+              : (input.borderWidth <= 0 ? 1 : input.borderWidth),
         ),
       );
   final dialogShape = dialog.border(sideColor: borderColor);
@@ -299,8 +367,10 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       ? const RoundedRectangleBorder()
       : RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
-              top: Radius.circular(
-                  sheet.radius <= 0 ? tokens.radiusCard : sheet.radius)),
+            top: Radius.circular(
+              sheet.radius <= 0 ? tokens.radiusCard : sheet.radius,
+            ),
+          ),
         );
   return base.copyWith(
     extensions: [tokens],
@@ -311,12 +381,15 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
     elevatedButtonTheme: ElevatedButtonThemeData(style: elevatedStyle),
     outlinedButtonTheme: OutlinedButtonThemeData(style: outlinedStyle),
     textButtonTheme: TextButtonThemeData(
-        style: ButtonStyle(
-            shape: WidgetStatePropertyAll(buttonShape),
-            foregroundColor: WidgetStatePropertyAll(scheme.primary),
-            splashFactory: _inkFactory(lang.interaction.ink),
-            textStyle: WidgetStatePropertyAll(
-                label.copyWith(fontWeight: FontWeight.w700)))),
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(buttonShape),
+        foregroundColor: WidgetStatePropertyAll(scheme.primary),
+        splashFactory: _inkFactory(lang.interaction.ink),
+        textStyle: WidgetStatePropertyAll(
+          label.copyWith(fontWeight: quiet),
+        ),
+      ),
+    ),
     iconButtonTheme: IconButtonThemeData(style: iconStyle),
     actionIconTheme: ActionIconThemeData(
       backButtonIconBuilder: (context) => Icon(
@@ -338,7 +411,7 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       alignment: AlignmentDirectional.topEnd,
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: overlay,
+      backgroundColor: navFill,
       elevation: nav.elevation,
       height: tokens.navHeight,
       // M3 Expressive: active indicator = secondary-container.
@@ -348,7 +421,7 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
         final selected = states.contains(WidgetState.selected);
         return label.copyWith(
           fontSize: 11,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          fontWeight: selected ? (paper ? FontWeight.w500 : FontWeight.w700) : FontWeight.w500,
           // Vertical items: label sits below the pill → secondary.
           color: selected ? scheme.secondary : scheme.onSurfaceVariant,
         );
@@ -365,10 +438,62 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       }),
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
     ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: scheme.surfaceContainerLow,
+      elevation: 0,
+      minWidth: AppLayout.navigationRailWidth,
+      minExtendedWidth: AppLayout.extendedNavigationRailWidth,
+      useIndicator: true,
+      indicatorColor: scheme.secondaryContainer,
+      selectedIconTheme: IconThemeData(
+        size: 24,
+        color: scheme.onSecondaryContainer,
+      ),
+      unselectedIconTheme: IconThemeData(
+        size: 24,
+        color: scheme.onSurfaceVariant,
+      ),
+      selectedLabelTextStyle: label.copyWith(
+        fontWeight: FontWeight.w500,
+        color: scheme.onSurface,
+      ),
+      unselectedLabelTextStyle: label.copyWith(
+        fontWeight: FontWeight.w500,
+        color: scheme.onSurfaceVariant,
+      ),
+      indicatorShape: const StadiumBorder(),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: paper ? scheme.surfaceContainerLow : scheme.surface,
+      surfaceTintColor: paper ? scheme.surfaceTint : Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: base.textTheme.titleLarge?.copyWith(
+        color: scheme.onSurface,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    scrollbarTheme: ScrollbarThemeData(
+      thickness: const WidgetStatePropertyAll(8),
+      radius: const Radius.circular(4),
+      crossAxisMargin: 2,
+      mainAxisMargin: 2,
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        final alpha = states.contains(WidgetState.dragged)
+            ? .65
+            : states.contains(WidgetState.hovered)
+            ? .5
+            : .32;
+        return scheme.onSurfaceVariant.withValues(alpha: alpha);
+      }),
+    ),
     listTileTheme: ListTileThemeData(
       shape: RoundedRectangleBorder(borderRadius: button.borderRadius),
-      selectedTileColor: scheme.primary.withValues(alpha: .16),
-      selectedColor: tokens.cyan,
+      selectedTileColor: paper
+          ? scheme.secondaryContainer
+          : scheme.primary.withValues(alpha: .16),
+      selectedColor: paper ? scheme.onSecondaryContainer : tokens.cyan,
       iconColor: scheme.onSurfaceVariant,
     ),
     chipTheme: base.chipTheme.copyWith(
@@ -376,28 +501,43 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       side: chip.borderWidth > 0
           ? BorderSide(
               color: scheme.outlineVariant.withValues(alpha: chip.borderAlpha),
-              width: chip.borderWidth)
+              width: chip.borderWidth,
+            )
           : BorderSide(color: scheme.outlineVariant),
       labelStyle: label.copyWith(fontWeight: FontWeight.w600),
       padding: EdgeInsets.symmetric(
-          horizontal: chip.paddingH, vertical: chip.paddingV),
-      selectedColor: scheme.primary.withValues(alpha: .18),
-      secondarySelectedColor: tokens.cyan.withValues(alpha: .18),
-      checkmarkColor: scheme.primary,
+        horizontal: chip.paddingH,
+        vertical: chip.paddingV,
+      ),
+      backgroundColor: paper ? scheme.surfaceContainerHigh : null,
+      selectedColor: paper
+          ? scheme.secondaryContainer
+          : scheme.primary.withValues(alpha: .18),
+      secondarySelectedColor: paper
+          ? scheme.secondaryContainer
+          : tokens.cyan.withValues(alpha: .18),
+      checkmarkColor: paper ? scheme.onSecondaryContainer : scheme.primary,
       deleteIconColor: scheme.onSurfaceVariant,
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         shape: WidgetStatePropertyAll(buttonShape),
         textStyle: WidgetStatePropertyAll(
-            label.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
-        padding: WidgetStatePropertyAll(EdgeInsets.symmetric(
-            horizontal: button.paddingH * .7, vertical: button.paddingV * .85)),
+          label.copyWith(fontWeight: quiet, fontSize: 13),
+        ),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(
+            horizontal: button.paddingH * .7,
+            vertical: button.paddingV * .85,
+          ),
+        ),
       ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: dialog.fill == FillKind.glass ? overlay : scheme.surface,
-      surfaceTintColor: Colors.transparent,
+      backgroundColor: paper
+          ? scheme.surfaceContainerHigh
+          : (dialog.fill == FillKind.glass ? overlay : scheme.surface),
+      surfaceTintColor: paper ? scheme.surfaceTint : Colors.transparent,
       barrierColor: tokens.barrier,
       elevation: dialog.elevation,
       shape: dialogShape,
@@ -417,12 +557,14 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       scrimColor: tokens.barrier,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.horizontal(
-            right: Radius.circular(
-                card.radius <= 0 ? tokens.radiusCard : card.radius)),
+          right: Radius.circular(
+            card.radius <= 0 ? tokens.radiusCard : card.radius,
+          ),
+        ),
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: overlay,
+      color: menuFill,
       surfaceTintColor: Colors.transparent,
       elevation: menu.elevation,
       shape: menu.border(sideColor: borderColor),
@@ -434,37 +576,49 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       shape: button.border(),
     ),
     cardTheme: CardThemeData(
-      color: card.fill == FillKind.glass
-          ? AppSurfaces.card(scheme, tokens: tokens)
-          : scheme.surface,
-      surfaceTintColor: Colors.transparent,
+      color: paper
+          ? scheme.surfaceContainerHigh
+          : (card.fill == FillKind.glass
+                ? AppSurfaces.card(scheme, tokens: tokens)
+                : scheme.surface),
+      surfaceTintColor: paper ? scheme.surfaceTint : Colors.transparent,
       elevation: card.elevation,
       shape: card.border(sideColor: borderColor),
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       filled: true,
-      fillColor: input.fill == FillKind.solid
-          ? scheme.surface
-          : scheme.surfaceContainerHighest
-              .withValues(alpha: tokens.cardAlpha * .7),
+      fillColor: paper
+          ? scheme.surfaceContainerHighest
+          : (input.fill == FillKind.solid
+                ? scheme.surface
+                : scheme.surfaceContainerHighest.withValues(
+                    alpha: tokens.cardAlpha * .7,
+                  )),
       border: fieldBorder(
-          input.borderWidth > 0 ? scheme.outlineVariant : Colors.transparent,
-          input.borderWidth > 0 ? input.borderWidth : 1),
+        input.borderWidth > 0 ? scheme.outlineVariant : Colors.transparent,
+        input.borderWidth > 0 ? input.borderWidth : 1,
+      ),
       enabledBorder: fieldBorder(
-          input.borderWidth > 0
-              ? scheme.outlineVariant.withValues(alpha: input.borderAlpha)
-              : Colors.transparent,
-          input.borderWidth > 0 ? input.borderWidth : 1),
+        input.borderWidth > 0
+            ? scheme.outlineVariant.withValues(alpha: input.borderAlpha)
+            : Colors.transparent,
+        input.borderWidth > 0 ? input.borderWidth : 1,
+      ),
       focusedBorder: fieldBorder(scheme.primary, 2),
-      errorBorder: fieldBorder(scheme.error, input.borderWidth > 0 ? input.borderWidth : 1),
+      errorBorder: fieldBorder(
+        scheme.error,
+        input.borderWidth > 0 ? input.borderWidth : 1,
+      ),
       focusedErrorBorder: fieldBorder(scheme.error, 2),
     ),
     switchTheme: ThemeChrome.switchTheme(scheme, tokens: tokens),
     checkboxTheme: ThemeChrome.checkboxTheme(scheme, tokens: tokens),
     radioTheme: ThemeChrome.radioTheme(scheme, tokens: tokens),
     // ignore: deprecated_member_use
-    sliderTheme: ThemeChrome.sliderTheme(scheme, tokens: tokens)
-        .copyWith(year2023: false),
+    sliderTheme: ThemeChrome.sliderTheme(
+      scheme,
+      tokens: tokens,
+    ).copyWith(year2023: false),
     // ignore: deprecated_member_use
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: scheme.primary,
@@ -476,22 +630,25 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-          color: scheme.inverseSurface,
-          borderRadius: input.borderRadius),
+        color: scheme.inverseSurface,
+        borderRadius: input.borderRadius,
+      ),
       textStyle: label.copyWith(
-          color: scheme.onInverseSurface,
-          fontSize: 12,
-          fontWeight: FontWeight.w500),
+        color: scheme.onInverseSurface,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       // M3 Expressive default FAB: primary-container / on-primary-container.
       backgroundColor: AppFab.containerOf(scheme, tokens: tokens),
       foregroundColor: AppFab.inkOf(scheme, tokens: tokens),
       focusColor: AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
-      hoverColor: AppFab.inkOf(scheme, tokens: tokens)
-          .withValues(alpha: lang.interaction.hoverAlpha),
-      splashColor:
-          AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
+      hoverColor: AppFab.inkOf(
+        scheme,
+        tokens: tokens,
+      ).withValues(alpha: lang.interaction.hoverAlpha),
+      splashColor: AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
       elevation: fab.elevation > 0 ? fab.elevation : 3,
       focusElevation: fab.elevation > 0 ? fab.elevation : 3,
       hoverElevation: fab.elevation > 0 ? fab.elevation + 1 : 4,
@@ -501,18 +658,22 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
       shape: AppFab.shapeOf(scheme, tokens: tokens),
       extendedIconLabelSpacing: 10,
       extendedPadding: EdgeInsetsDirectional.only(
-          start: fab.paddingH, end: fab.paddingH + 4),
-      extendedTextStyle:
-          label.copyWith(fontWeight: FontWeight.w700, fontSize: 14),
+        start: fab.paddingH,
+        end: fab.paddingH + 4,
+      ),
+      extendedTextStyle: label.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+      ),
     ),
   );
 }
 
 InteractiveInkFeatureFactory? _inkFactory(InkKind ink) => switch (ink) {
-      InkKind.ripple => null, // Material default
-      InkKind.highlight => NoSplash.splashFactory,
-      InkKind.none => NoSplash.splashFactory,
-    };
+  InkKind.ripple => null, // Material default
+  InkKind.highlight => NoSplash.splashFactory,
+  InkKind.none => NoSplash.splashFactory,
+};
 
 /// M3 Expressive floating actions — opaque primary-container / on-primary-
 /// container (soft tonal in light, quieter mid-tone in dark). No mist wash,
@@ -569,8 +730,7 @@ abstract final class AppFab {
     ColorScheme scheme, {
     bool danger = false,
     AsemanTokens? tokens,
-  }) =>
-      containerOf(scheme, danger: danger, tokens: tokens);
+  }) => containerOf(scheme, danger: danger, tokens: tokens);
 
   /// Hairline only when the pack recipe asks for a border (e.g. neo-brutal).
   static Color? rimOf(
@@ -597,7 +757,8 @@ abstract final class AppFab {
     }
     return RoundedRectangleBorder(
       borderRadius: BorderRadius.all(
-          Radius.circular(radius ?? tokens?.radiusFab ?? AppShape.fab)),
+        Radius.circular(radius ?? tokens?.radiusFab ?? AppShape.fab),
+      ),
       side: rim == null ? BorderSide.none : BorderSide(color: rim),
     );
   }
@@ -637,15 +798,13 @@ abstract final class AppFab {
       borderWidth: rim == null ? 0 : recipe.borderWidth,
     );
     final shadows = glow
-        ? (tokens?.language.shadow.resolve(scheme,
-                accent: danger ? scheme.error : scheme.primary) ??
-            glowOf(scheme, danger: danger))
+        ? (tokens?.language.shadow.resolve(
+                scheme,
+                accent: danger ? scheme.error : scheme.primary,
+              ) ??
+              glowOf(scheme, danger: danger))
         : null;
-    return ShapeDecoration(
-      color: fill,
-      shape: shape,
-      shadows: shadows,
-    );
+    return ShapeDecoration(color: fill, shape: shape, shadows: shadows);
   }
 
   /// M3 Expressive selected-tab indicator ([SegmentedTabBar] / [HomeTabBar]):
@@ -670,12 +829,18 @@ abstract final class AppFab {
       scheme.onSecondaryContainer;
 
   static Color backgroundOf(BuildContext context, {bool danger = false}) =>
-      containerOf(Theme.of(context).colorScheme,
-          danger: danger, tokens: AsemanTokens.maybeOf(context));
+      containerOf(
+        Theme.of(context).colorScheme,
+        danger: danger,
+        tokens: AsemanTokens.maybeOf(context),
+      );
 
   static Color foregroundOf(BuildContext context, {bool danger = false}) =>
-      inkOf(Theme.of(context).colorScheme,
-          danger: danger, tokens: AsemanTokens.maybeOf(context));
+      inkOf(
+        Theme.of(context).colorScheme,
+        danger: danger,
+        tokens: AsemanTokens.maybeOf(context),
+      );
 }
 
 /// M3 Expressive floating action — solid primary-container capsule.
@@ -743,9 +908,8 @@ class SkyFab extends StatelessWidget {
         ),
       ),
     );
-    final inkKind = fab?.ink ??
-        tokens?.language.interaction.ink ??
-        InkKind.ripple;
+    final inkKind =
+        fab?.ink ?? tokens?.language.interaction.ink ?? InkKind.ripple;
     final shape = AppFab.shapeOf(
       scheme,
       radius: mini ? radius : null,
@@ -754,8 +918,10 @@ class SkyFab extends StatelessWidget {
     );
     final elevation = fab?.elevation ?? 0;
     final shadows = elevation > 0
-        ? tokens?.language.shadow.resolve(scheme,
-            accent: danger ? scheme.error : scheme.primary)
+        ? tokens?.language.shadow.resolve(
+            scheme,
+            accent: danger ? scheme.error : scheme.primary,
+          )
         : null;
     Widget button = Material(
       color: AppFab.containerOf(scheme, danger: danger, tokens: tokens),

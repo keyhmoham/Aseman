@@ -43,8 +43,8 @@ class _ThemeStudioScreenState extends State<ThemeStudioScreen>
   late final TextEditingController _description;
   late final TextEditingController _json;
   late final TabController _tabs;
-  ThemePack _draft = DefaultThemePacks.sky;
-  String _baseId = DefaultThemePacks.skyId;
+  ThemePack _draft = DefaultThemePacks.paper;
+  String _baseId = DefaultThemePacks.paperId;
   String? _error;
   bool _busy = false;
   bool _publish = true;

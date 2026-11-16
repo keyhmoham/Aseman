@@ -170,7 +170,7 @@ func (s *Service) publicRef(ctx context.Context, viewer, id identity.ID) map[str
 	if rec, e := s.M.View(ctx, viewer, acc.ID); e == nil && rec != nil {
 		if profile, ok := rec.Tree["profile"].(map[string]any); ok {
 			name := helper.PersonName(profile, acc.Handle)
-			if string(acc.Kind) == "bot" {
+			if acc.Kind == account.KindBot {
 				name = helper.BotName(profile, acc.Handle)
 			}
 			if name != "" {
@@ -182,6 +182,34 @@ func (s *Service) publicRef(ctx context.Context, viewer, id identity.ID) map[str
 		}
 		if avatar := helper.TreeAvatar(rec.Tree); avatar != "" {
 			out["avatar"] = avatar
+		}
+	}
+	// A chat with an agent draws the same face as the open conversation:
+	// the bot record id (so a personal look matches) and the platform
+	// humanoid stored on the bot. The public view can omit both.
+	if acc.Kind == account.KindBot {
+		if rec, ok := s.botOf(ctx, acc.ID); ok {
+			out["bot_id"] = rec.ID.String()
+			if rec.Name != "" {
+				out["display_name"] = rec.Name
+			}
+		}
+		if s.M != nil {
+			if full, err := s.M.Get(ctx, acc.ID); err == nil && full != nil {
+				if profile, ok := full.Tree["profile"].(map[string]any); ok {
+					if h, ok := profile["humanoid"].(map[string]any); ok {
+						out["humanoid"] = h
+					}
+					if out["display_name"] == acc.Handle {
+						if name := helper.BotName(profile, acc.Handle); name != "" {
+							out["display_name"] = name
+						}
+					}
+				}
+				if avatar := helper.TreeAvatar(full.Tree); avatar != "" {
+					out["avatar"] = avatar
+				}
+			}
 		}
 	}
 	return out

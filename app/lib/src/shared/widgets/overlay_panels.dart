@@ -5,41 +5,19 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_surfaces.dart';
 import '../../core/theme/aseman_tokens.dart';
 import '../../core/theme/theme_chrome.dart';
 import 'glass_surface.dart';
 
-/// Slide/scale transition used for every desktop modal: rises from below
-/// while gently scaling in.
-///
-/// Deliberately avoids [Opacity] / [FadeTransition] — those force an
-/// offscreen layer and make [BackdropFilter] glass look solid.
+/// Panels and dialogs appear in place. The animation arguments are unused.
 Widget desktopFloatingPanelTransition(
   BuildContext context,
   Animation<double> animation,
   Widget child,
-) {
-  final eased = CurvedAnimation(
-    parent: animation,
-    curve: Curves.easeOutBack,
-    reverseCurve: Curves.easeInCubic,
-  );
-  final travel = math.min(240.0, MediaQuery.sizeOf(context).height * .28);
-  return AnimatedBuilder(
-    animation: animation,
-    child: child,
-    builder: (context, panel) {
-      final motion = eased.value.clamp(0.0, 1.08);
-      final scale = .955 + .045 * motion.clamp(0.0, 1.0);
-      return Transform.translate(
-        offset: Offset(0, travel * (1 - motion)),
-        child: Transform.scale(scale: scale, child: panel),
-      );
-    },
-  );
-}
+) => child;
 
 /// Opens [builder]'s widget as a desktop modal with the shared bottom-to-top
 /// motion. Prefer this over [showDialog] so every overlay matches.
@@ -61,7 +39,7 @@ Future<T?> showAppDialog<T>({
   // Scrim is painted with the frost when [frosted]; otherwise the shared
   // barrier colour sits behind panels that already bring their own glass.
   barrierColor: frosted ? Colors.transparent : AppSurfaces.barrierOf(context),
-  transitionDuration: const Duration(milliseconds: 420),
+  transitionDuration: Duration.zero,
   pageBuilder: (routeContext, animation, __) {
     final built = builder(routeContext);
     if (!frosted) {
@@ -304,17 +282,20 @@ Widget _appSheetChrome({
       if (expandBody) Expanded(child: body) else Flexible(child: body),
     ],
   );
-  return Builder(builder: (context) {
-    final radius = BorderRadius.vertical(
-        top: Radius.circular(AppShape.cardOf(context)));
-    return GlassSurface(
-      alpha: AppSurfaces.overlayAlphaOf(context),
-      blur: AppSurfaces.blurSigmaOf(context),
-      borderRadius: radius,
-      border: false,
-      child: column,
-    );
-  });
+  return Builder(
+    builder: (context) {
+      final radius = BorderRadius.vertical(
+        top: Radius.circular(AppShape.cardOf(context)),
+      );
+      return GlassSurface(
+        alpha: AppSurfaces.overlayAlphaOf(context),
+        blur: AppSurfaces.blurSigmaOf(context),
+        borderRadius: radius,
+        border: false,
+        child: column,
+      );
+    },
+  );
 }
 
 /// Hugs [child] when it fits. When [child] is taller than the height the sheet
@@ -562,6 +543,7 @@ Future<T?> showAppSheet<T>(
 }) => showModalBottomSheet<T>(
   context: context,
   backgroundColor: Colors.transparent,
+  sheetAnimationStyle: AnimationStyle.noAnimation,
   // Handle is drawn inside [_appSheetChrome] so it sits on glass.
   showDragHandle: false,
   // Always scroll-controlled: a tall body may use the full screen and then
@@ -686,7 +668,7 @@ Future<T?> showAppPicker<T>({
     barrierDismissible: true,
     barrierLabel: 'Dismiss',
     barrierColor: AppSurfaces.barrierOf(context),
-    transitionDuration: const Duration(milliseconds: 280),
+    transitionDuration: Duration.zero,
     pageBuilder: (routeContext, __, ___) => CustomSingleChildLayout(
       delegate: _AnchoredPickerLayout(
         anchor: resolved,
@@ -736,7 +718,7 @@ Future<T?> showAppMenu<T>({
     barrierDismissible: true,
     barrierLabel: 'Dismiss',
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 220),
+    transitionDuration: Duration.zero,
     pageBuilder: (routeContext, __, ___) => CustomSingleChildLayout(
       delegate: _AnchoredPickerLayout(
         anchor: anchor,
@@ -936,8 +918,8 @@ class FloatingPanelSurface extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final lift = elevation ?? 0;
     final shell = ThemeChrome.floatingShell(context, lift: lift);
-    final radius = shell.borderRadius ??
-        BorderRadius.circular(AppShape.cardOf(context));
+    final radius =
+        shell.borderRadius ?? BorderRadius.circular(AppShape.cardOf(context));
     return DecoratedBox(
       decoration: shell,
       child: DecoratedBox(
@@ -959,6 +941,120 @@ class FloatingPanelSurface extends StatelessWidget {
   }
 }
 
+/// Slides and fades a right-edge panel by its own width, in and out.
+class _TrailingDrawerMotion extends StatefulWidget {
+  const _TrailingDrawerMotion({required this.animation, required this.child});
+
+  final Animation<double> animation;
+  final Widget child;
+
+  @override
+  State<_TrailingDrawerMotion> createState() => _TrailingDrawerMotionState();
+}
+
+class _TrailingDrawerMotionState extends State<_TrailingDrawerMotion> {
+  late final CurvedAnimation _motion = CurvedAnimation(
+    parent: widget.animation,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(1, 0),
+    end: Offset.zero,
+  ).animate(_motion);
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _motion,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
+/// Which edge a [showDockedPanel] sticks to.
+enum DockedEdge { leading, trailing }
+
+/// Opens [builder] as a full-height panel stuck to [edge].
+///
+/// The surface is Material and the full window tall. A trailing panel slides
+/// and fades in from the right by its own width, and slides and fades back
+/// out the same distance, like a navigation drawer. A leading panel appears
+/// in place. Tapping the remaining page dismisses it.
+Future<T?> showDockedPanel<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  double width = 400,
+  DockedEdge edge = DockedEdge.trailing,
+  bool barrierDismissible = true,
+  String barrierLabel = 'Close panel',
+}) {
+  final fromRight = edge == DockedEdge.trailing;
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: barrierLabel,
+    barrierColor: AppSurfaces.barrierOf(context),
+    transitionDuration: fromRight
+        ? const Duration(milliseconds: 250)
+        : Duration.zero,
+    pageBuilder: (routeContext, animation, __) {
+      final size = MediaQuery.sizeOf(routeContext);
+      final panelWidth = math.min(width, size.width);
+      final full = panelWidth >= size.width - 1;
+      final scheme = Theme.of(routeContext).colorScheme;
+      final onTrailing = edge == DockedEdge.trailing;
+      final radius = full
+          ? BorderRadius.zero
+          : BorderRadius.horizontal(
+              left: onTrailing ? const Radius.circular(16) : Radius.zero,
+              right: onTrailing ? Radius.zero : const Radius.circular(16),
+            );
+      final edgeLine = BorderSide(
+        color: scheme.outlineVariant.withValues(alpha: .5),
+      );
+      // The slide child is the panel, so Offset(1, 0) travels [panelWidth],
+      // not the window.
+      Widget panel = Material(
+        color: scheme.surfaceContainer,
+        elevation: 1,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: panelWidth,
+          height: size.height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: full
+                  ? null
+                  : Border(
+                      left: onTrailing ? edgeLine : BorderSide.none,
+                      right: onTrailing ? BorderSide.none : edgeLine,
+                    ),
+            ),
+            child: AppSheetScope(child: builder(routeContext)),
+          ),
+        ),
+      );
+      if (fromRight) {
+        panel = _TrailingDrawerMotion(animation: animation, child: panel);
+      }
+      return Align(
+        alignment: onTrailing ? Alignment.centerRight : Alignment.centerLeft,
+        child: panel,
+      );
+    },
+    transitionBuilder: (_, __, ___, child) => child,
+  );
+}
+
 /// Shows [pageBuilder]'s widget as an animated floating panel over the
 /// app's shared scrim.
 Future<T?> showFloatingDialog<T>(
@@ -972,8 +1068,10 @@ Future<T?> showFloatingDialog<T>(
   builder: pageBuilder,
 );
 
-/// Opens [child] as a responsive floating panel: a bottom sheet on compact
-/// widths and a centered dialog on wider screens.
+/// Opens [child] as a responsive panel: a bottom sheet on compact widths,
+/// and a full-height sheet stuck to the trailing edge on wider screens.
+///
+/// [maxHeight] is unused on desktop — the sheet is the window's full height.
 Future<void> showFloatingPanel(
   BuildContext context,
   Widget child, {
@@ -981,24 +1079,13 @@ Future<void> showFloatingPanel(
   double maxHeight = 780,
   String barrierLabel = 'Close panel',
 }) {
-  if (MediaQuery.sizeOf(context).width < 820) {
+  if (MediaQuery.sizeOf(context).width < Breakpoints.expanded) {
     return showAppSheet<void>(context, child, heightFactor: .94);
   }
-  return showFloatingDialog<void>(
-    context,
+  return showDockedPanel<void>(
+    context: context,
+    width: maxWidth,
     barrierLabel: barrierLabel,
-    pageBuilder: (routeContext) {
-      final size = MediaQuery.sizeOf(routeContext);
-      return Align(
-        alignment: Alignment.center,
-        child: FloatingPanelSurface(
-          child: SizedBox(
-            width: math.min(maxWidth, size.width - 48),
-            height: math.min(maxHeight, size.height - 48),
-            child: child,
-          ),
-        ),
-      );
-    },
-  );
+    builder: (_) => child,
+  ).then((_) {});
 }

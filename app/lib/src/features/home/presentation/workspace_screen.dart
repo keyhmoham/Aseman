@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../agui/agui.dart';
 import '../../../app_dependencies.dart';
+import '../../../core/layout/app_layout.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
@@ -35,7 +37,6 @@ import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
-import '../../admin/presentation/admin_screen.dart';
 import '../../computer/computer_view.dart';
 import '../../computer/preview_view.dart';
 import '../../desk/domain/desk_models.dart';
@@ -94,9 +95,15 @@ class WorkspaceScreen extends StatefulWidget {
     this.initialRoomId,
     this.onBackToFeed,
     this.onWorkspaceChanged,
+    this.desktopShell = false,
   });
   final AppDependencies dependencies;
   final String initialWorkspace;
+
+  /// The shell already docked a navigation rail and owns the window chrome.
+  /// The workspace then always uses a desktop pane layout, even when the
+  /// remaining content box is narrower than the compact breakpoint.
+  final bool desktopShell;
 
   /// Space id when opening from chats (preferred over [initialWorkspace] name).
   final String? initialSpaceId;
@@ -116,6 +123,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   static const hallRoom = WorkspaceController.hallRoom;
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final mobilePages = PageController();
+  bool _libraryOpen = false;
   late final WorkspaceController session;
   Offset pointer = Offset.zero;
   // Starts away: the workspace arrives the way a switched-to one does.
@@ -123,6 +131,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     this,
     value: 0,
   );
+
+  /// True only for the compact phone shell. A desktop shell keeps the
+  /// workspace in its pane layout even when the rail leaves less than 840px.
+  bool get _compact =>
+      !widget.desktopShell &&
+      MediaQuery.sizeOf(context).width < Breakpoints.expanded;
 
   // Convenience accessors so build/parts keep short field names.
   String get workspace => session.workspace;
@@ -328,7 +342,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
       // On the desk, as a card window (its dock entry gathers it): a static
       // frontend runs in-app.
       session.deskController.open(bot.id, title: bot.name);
-      if (MediaQuery.sizeOf(context).width < 820 && session.mobilePage != 0) {
+      if (_compact && session.mobilePage != 0) {
         session.setMobilePage(0);
         mobilePages.animateToPage(
           0,
@@ -362,7 +376,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
     final spaceId = session.spaceFor(session.workspace)?.id ?? '';
     if (spaceId.isEmpty) return;
     session.setOpenFilePath(path);
-    if (MediaQuery.sizeOf(context).width < 820) {
+    if (_compact) {
       showWorkspaceFileSheet(
         context,
         service: widget.dependencies.service,
@@ -375,6 +389,24 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   }
 
   void openRoom(String value) => session.openRoom(value);
+
+  /// The space feed when the desktop layout is too narrow to dock it as a
+  /// third pane (expanded windows).
+  void _openSpaceFeed() {
+    final spaceId = session.spaceFor(workspace)?.id ?? '';
+    showFloatingPanel(
+      context,
+      _SocialFeed(
+        workspace: workspace,
+        dependencies: widget.dependencies,
+        spaceId: spaceId,
+        flat: true,
+      ),
+      maxWidth: 760,
+      maxHeight: 820,
+      barrierLabel: 'Close space feed',
+    );
+  }
 
   void goHome() => session.goHome();
 
@@ -405,7 +437,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 820;
+    final compact = _compact;
     // The desk is reachable from the chat (pages agents share open on it).
     return DeskScope(
       controller: deskController,
@@ -418,60 +450,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                   backgroundColor: Colors.transparent,
                   width: math.min(340, MediaQuery.sizeOf(context).width * .88),
                   child: GlassDrawerSurface(
-                    child: SafeArea(
-                      child: ThemeSlotHost(
-                        slot: FeatureSlots.workspaceRail,
-                        child: ThemeSlotHost(
-                          slot: ThemeChromeSlots.workspaceRail,
-                          child: _LibraryPanel(
-                            room: room,
-                            workspace: workspace,
-                            rooms: rooms,
-                            bots: bots,
-                            spaceBots: spaceBots,
-                            allBots: bots,
-                            tab: libraryTab,
-                            flat: true,
-                            onOpenSettings:
-                                session.spaceFor(workspace) == null
-                                ? null
-                                : () {
-                                    Navigator.pop(context);
-                                    _openSpaceSettings();
-                                  },
-                            dependencies: widget.dependencies,
-                            spaceId: session.spaceFor(workspace)?.id ?? '',
-                            roomId: session.currentRoomId,
-                            fileRevision: session.fileRevision,
-                            onTab: session.setLibraryTab,
-                            onOpenApp: openApp,
-                            onOpenFile: _openFile,
-                            openFilePath: session.openFilePath,
-                            onCreateRoom: _createRoom,
-                            onSearch: () => _search(context),
-                            onAddBot: _addBotToWorkspace,
-                            onRemoveBot: _removeBotFromWorkspace,
-                            onAddApp: _addAppToWorkspace,
-                            appConnections: session.currentAppConnections,
-                            onConnectApp: _connectApp,
-                            openRoom: (value) {
-                              Navigator.pop(context);
-                              openRoom(value);
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: SafeArea(child: _libraryPanel(floating: false)),
                   ),
                 )
               : null,
           body: Stack(
             children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: GlowPainter(colors.primary, colors.tertiary),
+              if (compact && ThemeChrome.paintsAtmosphere(context))
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: GlowPainter(colors.primary, colors.tertiary),
+                  ),
                 ),
-              ),
               // Content fills the safe area; desk / feed / chat reserve the
               // floating app-bar inset inside themselves so scroll passes under.
               SafeArea(
@@ -481,7 +471,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       context,
                       compact,
                     );
-                    if (box.maxWidth < 820) {
+                    final usePanes =
+                        !compact &&
+                        box.maxWidth >= 720 &&
+                        !AppHeightClass.fromHeight(box.maxHeight).isCompact;
+                    if (!usePanes) {
                       return WorkspacePanelMotion(
                         animation: workspaceMotion,
                         hiddenOffset: WorkspacePanelMotions.mobileOffset,
@@ -489,145 +483,102 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         child: _mobile(appBarInset: appBarInset),
                       );
                     }
-                    // Desk fills the row; left/right panels sit under the card
-                    // windows so windows can float over them on desktop.
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-                      child: _CenterDesk(
-                        workspace: workspace,
-                        room: room,
-                        pointer: pointer,
+                    final inner = box.maxWidth;
+                    // The library opens from the bar. Its old column is
+                    // part of the chat. The desk stays on the right.
+                    final deskWidth = AppLayout.roomDeskPaneWidth(
+                      innerWidth: inner,
+                      libraryWidth: 0,
+                    );
+                    final spaceId = session.spaceFor(workspace)?.id ?? '';
+                    final social = room == null
+                        ? _SocialFeed(
+                            key: ValueKey('space-feed-$spaceId'),
+                            workspace: workspace,
+                            dependencies: widget.dependencies,
+                            spaceId: spaceId,
+                            flat: true,
+                          )
+                        : RoomChat(
+                            key: ValueKey('$spaceId/${session.currentRoomId}'),
+                            room: room!,
+                            messages: chatMessages,
+                            working: session.workingAgent,
+                            workingDetail: session.workingDetail,
+                            me:
+                                widget
+                                    .dependencies
+                                    .sessionController
+                                    .session
+                                    ?.accountId ??
+                                '',
+                            dependencies: widget.dependencies,
+                            spaceId: spaceId,
+                            roomId: session.chatRoomId,
+                            suggestions:
+                                session.spaceFor(workspace)?.home ?? false,
+                            threadRoomId: session.currentRoomId,
+                            threadTitle:
+                                session
+                                    .roomThreads[session.currentRoomId]
+                                    ?.title ??
+                                '',
+                            onThread: session.switchThread,
+                            mentionable: spaceBots
+                                .where((b) => b.isAgent)
+                                .toList(),
+                            onSend: _sendRoomMessage,
+                            onEdit: _editRoomMessage,
+                            onDelete: _deleteRoomMessage,
+                            onReport: _reportRoomMessage,
+                            canModerate: session.canManageTasks,
+                            hasMore: chatHasMore,
+                            loadingOlder: chatLoadingOlder,
+                            onLoadOlder: session.loadOlderRoomMessages,
+                            flat: true,
+                          );
+                    final desk = _CenterDesk(
+                      workspace: workspace,
+                      room: room,
+                      pointer: pointer,
+                      controller: deskController,
+                      dependencies: widget.dependencies,
+                      spaceId: spaceId,
+                      roomId: session.currentRoomId,
+                      board: true,
+                    );
+                    return _DeskWindowPortal(
+                      layer: _DeskFloatLayer(
                         controller: deskController,
                         dependencies: widget.dependencies,
-                        spaceId: session.spaceFor(workspace)?.id ?? '',
+                        spaceId: spaceId,
                         roomId: session.currentRoomId,
-                        topContentInset: appBarInset,
-                        underlay: Padding(
-                          padding: EdgeInsets.only(top: appBarInset),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              WorkspacePanelMotion(
-                                animation: workspaceMotion,
-                                hiddenOffset: WorkspacePanelMotions.left,
-                                child: SizedBox(
-                                  width: math.min(286, box.maxWidth * .22),
-                                  height: math.max(
-                                    0,
-                                    box.maxHeight * .82 - appBarInset,
-                                  ),
-                                  child: ThemeSlotHost(
-                                    slot: FeatureSlots.workspaceRail,
-                                    child: ThemeSlotHost(
-                                      slot: ThemeChromeSlots.workspaceRail,
-                                      child: _LibraryPanel(
-                                        room: room,
-                                        workspace: workspace,
-                                        rooms: rooms,
-                                        bots: bots,
-                                        spaceBots: spaceBots,
-                                        allBots: bots,
-                                        tab: libraryTab,
-                                        dependencies: widget.dependencies,
-                                        spaceId: session.spaceFor(workspace)
-                                                ?.id ??
-                                            '',
-                                        roomId: session.currentRoomId,
-                                        fileRevision: session.fileRevision,
-                                        onTab: session.setLibraryTab,
-                                        onOpenSettings:
-                                            session.spaceFor(workspace) == null
-                                                ? null
-                                                : _openSpaceSettings,
-                                        onOpenApp: openApp,
-                                        onOpenFile: _openFile,
-                                        openFilePath: session.openFilePath,
-                                        onCreateRoom: _createRoom,
-                                        onSearch: () => _search(context),
-                                        onAddBot: _addBotToWorkspace,
-                                        onRemoveBot: _removeBotFromWorkspace,
-                                        onAddApp: _addAppToWorkspace,
-                                        appConnections:
-                                            session.currentAppConnections,
-                                        onConnectApp: _connectApp,
-                                        openRoom: openRoom,
-                                      ),
-                                    ),
-                                  ),
+                      ),
+                      child: Column(
+                        children: [
+                          _workspaceHeader(context, compact, anchored: true),
+                          Expanded(
+                            child: Stack(
+                              children: [
+                                Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(child: AppPane(child: social)),
+                                    const PaneDivider(),
+                                    AppPane(width: deskWidth, child: desk),
+                                  ],
                                 ),
-                              ),
-                              const Expanded(
-                                child: IgnorePointer(child: SizedBox.expand()),
-                              ),
-                              WorkspacePanelMotion(
-                                animation: workspaceMotion,
-                                hiddenOffset: WorkspacePanelMotions.right,
-                                child: SizedBox(
-                                  width: math.min(330, box.maxWidth * .25),
-                                  height: math.max(
-                                    0,
-                                    box.maxHeight * .88 - appBarInset,
-                                  ),
-                                  child: room == null
-                                      ? _SocialFeed(
-                                          key: ValueKey(
-                                            'space-feed-${session.spaceFor(workspace)?.id ?? workspace}',
-                                          ),
-                                          workspace: workspace,
-                                          dependencies: widget.dependencies,
-                                          spaceId: session
-                                                  .spaceFor(workspace)
-                                                  ?.id ??
-                                              '',
-                                        )
-                                      : RoomChat(
-                                          key: ValueKey(
-                                            '${session.spaceFor(workspace)?.id}/${session.currentRoomId}',
-                                          ),
-                                          room: room!,
-                                          messages: chatMessages,
-                                          working: session.workingAgent,
-                                          workingDetail: session.workingDetail,
-                                          me: widget.dependencies
-                                                  .sessionController
-                                                  .session
-                                                  ?.accountId ??
-                                              '',
-                                          dependencies: widget.dependencies,
-                                          spaceId: session
-                                                  .spaceFor(workspace)
-                                                  ?.id ??
-                                              '',
-                                          roomId: session.chatRoomId,
-                                          suggestions: session
-                                                  .spaceFor(workspace)
-                                                  ?.home ??
-                                              false,
-                                          threadRoomId: session.currentRoomId,
-                                          threadTitle: session
-                                                  .roomThreads[
-                                                      session.currentRoomId]
-                                                  ?.title ??
-                                              '',
-                                          onThread: session.switchThread,
-                                          mentionable: spaceBots
-                                              .where((b) => b.isAgent)
-                                              .toList(),
-                                          onSend: _sendRoomMessage,
-                                          onEdit: _editRoomMessage,
-                                          onDelete: _deleteRoomMessage,
-                                          onReport: _reportRoomMessage,
-                                          canModerate: session.canManageTasks,
-                                          hasMore: chatHasMore,
-                                          loadingOlder: chatLoadingOlder,
-                                          onLoadOlder:
-                                              session.loadOlderRoomMessages,
-                                        ),
+                                SpaceLibraryFlyout(
+                                  open: _libraryOpen,
+                                  onDismiss: () =>
+                                      setState(() => _libraryOpen = false),
+                                  builder: (_) => _libraryPanel(floating: true),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     );
                   },
@@ -643,61 +594,129 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                     roomId: session.currentRoomId,
                   ),
                 ),
-              // Floating glass app bar over desk / feed / chat.
-              SafeArea(
-                bottom: false,
-                child: ThemeSlotHost(
-                  slot: ThemeChromeSlots.floatingAppBar,
-                  child: ThemeSlotHost(
-                    slot: FeatureSlots.workspaceHeader,
-                    child: ListenableBuilder(
-                      listenable: widget.dependencies.sessionController,
-                      builder: (context, _) => WorkspaceHeader(
-                        room: room,
-                        compact: compact,
-                        handle: widget.dependencies.sessionController.session
-                                ?.handle ??
-                            '',
-                        accountId: widget.dependencies.sessionController.session
-                                ?.accountId ??
-                            '',
-                        avatar: widget.dependencies.service.avatarImage(
-                          widget.dependencies.sessionController.avatar,
-                        ),
-                        onBackToFeed: widget.onBackToFeed == null
-                            ? null
-                            : _leaveToFeed,
-                        onGoHome: goHome,
-                        onOpenAdmin:
-                            !widget.dependencies.sessionController.isAdmin
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => AdminScreen(
-                                        dependencies: widget.dependencies,
-                                      ),
-                                    ),
-                                  ),
-                        onOpenWidgetsLibrary: () => showWidgetsLibrary(
-                          context,
-                          widget.dependencies,
-                          onOpenSpace: (name) =>
-                              unawaited(switchWorkspace(name)),
-                        ),
-                        onOpenProfile: compact
-                            ? null
-                            : () => showProfileMenu(
-                                  context,
-                                  widget.dependencies,
-                                  showMessages: true,
-                                ),
-                      ),
-                    ),
-                  ),
+              if (compact ||
+                  MediaQuery.sizeOf(context).width < 720 ||
+                  AppHeightClass.fromHeight(
+                    MediaQuery.sizeOf(context).height,
+                  ).isCompact)
+                SafeArea(
+                  bottom: false,
+                  child: _workspaceHeader(context, compact),
                 ),
-              ),
-              SwitcherEdgeHandle(onTap: () => _workspacePicker(context)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The rooms, agents and apps library. [floating] draws it as the card
+  /// that opens from the desktop bar; the phone drawer keeps it flat.
+  Widget _libraryPanel({required bool floating}) {
+    void close() {
+      if (floating) {
+        setState(() => _libraryOpen = false);
+      } else {
+        Navigator.pop(context);
+      }
+    }
+
+    return ThemeSlotHost(
+      slot: FeatureSlots.workspaceRail,
+      child: ThemeSlotHost(
+        slot: ThemeChromeSlots.workspaceRail,
+        child: _LibraryPanel(
+          room: room,
+          workspace: workspace,
+          rooms: rooms,
+          bots: bots,
+          spaceBots: spaceBots,
+          allBots: bots,
+          tab: libraryTab,
+          flat: !floating,
+          onOpenSettings: session.spaceFor(workspace) == null
+              ? null
+              : () {
+                  close();
+                  _openSpaceSettings();
+                },
+          dependencies: widget.dependencies,
+          spaceId: session.spaceFor(workspace)?.id ?? '',
+          roomId: session.currentRoomId,
+          fileRevision: session.fileRevision,
+          onTab: session.setLibraryTab,
+          onOpenApp: (bot) {
+            close();
+            openApp(bot);
+          },
+          onOpenFile: (path) {
+            close();
+            _openFile(path);
+          },
+          openFilePath: session.openFilePath,
+          onCreateRoom: () {
+            close();
+            _createRoom();
+          },
+          onSearch: () {
+            close();
+            _search(context);
+          },
+          onAddBot: _addBotToWorkspace,
+          onRemoveBot: _removeBotFromWorkspace,
+          onAddApp: _addAppToWorkspace,
+          appConnections: session.currentAppConnections,
+          onConnectApp: _connectApp,
+          openRoom: (value) {
+            close();
+            openRoom(value);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _workspaceHeader(
+    BuildContext context,
+    bool compact, {
+    bool anchored = false,
+  }) {
+    return ThemeSlotHost(
+      slot: ThemeChromeSlots.floatingAppBar,
+      child: ThemeSlotHost(
+        slot: FeatureSlots.workspaceHeader,
+        child: ListenableBuilder(
+          listenable: widget.dependencies.sessionController,
+          builder: (context, _) => WorkspaceHeader(
+            room: room,
+            compact: compact,
+            anchored: anchored,
+            handle: widget.dependencies.sessionController.session?.handle ?? '',
+            accountId:
+                widget.dependencies.sessionController.session?.accountId ?? '',
+            avatar: widget.dependencies.service.avatarImage(
+              widget.dependencies.sessionController.avatar,
+            ),
+            onBackToFeed: widget.onBackToFeed == null ? null : _leaveToFeed,
+            onGoHome: goHome,
+            onOpenWidgetsLibrary: () => showWidgetsLibrary(
+              context,
+              widget.dependencies,
+              onOpenSpace: (name) => unawaited(switchWorkspace(name)),
+            ),
+            onOpenLibrary: compact
+                ? null
+                : () => setState(() => _libraryOpen = !_libraryOpen),
+            onOpenSpaceFeed: !compact && MediaQuery.sizeOf(context).width < 720
+                ? _openSpaceFeed
+                : null,
+            onOpenProfile: compact
+                ? null
+                : (anchor) => showProfileMenu(
+                    context,
+                    widget.dependencies,
+                    anchor: anchor,
+                  ),
           ),
         ),
       ),
@@ -745,7 +764,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       messages: chatMessages,
                       working: session.workingAgent,
                       workingDetail: session.workingDetail,
-                      me: widget.dependencies.sessionController.session
+                      me:
+                          widget
+                              .dependencies
+                              .sessionController
+                              .session
                               ?.accountId ??
                           '',
                       dependencies: widget.dependencies,
@@ -753,9 +776,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                       roomId: session.chatRoomId,
                       suggestions: session.spaceFor(workspace)?.home ?? false,
                       threadRoomId: session.currentRoomId,
-                      threadTitle: session
-                              .roomThreads[session.currentRoomId]
-                              ?.title ??
+                      threadTitle:
+                          session.roomThreads[session.currentRoomId]?.title ??
                           '',
                       onThread: session.switchThread,
                       mentionable: spaceBots.where((b) => b.isAgent).toList(),
@@ -823,60 +845,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
   void _sheet(BuildContext context, Widget child, {double maxWidth = 1180}) =>
       showFloatingPanel(context, child, maxWidth: maxWidth);
 
-  void _workspacePicker(BuildContext context) {
-    final sheet = MediaQuery.sizeOf(context).width < 820;
-    final picker = WorkspacePicker(
-      current: workspace,
-      dependencies: widget.dependencies,
-      inBottomSheet: sheet,
-      onOpenFeed: widget.onBackToFeed == null
-          ? null
-          : () async {
-              Navigator.pop(context);
-              await Future<void>.delayed(const Duration(milliseconds: 320));
-              if (mounted) await _leaveToFeed();
-            },
-      onSettings: (space) {
-        Navigator.pop(context);
-        Future<void>.delayed(const Duration(milliseconds: 320), () {
-          if (!mounted) return;
-          _sheet(
-            context,
-            SpaceSettingsPanel(
-              dependencies: widget.dependencies,
-              space: space,
-              onUpdated: (updated) {
-                session.loadWorkspaces();
-                if (updated.id != session.activeSpaceId && mounted) {
-                  switchWorkspace(updated.name, spaceId: updated.id);
-                }
-              },
-              onExit: () {
-                Navigator.of(context).pop();
-                session.loadWorkspaces();
-              },
-            ),
-            maxWidth: 720,
-          );
-        });
-      },
-      onPick: (value, {spaceId = ''}) async {
-        Navigator.pop(context);
-        await Future<void>.delayed(const Duration(milliseconds: 320));
-        if (mounted) await switchWorkspace(value, spaceId: spaceId);
-      },
-    );
-    if (sheet) {
-      showAppSheet<void>(context, picker, heightFactor: .82);
-      return;
-    }
-    showFloatingDialog<void>(
-      context,
-      barrierLabel: 'Workspaces',
-      pageBuilder: (_) => FloatingPanelSurface(child: picker),
-    );
-  }
-
   void _openSpaceSettings() {
     final sp = session.spaceFor(workspace);
     if (sp == null) return;
@@ -917,6 +885,122 @@ String _fmtDuration(int sec) {
   if (sec < 3600) return '${(sec / 60).floor()}m';
   if (sec < 86400) return '${(sec / 3600).floor()}h';
   return '${(sec / 86400).floor()}d';
+}
+
+/// The library card that floats over the chat from the space bar.
+///
+/// It keeps the pane's width. It fades and scales from the bar button,
+/// and tapping the chat behind it closes it.
+class SpaceLibraryFlyout extends StatefulWidget {
+  const SpaceLibraryFlyout({
+    super.key,
+    required this.open,
+    required this.onDismiss,
+    required this.builder,
+    this.top = 0,
+  });
+
+  final bool open;
+  final VoidCallback onDismiss;
+  final WidgetBuilder builder;
+  final double top;
+
+  @override
+  State<SpaceLibraryFlyout> createState() => _SpaceLibraryFlyoutState();
+}
+
+class _SpaceLibraryFlyoutState extends State<SpaceLibraryFlyout>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motion;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+  bool _present = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _motion = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    final curve = CurvedAnimation(
+      parent: _motion,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _fade = curve;
+    _scale = Tween<double>(begin: 0.94, end: 1).animate(curve);
+    if (widget.open) {
+      _present = true;
+      _motion.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(SpaceLibraryFlyout old) {
+    super.didUpdateWidget(old);
+    if (widget.open && !old.open) {
+      _present = true;
+      _motion.forward();
+    } else if (!widget.open && old.open) {
+      _motion.reverse().whenComplete(() {
+        if (mounted && !widget.open) setState(() => _present = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_present) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(top: widget.top),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = math.min(
+            AppLayout.listPaneWidth,
+            math.max(280.0, constraints.maxWidth - 24),
+          );
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onDismiss,
+                    child: const ColoredBox(color: Color(0x14000000)),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                top: 8,
+                bottom: 12,
+                width: width,
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: ScaleTransition(
+                    alignment: Alignment.topLeft,
+                    scale: _scale,
+                    child: GestureDetector(
+                      onTap: () {},
+                      child: widget.builder(context),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _Panel extends StatelessWidget {

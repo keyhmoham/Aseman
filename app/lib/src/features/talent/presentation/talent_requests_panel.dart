@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/app_inputs.dart';
@@ -131,7 +132,7 @@ class _TalentRequestsPanelState extends State<TalentRequestsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: PanelScaffold(

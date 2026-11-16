@@ -1364,7 +1364,7 @@ class _DetailFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final narrow = MediaQuery.sizeOf(context).width < 700;
+    final narrow = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     return Builder(
       builder: (context) => Dialog.fullscreen(
         backgroundColor: scheme.surface,

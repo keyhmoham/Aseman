@@ -45,6 +45,7 @@ enum BlockKind {
   bulletList,
   orderedList,
   quote,
+  callout,
   code,
   divider,
   table,
@@ -70,21 +71,31 @@ class PostBlock {
       {this.level,
       this.code,
       this.language = '',
+      this.tone = '',
       this.rows,
+      this.cells,
       this.chart,
       this.url,
       this.card,
       this.data});
   final BlockKind kind;
 
-  /// Inline tokens for paragraph/heading/list/quote/table cells.
+  /// Inline tokens for paragraph/heading/list/quote/callout lines.
   final List<List<InlineToken>> inline;
   final int? level;
   final String? code;
 
   /// A code block's language, from its fence (```python).
   final String language;
+
+  /// A callout's tone: note, tip, important, warning, caution.
+  final String tone;
+
+  /// Table rows as a flat token list (previews). Prefer [cells] to draw.
   final List<List<InlineToken>>? rows;
+
+  /// Table rows, each a list of cells.
+  final List<List<List<InlineToken>>>? cells;
   final Map<String, dynamic>? chart;
   final String? url;
   final PostCard? card;
@@ -114,28 +125,44 @@ List<PostBlock> parseRichMarkdown(String source) {
   final tableRows = <String>[];
   void flushTable() {
     if (tableRows.isEmpty) return;
-    final parsed = <List<InlineToken>>[];
+    final flat = <List<InlineToken>>[];
+    final grid = <List<List<InlineToken>>>[];
     for (var i = 0; i < tableRows.length; i++) {
       if (i == 1 && _isTableSeparator(tableRows[i])) continue;
-      final cells = tableRows[i].split('|');
-      final row = <InlineToken>[];
-      for (final cell in cells) {
-        final t = cell.trim();
-        if (t.isEmpty) continue;
-        row.addAll(parseInline(t));
+      var parts = tableRows[i].split('|').map((c) => c.trim()).toList();
+      if (parts.isNotEmpty && parts.first.isEmpty) {
+        parts = parts.sublist(1);
       }
-      if (row.isNotEmpty) parsed.add(row);
+      if (parts.isNotEmpty && parts.last.isEmpty) {
+        parts = parts.sublist(0, parts.length - 1);
+      }
+      if (parts.isEmpty) continue;
+      final rowCells = [for (final part in parts) parseInline(part)];
+      grid.add(rowCells);
+      flat.add([
+        for (final cell in rowCells)
+          InlineToken(InlineKind.text, cell.map((t) => t.text).join()),
+      ]);
     }
-    if (parsed.isNotEmpty) {
-      blocks.add(PostBlock(BlockKind.table, const [], rows: parsed));
+    if (grid.isNotEmpty) {
+      blocks.add(PostBlock(BlockKind.table, const [], rows: flat, cells: grid));
     }
     tableRows.clear();
   }
 
+  void emitFence(String language, String code) {
+    final chart = chartFence(language, code);
+    if (chart != null) {
+      blocks.add(PostBlock(BlockKind.chart, const [], chart: chart));
+      return;
+    }
+    blocks.add(PostBlock(BlockKind.code, const [],
+        code: code, language: language));
+  }
+
   void flushFence() {
     if (!inFence || fenceBuf.isEmpty) return;
-    blocks.add(PostBlock(BlockKind.code, const [],
-        code: fenceBuf.join('\n'), language: fenceLanguage));
+    emitFence(fenceLanguage, fenceBuf.join('\n'));
     fenceBuf.clear();
   }
 
@@ -145,8 +172,7 @@ List<PostBlock> parseRichMarkdown(String source) {
     // Code fence.
     if (line.trimLeft().startsWith('```')) {
       if (inFence) {
-        blocks.add(PostBlock(BlockKind.code, const [],
-            code: fenceBuf.join('\n'), language: fenceLanguage));
+        emitFence(fenceLanguage, fenceBuf.join('\n'));
         fenceBuf.clear();
         inFence = false;
       } else {
@@ -220,6 +246,18 @@ List<PostBlock> parseRichMarkdown(String source) {
       continue;
     }
 
+    // A line that is only a link to a picture, clip or audio file.
+    final aloneLink =
+        RegExp(r'^\[([^\]]*)\]\((https?:[^)\s]+)\)$').firstMatch(trimmed);
+    if (aloneLink != null) {
+      final kind = _mediaKind(aloneLink.group(2)!);
+      if (kind != null) {
+        flushParagraph();
+        blocks.add(PostBlock(kind, const [], url: aloneLink.group(2)!));
+        continue;
+      }
+    }
+
     // Headings.
     final hMatch = RegExp(r'^(#{1,6})\s+(.*)$').firstMatch(trimmed);
     if (hMatch != null) {
@@ -236,7 +274,8 @@ List<PostBlock> parseRichMarkdown(String source) {
       continue;
     }
 
-    // Blockquote.
+    // Blockquote. Consecutive lines are joined afterwards, so a callout
+    // (`> [!WARNING]`) keeps the lines under it.
     if (trimmed.startsWith('>')) {
       flushParagraph();
       blocks.add(PostBlock(
@@ -264,7 +303,94 @@ List<PostBlock> parseRichMarkdown(String source) {
   flushParagraph();
   flushFence();
   flushTable();
-  return blocks;
+  return _joinQuotes(blocks);
+}
+
+/// Consecutive quote lines are one quote. A first line `[!NOTE]` (and the
+/// other GitHub tones) is a callout card instead.
+List<PostBlock> _joinQuotes(List<PostBlock> blocks) {
+  final out = <PostBlock>[];
+  var i = 0;
+  while (i < blocks.length) {
+    if (blocks[i].kind != BlockKind.quote) {
+      out.add(blocks[i]);
+      i++;
+      continue;
+    }
+    final lines = <List<InlineToken>>[];
+    while (i < blocks.length && blocks[i].kind == BlockKind.quote) {
+      lines.addAll(blocks[i].inline);
+      i++;
+    }
+    final first = lines.isEmpty ? '' : lines.first.map((t) => t.text).join();
+    final call = RegExp(
+            r'^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$',
+            caseSensitive: false)
+        .firstMatch(first.trim());
+    if (call == null) {
+      out.add(PostBlock(BlockKind.quote, lines));
+      continue;
+    }
+    final rest = call.group(2)!.trim();
+    final body = <List<InlineToken>>[
+      if (rest.isNotEmpty) parseInline(rest),
+      ...lines.skip(1),
+    ];
+    out.add(PostBlock(BlockKind.callout, body, tone: call.group(1)!.toLowerCase()));
+  }
+  return out;
+}
+
+BlockKind? _mediaKind(String href) {
+  final path = href.split(RegExp(r'[?#]')).first;
+  if (RegExp(r'\.(png|jpe?g|gif|webp|avif|bmp|svg)$', caseSensitive: false)
+      .hasMatch(path)) {
+    return BlockKind.image;
+  }
+  if (RegExp(r'\.(mp4|webm|mov|m4v)$', caseSensitive: false).hasMatch(path)) {
+    return BlockKind.video;
+  }
+  if (RegExp(r'\.(mp3|m4a|wav|ogg|aac|flac)$', caseSensitive: false)
+      .hasMatch(path)) {
+    return BlockKind.audio;
+  }
+  return null;
+}
+
+/// A fenced `chart` / `bar` or `line` / `spark` block: `Label: 12` per line,
+/// optional `title: …`. Null when the fence is ordinary code.
+Map<String, dynamic>? chartFence(String lang, String text) {
+  final type = switch (lang.trim().toLowerCase()) {
+    'chart' || 'bar' || 'bars' => 'bar',
+    'line' || 'spark' || 'sparkline' => 'line',
+    _ => null,
+  };
+  if (type == null) return null;
+  var title = '';
+  final labels = <String>[];
+  final values = <num>[];
+  for (final raw in text.split('\n')) {
+    final line = raw.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+    final titled = RegExp(r'^(?:title)\s*[:=]\s*(.+)$', caseSensitive: false)
+        .firstMatch(line);
+    if (titled != null && values.isEmpty) {
+      title = titled.group(1)!.trim();
+      continue;
+    }
+    final pair =
+        RegExp(r'^([^:|,]+)\s*[:,|]\s*(-?\d+(?:\.\d+)?)\s*$').firstMatch(line);
+    if (pair == null) return null;
+    labels.add(pair.group(1)!.trim());
+    values.add(num.parse(pair.group(2)!));
+  }
+  if (values.length < (type == 'line' ? 2 : 1)) return null;
+  return {
+    'type': type,
+    if (title.isNotEmpty) 'title': title,
+    'labels': labels,
+    'values': values,
+  };
 }
 
 /// Parses inline formatting into tokens (bold, italic, strike, code, links,
@@ -476,6 +602,10 @@ String markupPreview(String source, {int depth = 0}) {
             ].join(': ');
           }(),
         BlockKind.chart => 'Chart',
+        BlockKind.callout => [
+            b.tone,
+            for (final run in b.inline) run.map((t) => t.text).join(),
+          ].join(' '),
         BlockKind.image => 'Photo',
         BlockKind.video => 'Video',
         BlockKind.audio => 'Audio',
@@ -516,7 +646,8 @@ String markupPlainText(String source) {
             for (var i = 0; i < b.inline.length; i++)
               '${i + 1}. ${run(b.inline[i])}'
           ].join('\n'),
-        BlockKind.quote => '“${b.inline.map(run).join(' ')}”',
+        BlockKind.quote || BlockKind.callout =>
+          '“${b.inline.map(run).join(' ')}”',
         BlockKind.image || BlockKind.video || BlockKind.audio => b.url ?? '',
         BlockKind.code => b.code ?? '',
         BlockKind.table =>

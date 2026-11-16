@@ -26,8 +26,15 @@ Future<void> showNotifyPrefs(
     );
 
 class NotifyPrefsPanel extends StatefulWidget {
-  const NotifyPrefsPanel({super.key, required this.dependencies});
+  const NotifyPrefsPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
+
+  /// Draw the switches in the settings page instead of a floating panel.
+  final bool embedded;
 
   @override
   State<NotifyPrefsPanel> createState() => _NotifyPrefsPanelState();
@@ -95,6 +102,47 @@ class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final body = _loading
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(_error!, style: TextStyle(color: scheme.error)),
+                ),
+              QuietList(
+                children: [
+                  for (final c in _categories)
+                    QuietSwitchTile(
+                      icon: c.$4,
+                      label: c.$2,
+                      subtitle: c.$3,
+                      value: _cats[c.$1] ?? true,
+                      onChanged: (v) => _toggle(c.$1, v),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              QuietList(
+                children: [
+                  QuietTile(
+                    icon: Icons.volume_off_outlined,
+                    label: 'Muted chats and rooms',
+                    subtitle: _mutedSpaces + _mutedPeers == 0
+                        ? 'Mute a chat or room from its menu. Muted threads stay quiet for push only.'
+                        : '$_mutedSpaces rooms and $_mutedPeers chats are muted. Unmute them from each chat’s menu.',
+                    trailing: const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ],
+          );
+    if (widget.embedded) return body;
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Notifications',
@@ -105,39 +153,7 @@ class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
           ? const SkeletonPage()
           : ListView(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 28),
-              children: [
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(_error!,
-                        style: TextStyle(color: scheme.error)),
-                  ),
-                QuietList(
-                  children: [
-                    for (final c in _categories)
-                      QuietSwitchTile(
-                        icon: c.$4,
-                        label: c.$2,
-                        subtitle: c.$3,
-                        value: _cats[c.$1] ?? true,
-                        onChanged: (v) => _toggle(c.$1, v),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                QuietList(
-                  children: [
-                    QuietTile(
-                      icon: Icons.volume_off_outlined,
-                      label: 'Muted chats and rooms',
-                      subtitle: _mutedSpaces + _mutedPeers == 0
-                          ? 'Mute a chat or room from its menu. Muted threads stay quiet for push only.'
-                          : '$_mutedSpaces rooms and $_mutedPeers chats are muted. Unmute them from each chat’s menu.',
-                      trailing: const SizedBox.shrink(),
-                    ),
-                  ],
-                ),
-              ],
+              children: [body],
             ),
     );
   }

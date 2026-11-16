@@ -40,6 +40,13 @@ import 'room_threads.dart';
 import 'room_work_view.dart';
 import 'workspace_links.dart';
 
+/// Lets a host header open the same work and routines panels as the room
+/// header. [RoomChat] fills the callbacks while it builds.
+class RoomChatChrome {
+  VoidCallback? openWork;
+  VoidCallback? openRoutines;
+}
+
 /// A room's conversation: the message list (chat bubbles, agent logs, files,
 /// sandbox previews), the live "agent is working" status and the composer
 /// (attachments, agent mentions, the message designer). Used by the workspace
@@ -88,6 +95,7 @@ class RoomChat extends StatefulWidget {
     this.direct = false,
     this.saved = false,
     this.peerId = '',
+    this.chrome,
   });
   final String room;
   final List<RoomMessage> messages;
@@ -192,8 +200,73 @@ class RoomChat extends StatefulWidget {
 
   /// Personal Aseman chat (self-chat).
   final bool saved;
+
+  /// When the list header is hidden, the host reads these to keep Work and
+  /// Routines on its own bar.
+  final RoomChatChrome? chrome;
+
   @override
   State<RoomChat> createState() => _RoomChatState();
+}
+
+/// Scroll position that places loaded messages before the first paint.
+///
+/// The default list starts at offset 0 and then animates toward the latest
+/// message once the extent is known. This corrects the offset during layout
+/// instead, so the thread is already where it belongs when it appears.
+class _ChatScrollController extends ScrollController {
+  _ChatScrollController(this.host);
+
+  final _RoomChatState host;
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    return _ChatScrollPosition(
+      physics: physics,
+      context: context,
+      oldPosition: oldPosition,
+      host: host,
+    );
+  }
+}
+
+class _ChatScrollPosition extends ScrollPositionWithSingleContext {
+  _ChatScrollPosition({
+    required super.physics,
+    required super.context,
+    required this.host,
+    super.oldPosition,
+  }) : super(initialPixels: 0);
+
+  final _RoomChatState host;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final oldPixels = hasPixels ? pixels : 0.0;
+    final oldMax = hasContentDimensions ? this.maxScrollExtent : maxScrollExtent;
+    final accepted =
+        super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    final target = host.instantOffset(
+      oldPixels: oldPixels,
+      oldMax: oldMax,
+      minExtent: minScrollExtent,
+      maxExtent: maxScrollExtent,
+      userDragging: activity is DragScrollActivity,
+    );
+    if (target == null) return accepted;
+    final next = target.clamp(minScrollExtent, maxScrollExtent);
+    if ((pixels - next).abs() <= 0.5) return accepted;
+    if (activity is! IdleScrollActivity && activity is! DragScrollActivity) {
+      goIdle();
+    }
+    correctPixels(next);
+    host.noteInstantCorrection();
+    return false;
+  }
 }
 
 class _RoomChatState extends State<RoomChat> {
@@ -210,7 +283,7 @@ class _RoomChatState extends State<RoomChat> {
   final Set<String> _mentions = {};
   final Map<String, String> _mentionNames = {};
   final List<_DraftAttachment> _drafts = [];
-  final ScrollController _chatScroll = ScrollController();
+  late final _ChatScrollController _chatScroll = _ChatScrollController(this);
   final Set<String> _expandedLogs = {};
   bool _sending = false;
 
@@ -224,29 +297,24 @@ class _RoomChatState extends State<RoomChat> {
   /// the person has not scrolled this room yet (land on the live bottom).
   RoomChatScroll? _restore;
 
-  /// How many frames a restore may wait for the list to settle.
-  static const _maxRestoreFrames = 45;
-
-  /// True once [_restore] has been applied (or abandoned for a fresh bottom).
+  /// True once [_restore] has been applied (or there was nothing to restore).
   bool _didRestore = false;
 
-  /// Skips persist while a programmatic [jumpTo] is in flight so restore
-  /// does not overwrite the saved session with a half-laid-out offset.
-  bool _suppressPersist = false;
+  /// Older messages were inserted above the viewport. The next layout keeps
+  /// the same messages on screen by shifting the offset with the extent.
+  bool _shiftForPrepend = false;
 
-  /// Frames spent waiting for layout before restore; capped so a short chat
-  /// that truly does not scroll still lands.
-  int _restoreAttempts = 0;
-
-  /// Last [maxScrollExtent] while waiting for layout to settle before restore.
-  double? _restoreExtent;
-
-  /// Consecutive frames with an unchanged extent before applying restore.
-  int _restoreStableFrames = 0;
+  /// A post-frame announcement of a silent layout correction is already queued.
+  bool _announceScheduled = false;
 
   /// Whether the list is following the live end. Kept across remounts when
   /// the saved scroll was near the bottom, so new messages still stick.
   bool _pinToBottom = true;
+
+  /// Lays out the whole thread in one pass so the scroll extent is exact
+  /// before the first paint. A lazy estimate would place the list, then
+  /// glide as the real height arrives.
+  static const _messageCacheExtent = 10000000.0;
 
   /// The room's agent work (runs, live drafts, questions), when the chat
   /// knows its project and room.
@@ -278,33 +346,11 @@ class _RoomChatState extends State<RoomChat> {
     if (_restore != null) _pinToBottom = _restore!.nearBottom;
     _chatScroll.addListener(_onScroll);
     _followWork();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _afterFirstLayout());
-  }
-
-  void _afterFirstLayout() {
-    if (!mounted) return;
-    if (_tryRestore()) return;
-    // First visit to this room in the session: start at the live end.
-    if (_restore == null) _jumpToBottom();
-  }
-
-  /// Schedules another restore attempt after the next frame (layout may
-  /// still be settling or messages still arriving).
-  void _scheduleRestoreRetry() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _didRestore) return;
-      if (_tryRestore()) return;
-      if (_restore == null) _jumpToBottom();
-    });
-    // A post-frame callback alone does not schedule a frame; without this,
-    // retries stall when nothing else is animating (common in tests and when
-    // returning to a settled chat).
-    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Persists the current offset so a later visit to this room restores it.
   void _persistScroll([String? spaceId, String? roomId]) {
-    if (_suppressPersist || !_chatScroll.hasClients) return;
+    if (!_chatScroll.hasClients) return;
     // Do not overwrite a saved session with a half-restored / unloaded list.
     if (!_didRestore && _restore != null) return;
     final pos = _chatScroll.position;
@@ -333,93 +379,63 @@ class _RoomChatState extends State<RoomChat> {
     if (_chatScroll.position.pixels <= 80) widget.onLoadOlder!();
   }
 
-  void _runWithoutPersist(VoidCallback fn) {
-    _suppressPersist = true;
-    try {
-      fn();
-    } finally {
-      _suppressPersist = false;
+  /// Offset to apply during layout, before paint, so messages appear where
+  /// they belong. Null leaves the current offset alone.
+  ///
+  /// [jumpTo] runs after the frame and starts a ballistic activity, which
+  /// shows the thread scrolling into place as it loads. Correcting here is
+  /// the first paint.
+  double? instantOffset({
+    required double oldPixels,
+    required double oldMax,
+    required double minExtent,
+    required double maxExtent,
+    required bool userDragging,
+  }) {
+    if (_shiftForPrepend && !userDragging) {
+      _shiftForPrepend = false;
+      return (oldPixels + (maxExtent - oldMax)).clamp(minExtent, maxExtent);
     }
-  }
-
-  /// Applies a saved scroll once the list has laid out. Returns true when
-  /// restore is done or still pending another frame of content.
-  bool _tryRestore() {
     final saved = _restore;
-    if (saved == null || _didRestore) return saved != null && _didRestore;
-    // Never retry for ever: a list whose height keeps changing (or that never
-    // lays out) would otherwise request a frame every frame.
-    if (_restoreAttempts >= _maxRestoreFrames) {
-      if (_chatScroll.hasClients) {
-        _runWithoutPersist(() => _chatScroll
-            .jumpTo(saved.offsetFor(_chatScroll.position.maxScrollExtent)));
-      }
+    if (!_didRestore && saved != null && widget.messages.isNotEmpty) {
+      _didRestore = true;
       _pinToBottom = saved.nearBottom;
-      _didRestore = true;
-      _restoreAttempts = 0;
-      return true;
+      _shiftForPrepend = false;
+      if (saved.nearBottom) return maxExtent;
+      return saved.offsetFor(maxExtent).clamp(minExtent, maxExtent);
     }
-    if (!_chatScroll.hasClients) {
-      _restoreAttempts++;
-      _scheduleRestoreRetry();
-      return true;
+    if (_pinToBottom && !userDragging) return maxExtent;
+    if (!userDragging && (oldPixels < minExtent || oldPixels > maxExtent)) {
+      return oldPixels.clamp(minExtent, maxExtent);
     }
-    // First page still arriving: keep the pending restore until it lands.
-    // didUpdateWidget tries again when the messages arrive, so no frames
-    // are spent waiting.
-    if (widget.messages.isEmpty) {
-      if (widget.loading) return true;
-      // Truly empty conversation — nothing to restore to.
-      _runWithoutPersist(
-          () => _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent));
-      _pinToBottom = true;
-      _didRestore = true;
-      return true;
-    }
-    final max = _chatScroll.position.maxScrollExtent;
-    _restoreAttempts++;
-    // Children often report max==0 for a frame before layout finishes.
-    final expectScroll =
-        saved.maxExtent > 0 || saved.offset > 0 || saved.nearBottom;
-    if (max <= 0 && expectScroll) {
-      _restoreExtent = null;
-      _restoreStableFrames = 0;
-      _scheduleRestoreRetry();
-      return true;
-    }
-    // Wait until the extent stops changing so proportional restore is not
-    // applied against a mid-layout height.
-    if (_restoreExtent == null || (_restoreExtent! - max).abs() > 1) {
-      _restoreExtent = max;
-      _restoreStableFrames = 0;
-      _scheduleRestoreRetry();
-      return true;
-    }
-    _restoreStableFrames++;
-    if (_restoreStableFrames < 2) {
-      _scheduleRestoreRetry();
-      return true;
-    }
-    final target = saved.offsetFor(max);
-    _runWithoutPersist(() => _chatScroll.jumpTo(target));
-    _pinToBottom = saved.nearBottom;
-    _didRestore = true;
-    _restoreAttempts = 0;
-    _restoreExtent = null;
-    _restoreStableFrames = 0;
-    // Persist the applied position (now that restore is done) so leave /
-    // remount keeps the corrected offset, not a stale pre-layout value.
-    _persistScroll();
-    return true;
+    return null;
   }
 
-  void _jumpToBottom() {
-    if (!_chatScroll.hasClients) return;
-    _runWithoutPersist(
-        () => _chatScroll.jumpTo(_chatScroll.position.maxScrollExtent));
-    _pinToBottom = true;
-    _didRestore = true;
-    _persistScroll();
+  /// Tells listeners the list is already at [instantOffset]'s target. The
+  /// correction itself does not notify, so a collapsing header still learns
+  /// the real offset without a scroll animation.
+  void noteInstantCorrection() {
+    if (_announceScheduled) return;
+    _announceScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _announceScheduled = false;
+      if (!mounted || !_chatScroll.hasClients) return;
+      _persistScroll();
+      final pixels = _chatScroll.position.pixels;
+      if (widget.onLoadOlder != null &&
+          widget.hasMore &&
+          !widget.loadingOlder &&
+          pixels <= 80) {
+        widget.onLoadOlder!();
+      }
+      final context = _chatScroll.position.context.notificationContext;
+      if (context == null || !context.mounted) return;
+      ScrollUpdateNotification(
+        metrics: _chatScroll.position.copyWith(),
+        context: context,
+        scrollDelta: 0,
+      ).dispatch(context);
+    });
   }
 
   /// The id of the chronologically oldest message, for detecting prepends.
@@ -450,7 +466,6 @@ class _RoomChatState extends State<RoomChat> {
   void _workChanged() {
     if (!mounted) return;
     setState(() {});
-    if (_work?.drafting != null) _scrollToBottom();
   }
 
   /// Agents are on it in this room.
@@ -504,21 +519,13 @@ class _RoomChatState extends State<RoomChat> {
       _persistScroll(oldWidget.spaceId, oldWidget.roomId);
       _restore = RoomChatScrollStore.read(widget.spaceId, widget.roomId);
       _didRestore = false;
-      _restoreAttempts = 0;
-      _restoreExtent = null;
-      _restoreStableFrames = 0;
+      _shiftForPrepend = false;
       _pinToBottom = _restore?.nearBottom ?? true;
-      _scheduleRestoreRetry();
     }
     if (oldWidget.spaceId != widget.spaceId ||
         oldWidget.roomId != widget.roomId ||
         oldWidget.dependencies != widget.dependencies) {
       _followWork();
-    }
-    // Finish a pending restore once messages (and layout) have arrived.
-    if (!_didRestore && _restore != null) {
-      _scheduleRestoreRetry();
-      return;
     }
     final oldOldest = _oldestId(oldWidget.messages);
     final newOldest = _oldestId(widget.messages);
@@ -526,37 +533,11 @@ class _RoomChatState extends State<RoomChat> {
         newOldest != null &&
         oldOldest != newOldest &&
         widget.messages.length > oldWidget.messages.length;
-    if (prepended && _chatScroll.hasClients) {
+    if (prepended) {
       // Keep the viewport on the same messages when older ones are inserted
-      // above (scroll-to-load history).
-      final oldMax = _chatScroll.position.maxScrollExtent;
-      final oldPixels = _chatScroll.position.pixels;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_chatScroll.hasClients) return;
-        final newMax = _chatScroll.position.maxScrollExtent;
-        _runWithoutPersist(() => _chatScroll.jumpTo(
-            (oldPixels + (newMax - oldMax)).clamp(0.0, newMax)));
-        _persistScroll();
-      });
-      return;
+      // above. Applied in the layout that paints the new page, not after it.
+      _shiftForPrepend = true;
     }
-    // New messages arrived (async agent replies / logs): follow the bottom when
-    // the user was already near it, so aseman's flow appears live.
-    if (widget.messages.length != oldWidget.messages.length) {
-      _scrollToBottom();
-    }
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_chatScroll.hasClients) return;
-      final pos = _chatScroll.position;
-      if (_pinToBottom || pos.maxScrollExtent - pos.pixels < 160) {
-        _runWithoutPersist(() => _chatScroll.jumpTo(pos.maxScrollExtent));
-        _pinToBottom = true;
-        _persistScroll();
-      }
-    });
   }
 
   void _toggleLog(String id) {
@@ -1603,8 +1584,41 @@ class _RoomChatState extends State<RoomChat> {
     ];
   }
 
+  Widget _messageList({
+    required EdgeInsets padding,
+    required List<Widget> children,
+  }) {
+    return ListView(
+      controller: _chatScroll,
+      cacheExtent: _messageCacheExtent,
+      padding: padding,
+      children: children,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final chrome = widget.chrome;
+    if (chrome != null) {
+      final deps = widget.dependencies;
+      final work = _work;
+      chrome.openWork = work == null
+          ? null
+          : () => showRoomWork(
+                context,
+                work,
+                onRunAgain: widget.onSend == null ? null : _runAgain,
+              );
+      chrome.openRoutines = deps == null
+          ? null
+          : () => showRoutinesSheet(
+                context,
+                deps,
+                widget.spaceId,
+                widget.roomId,
+                widget.room,
+              );
+    }
     // Show the conversation chronologically (oldest→newest). message_list
     // returns newest-first, so sort by createdAt with the id as a tiebreaker.
     final messages = [..._visibleMessages]..sort((a, b) {
@@ -1629,8 +1643,7 @@ class _RoomChatState extends State<RoomChat> {
                 child: CustomPaint(
               painter: _ChatPatternPainter(
                   Theme.of(context).colorScheme.primary, widget.room),
-              child: ListView(
-                  controller: _chatScroll,
+              child: _messageList(
                   padding: EdgeInsets.fromLTRB(
                       12, widget.topContentInset, 12, bottomPad),
                   children: _messageChildren(context, messages, working,
@@ -1660,11 +1673,9 @@ class _RoomChatState extends State<RoomChat> {
               ? const _NoMessages()
               : messages.isEmpty && widget.loading
                   ? const SkeletonMessages()
-                  : ListView(
-                      controller: _chatScroll,
+                  : _messageList(
                       padding: const EdgeInsets.all(12),
-                      children:
-                          _messageChildren(context, messages, working)),
+                      children: _messageChildren(context, messages, working)),
         )),
         Padding(padding: const EdgeInsets.all(10), child: _composer()),
       ]),
@@ -2403,18 +2414,10 @@ class _RoomChatState extends State<RoomChat> {
       final offered = parseReplies(m.body);
       final parsed = parseAgUiBody(offered.text);
       final out = <Widget>[];
-      if (parsed.caption.trim().isNotEmpty) {
-        out.add(RichPostContent(parsed.caption,
-            headers: deps?.service.authHeaders() ?? const {},
-            resolveUrl: deps?.service.resolveContentUrl,
-            onLinkTap: deps == null
-                ? null
-                : (link) => openWorkspaceLink(context, deps.service, link)));
-      }
       final surface = parsed.surface;
       if (surface != null && surface.root != null) {
         out.add(Padding(
-          padding: EdgeInsets.only(top: parsed.caption.trim().isEmpty ? 0 : 8),
+          padding: const EdgeInsets.only(bottom: 8),
           child: _withActions(
             deps,
             AgUiSurfaceView(
@@ -2427,7 +2430,15 @@ class _RoomChatState extends State<RoomChat> {
             ),
           ),
         ));
-      } else if (parsed.caption.trim().isEmpty &&
+      }
+      if (parsed.caption.trim().isNotEmpty) {
+        out.add(RichPostContent(parsed.caption,
+            headers: deps?.service.authHeaders() ?? const {},
+            resolveUrl: deps?.service.resolveContentUrl,
+            onLinkTap: deps == null
+                ? null
+                : (link) => openWorkspaceLink(context, deps.service, link)));
+      } else if (surface == null &&
           offered.text.trim().isNotEmpty) {
         // No fence — original markdown body.
         out.add(RichPostContent(offered.text,

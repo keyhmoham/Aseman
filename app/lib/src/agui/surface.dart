@@ -81,6 +81,34 @@ final _fence = RegExp(r'```(?:agui|surface)\s*\n([\s\S]*?)\n```', multiLine: tru
   }
 }
 
+/// Chart props as the UI kit reads them. AG-UI often sends `points`
+/// (`{label, value}`) where the kit reads `data` / `values` / `rows`.
+Map<String, dynamic> chartPropsForKit(Map<String, dynamic> props) {
+  final next = Map<String, dynamic>.from(props);
+  final data =
+      props['data'] ?? props['rows'] ?? props['values'] ?? props['points'];
+  if (data != null) next['data'] = data;
+  if (next['type'] == null && next['kind'] == null) next['type'] = 'bar';
+  return next;
+}
+
+/// Callout props: AG-UI uses `tone` and `content` / `message`; the kit
+/// reads `severity` and `text`.
+Map<String, dynamic> calloutPropsForKit(Map<String, dynamic> props) {
+  final next = Map<String, dynamic>.from(props);
+  final tone = '${props['tone'] ?? props['kind'] ?? ''}'.toLowerCase();
+  if (props['severity'] == null && props['status'] == null && tone.isNotEmpty) {
+    next['severity'] = switch (tone) {
+      'warning' || 'caution' => 'warning',
+      'error' || 'danger' || 'important' => 'critical',
+      'success' || 'tip' || 'good' => 'good',
+      _ => 'info',
+    };
+  }
+  next['text'] ??= props['content'] ?? props['message'] ?? props['body'];
+  return next;
+}
+
 String typeOf(Map<String, dynamic> node) {
   for (final k in ['c', 'type', '\$type', 'component']) {
     final v = node[k];
@@ -99,5 +127,8 @@ Map<String, dynamic> propsOf(Map<String, dynamic> node) {
 List<dynamic> childrenOf(Map<String, dynamic> node) {
   final c = node['children'] ?? node['items'];
   if (c is List) return c;
+  // Agents often nest the body under props: {c, p: {title, children}}.
+  final nested = propsOf(node)['children'];
+  if (nested is List) return nested;
   return const [];
 }

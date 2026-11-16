@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_surfaces.dart';
+import 'default_theme_packs.dart';
 import 'design_language.dart';
 import 'shell_layout.dart';
 import 'theme_pack.dart';
@@ -193,20 +194,8 @@ class AsemanTokens extends ThemeExtension<AsemanTokens> {
   static AsemanTokens of(BuildContext context) =>
       maybeOf(context) ?? defaults(Theme.of(context).brightness);
 
-  static AsemanTokens defaults(Brightness brightness) {
-    final t = brightness == Brightness.dark
-        ? skyDarkTokens()
-        : skyLightTokens();
-    return fromTokens(
-      packId: 'builtin.sky',
-      tokens: t,
-      language: const DesignLanguage(),
-      graphics: const ThemeGraphics(),
-      shell: const ShellLayoutSpec(),
-      components: const {},
-      bridges: const ThemeBridges(),
-    );
-  }
+  static AsemanTokens defaults(Brightness brightness) =>
+      fromPack(DefaultThemePacks.paper, brightness);
 
   static AsemanTokens fromPack(ThemePack pack, Brightness brightness) {
     final tokens = pack.tokens.forBrightness(brightness);

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/context_extensions.dart';
 import '../../data/services/aseman_service.dart';
@@ -11,7 +12,7 @@ import 'space_computer.dart';
 
 /// Below this width the computer opens in a bottom sheet, else as a card
 /// window on the desk (the workspace's own breakpoint).
-const double computerSheetBreakpoint = 820;
+const double computerSheetBreakpoint = Breakpoints.expanded;
 
 /// Opens the project's computer, its desktop live and driven: a card window
 /// on the desk on wide screens, a bottom sheet on phones.

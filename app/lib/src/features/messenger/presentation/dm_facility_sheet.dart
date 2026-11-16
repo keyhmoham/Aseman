@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/space.dart';
@@ -29,7 +30,7 @@ Future<void> showDmFacilitySheet(
   ChatPeer? peer,
   Future<void> Function()? onChanged,
 }) {
-  final sheet = MediaQuery.sizeOf(context).width < 820;
+  final sheet = MediaQuery.sizeOf(context).width < Breakpoints.expanded;
   final panel = DmFacilitySheet(
     dependencies: dependencies,
     spaceId: spaceId,

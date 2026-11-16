@@ -54,6 +54,7 @@ class LoadedPanel extends StatefulWidget {
     required this.build,
     this.actions = const [],
     this.maxWidth = 760,
+    this.embedded = false,
   });
 
   final String title;
@@ -66,6 +67,9 @@ class LoadedPanel extends StatefulWidget {
   build;
   final List<Widget> actions;
   final double maxWidth;
+
+  /// Settings hosts the body in its own scroll, without this panel's scaffold.
+  final bool embedded;
 
   @override
   State<LoadedPanel> createState() => _LoadedPanelState();
@@ -97,6 +101,30 @@ class _LoadedPanelState extends State<LoadedPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              tooltip: 'Refresh',
+              onPressed: reload,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ),
+          if (error.isNotEmpty && data == null)
+            Text(error, style: TextStyle(color: scheme.error))
+          else if (data == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            widget.build(context, data!, reload),
+        ],
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(

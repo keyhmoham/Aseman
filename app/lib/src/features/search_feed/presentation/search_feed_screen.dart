@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
-import '../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/app_layout.dart';
+import '../../../core/layout/breakpoints.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/aseman_tokens.dart';
@@ -24,7 +26,6 @@ import '../../../shared/widgets/sky_ui.dart';
 import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/workspace_panel_motion.dart';
-import '../../admin/presentation/admin_screen.dart' deferred as admin;
 import '../../assistant/assistant.dart';
 import '../../desk/presentation/widgets_library.dart';
 import '../../home/presentation/workspace_entry.dart';
@@ -34,18 +35,11 @@ import '../domain/feed_post.dart';
 import 'feed_post_card.dart';
 import 'post_editor.dart';
 import 'search_feed_view_model.dart';
-import '../../../core/deferred/deferred_loader.dart';
 
-/// The admin console, loaded when an administrator first opens it.
-final _adminConsole = DeferredLoader(() => admin.loadLibrary());
-
-/// Loads the admin console the feed opens.
-Future<void> loadFeedAdminConsole() async => _adminConsole.ensure();
-
-/// Landing page. On a wide screen the chats sit in the left rail, Aseman
-/// (chat + desk) in the center, and Explore (posts) in the right rail. On a
-/// phone a floating pill switches Chats, Explore and You — Aseman lives in
-/// the chats list (and stays centered on desktop). You is the former
+/// Landing page. On a wide screen the feed sits to the left of Aseman
+/// (chat + desk), which fills the right side; extra-large windows add the
+/// chats list at the far left. On a phone a floating pill switches Chats,
+/// Explore and You — Aseman lives in the chats list. You is the former
 /// top-right profile sheet.
 enum HomeMobileTab { chats, explore, you }
 
@@ -57,11 +51,16 @@ class SearchFeedScreen extends StatefulWidget {
     this.onOpenWorkspace,
     this.onOpenSpaceRoom,
     this.initialMobileTab = HomeMobileTab.chats,
+    this.desktopShell = false,
   });
 
   final AppDependencies dependencies;
   final String workspace;
   final ValueChanged<String>? onOpenWorkspace;
+
+  /// Desktop shell: the window already has a navigation rail, so this screen
+  /// always uses the desktop pane layout and never the phone tab shell.
+  final bool desktopShell;
 
   /// Opens a project on the workspace page with [roomName] / [roomId]
   /// already selected (desk, chat, and the rest of that room).
@@ -70,7 +69,8 @@ class SearchFeedScreen extends StatefulWidget {
     String spaceName,
     String roomName,
     String roomId,
-  )? onOpenSpaceRoom;
+  )?
+  onOpenSpaceRoom;
 
   /// Which phone tab to show on mount. Chats on first land and when the
   /// workspace Home button returns here.
@@ -184,7 +184,31 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     if (mounted) open(spaceId, name, roomName, roomId);
   }
 
-  bool get _compact => MediaQuery.sizeOf(context).width < 820;
+  bool get _compact =>
+      !widget.desktopShell &&
+      MediaQuery.sizeOf(context).width < Breakpoints.expanded;
+
+  /// Desktop home panes for a content width of [width].
+  ///
+  /// Large windows: the conversation and the feed. Extra-large windows add
+  /// the chats list as a third pane. Nothing else earns a column.
+  ({double chats, double feed, bool showChats, bool showFeed}) _homePanes(
+    double width,
+  ) {
+    final showFeed = AppWindowScope.supportingPane(context);
+    final showChats = AppWindowScope.threePanes(context);
+    final panes = AppLayout.paneWidths(
+      innerWidth: width,
+      leading: showChats,
+      trailing: showFeed,
+    );
+    return (
+      chats: panes.leading,
+      feed: panes.trailing,
+      showChats: showChats,
+      showFeed: showFeed,
+    );
+  }
 
   void _onScroll() {
     if (!scrollController.hasClients) return;
@@ -303,8 +327,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     final compact = _compact;
     final homeShell = shellOf(context).home;
     final mobileSlot = _mobileSlot;
-    final showComposer = (!compact ||
-            homeShell.composerOn.contains(mobileSlot)) &&
+    final showComposer =
+        (!compact || homeShell.composerOn.contains(mobileSlot)) &&
         !themeSlotDisabled(context, FeatureSlots.homeComposer) &&
         !themeSlotDisabled(context, ThemeChromeSlots.feedComposer);
     final appBarInset = FloatingAppBarLayout.contentInsetOf(context, compact);
@@ -312,11 +336,12 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       extendBody: compact,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GlowPainter(scheme.primary, scheme.tertiary),
+          if (compact && ThemeChrome.paintsAtmosphere(context))
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GlowPainter(scheme.primary, scheme.tertiary),
+              ),
             ),
-          ),
           // Page content fills the safe area; each tab/rail reserves
           // [appBarInset] inside itself so scroll can pass under the bar.
           SafeArea(
@@ -337,8 +362,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                     final tabIndex = phoneTabs.isEmpty
                         ? 0
                         : phoneTabs
-                            .indexWhere((t) => t.slot == _mobileSlot)
-                            .clamp(0, phoneTabs.length - 1);
+                              .indexWhere((t) => t.slot == _mobileSlot)
+                              .clamp(0, phoneTabs.length - 1);
                     Widget tabBody(String slot) {
                       if (slot == FeatureSlots.homeChats) {
                         return glassTab(
@@ -380,6 +405,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                       }
                       return glassTab(const SizedBox.shrink());
                     }
+
                     return IndexedStack(
                       index: tabIndex,
                       sizing: StackFit.expand,
@@ -388,96 +414,71 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                       ],
                     );
                   }
-                  // Chats on the left, Aseman chat/desk in the center, Explore
-                  // on the right.
-                  final railWidth = math.min(320.0, box.maxWidth * .24);
-                  final railHeight = math.max(0.0, box.maxHeight - appBarInset);
-                  Widget denseRail(Widget child) => MediaQuery(
-                    data: MediaQuery.of(
-                      context,
-                    ).copyWith(textScaler: const TextScaler.linear(.88)),
-                    child: child,
-                  );
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-                    child: Row(
-                      children: [
-                        WorkspacePanelMotion(
-                          animation: motion,
-                          hiddenOffset: WorkspacePanelMotions.left,
-                          child: Padding(
-                            padding: EdgeInsets.only(top: appBarInset),
-                            child: _DesktopRail(
-                              width: railWidth,
-                              height: railHeight,
-                              child: denseRail(
-                                MessengerPanel(
-                                  dependencies: widget.dependencies,
-                                  embedded: true,
-                                  dense: true,
-                                  onOpenSpaceRoom:
-                                      widget.onOpenSpaceRoom == null
-                                      ? null
-                                      : _enterWorkspaceRoom,
-                                  onOpenWorkspace:
-                                      widget.onOpenWorkspace == null
-                                      ? null
-                                      : _enterWorkspace,
+                  // The bar owns the top. Panes fill what's left: chats only
+                  // from extra-large, the feed to the left of Aseman from
+                  // large, and Aseman as the flexible pane on the right.
+                  final metrics = _homePanes(box.maxWidth);
+                  return Column(
+                    children: [
+                      _workspaceBar(context, false, anchored: true),
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (metrics.showChats) ...[
+                              WorkspacePanelMotion(
+                                animation: motion,
+                                hiddenOffset: WorkspacePanelMotions.left,
+                                child: AppPane(
+                                  width: metrics.chats,
+                                  child: MessengerPanel(
+                                    dependencies: widget.dependencies,
+                                    embedded: true,
+                                    dense: true,
+                                    onOpenSpaceRoom:
+                                        widget.onOpenSpaceRoom == null
+                                        ? null
+                                        : _enterWorkspaceRoom,
+                                    onOpenWorkspace:
+                                        widget.onOpenWorkspace == null
+                                        ? null
+                                        : _enterWorkspace,
+                                  ),
+                                ),
+                              ),
+                              const PaneDivider(),
+                            ],
+                            if (metrics.showFeed) ...[
+                              WorkspacePanelMotion(
+                                animation: motion,
+                                hiddenOffset: WorkspacePanelMotions.left,
+                                child: AppPane(
+                                  width: metrics.feed,
+                                  child: _feedScroll(compact: true, topInset: 0),
+                                ),
+                              ),
+                              const PaneDivider(),
+                            ],
+                            Expanded(
+                              child: WorkspacePanelMotion(
+                                animation: motion,
+                                scaleFrom: WorkspacePanelMotions.centerScale,
+                                child: AppPane(
+                                  child: _asemanPane(bottomInset: 0),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: WorkspacePanelMotion(
-                            animation: motion,
-                            scaleFrom: WorkspacePanelMotions.centerScale,
-                            child: SizedBox(
-                              height: railHeight,
-                              child: Builder(builder: (context) {
-                                final shell = ThemeChrome.floatingShell(
-                                  context,
-                                  lift: 2,
-                                );
-                                final radius = shell.borderRadius
-                                        is BorderRadius
-                                    ? shell.borderRadius as BorderRadius
-                                    : context.cardBorderRadius;
-                                return DecoratedBox(
-                                  decoration: shell,
-                                  child: GlassSurface(
-                                    alpha: AppSurfaces.cardAlphaOf(context),
-                                    blur: AppSurfaces.blurSigmaOf(context),
-                                    borderRadius: radius,
-                                    child: _asemanPane(bottomInset: 0),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        WorkspacePanelMotion(
-                          animation: motion,
-                          hiddenOffset: WorkspacePanelMotions.right,
-                          child: Padding(
-                            padding: EdgeInsets.only(top: appBarInset),
-                            child: _DesktopRail(
-                              width: railWidth,
-                              height: railHeight,
-                              child: _feedScroll(compact: true, topInset: 0),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   );
                 },
               ),
             ),
           ),
-          // Floating glass app bar over every home tab / desktop rails.
+          // Phones keep the floating pill. Desktop draws its bar in the page column.
+          if (compact)
           SafeArea(
             bottom: false,
             child: ThemeSlotHost(
@@ -500,10 +501,14 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                   builder: (context, _) => HomeTabBar(
                     selectedSlot: _mobileSlot,
                     onSelect: _setMobileSlot,
-                    handle: widget.dependencies.sessionController.session
-                            ?.handle ??
+                    handle:
+                        widget.dependencies.sessionController.session?.handle ??
                         '',
-                    accountId: widget.dependencies.sessionController.session
+                    accountId:
+                        widget
+                            .dependencies
+                            .sessionController
+                            .session
                             ?.accountId ??
                         '',
                     avatar: widget.dependencies.service.avatarImage(
@@ -566,12 +571,17 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
         },
       );
 
-  Widget _workspaceBar(BuildContext context, bool compact) =>
+  Widget _workspaceBar(
+    BuildContext context,
+    bool compact, {
+    bool anchored = false,
+  }) =>
       // Rebuilt when the account's avatar changes.
       ListenableBuilder(
         listenable: widget.dependencies.sessionController,
         builder: (context, _) => WorkspaceHeader(
           compact: compact,
+          anchored: anchored,
           feed: true,
           onOpenNotifications: _openNotifications,
           unreadNotifications: _unreadNotifications,
@@ -581,19 +591,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
           avatar: widget.dependencies.service.avatarImage(
             widget.dependencies.sessionController.avatar,
           ),
-          onOpenAdmin: !widget.dependencies.sessionController.isAdmin
-              ? null
-              : () async {
-                  await _adminConsole.ensure();
-                  if (!context.mounted) return;
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => admin.AdminScreen(
-                        dependencies: widget.dependencies,
-                      ),
-                    ),
-                  );
-                },
+          // Profile and admin live in Settings. Widgets stays: pinned windows
+          // are not a settings section.
           onOpenWidgetsLibrary: () => showWidgetsLibrary(
             context,
             widget.dependencies,
@@ -601,9 +600,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                 ? null
                 : (name) => unawaited(_enterWorkspace(name)),
           ),
-          onOpenProfile: compact
-              ? null
-              : () => showProfileMenu(context, widget.dependencies),
         ),
       );
 
@@ -622,13 +618,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
             child: ProfileMenuBody(
               dependencies: widget.dependencies,
               showAdmin: widget.dependencies.sessionController.isAdmin,
-              showMessages: false,
               onSelect: (action) => unawaited(
-                dispatchProfileAction(
-                  context,
-                  widget.dependencies,
-                  action,
-                ),
+                dispatchProfileAction(context, widget.dependencies, action),
               ),
             ),
           ),
@@ -748,16 +739,17 @@ class _HeroContent extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.hardEdge,
       children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: fade,
-              child: CustomPaint(
-                painter: GlowPainter(scheme.primary, scheme.tertiary),
+        if (ThemeChrome.paintsAtmosphere(context))
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: fade,
+                child: CustomPaint(
+                  painter: GlowPainter(scheme.primary, scheme.tertiary),
+                ),
               ),
             ),
           ),
-        ),
         Positioned(
           top: 12,
           left: 0,
@@ -848,15 +840,21 @@ class HomeTabBar extends StatelessWidget {
     final barH = _barHeight(context);
     final iconSize = tokens?.language.iconSize ?? 22;
     final metas = homePhoneTabsOf(context);
-    final tabs = [
-      for (final meta in metas) _specFor(meta),
-    ];
+    final tabs = [for (final meta in metas) _specFor(meta)];
     if (tabs.isEmpty) {
       tabs.addAll([
-        const _HomeTabSpec(FeatureSlots.homeChats, 'Chats',
-            icon: Icons.forum_outlined, selectedIcon: Icons.forum_rounded),
-        const _HomeTabSpec(FeatureSlots.homeExplore, 'Explore',
-            icon: Icons.explore_outlined, selectedIcon: Icons.explore_rounded),
+        const _HomeTabSpec(
+          FeatureSlots.homeChats,
+          'Chats',
+          icon: Icons.forum_outlined,
+          selectedIcon: Icons.forum_rounded,
+        ),
+        const _HomeTabSpec(
+          FeatureSlots.homeExplore,
+          'Explore',
+          icon: Icons.explore_outlined,
+          selectedIcon: Icons.explore_rounded,
+        ),
         const _HomeTabSpec(FeatureSlots.homeYou, 'You', avatar: true),
       ]);
     }
@@ -871,8 +869,11 @@ class HomeTabBar extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: capsuleRadius,
-            boxShadow: tokens?.language.shadow
-                    .resolve(scheme, accent: scheme.primary) ??
+            boxShadow:
+                tokens?.language.shadow.resolve(
+                  scheme,
+                  accent: scheme.primary,
+                ) ??
                 AppFab.glowOf(scheme),
           ),
           child: GlassSurface(
@@ -967,8 +968,9 @@ class _HomeTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color =
-        selected ? AppFab.tabIndicatorInkOf(scheme) : scheme.onSurfaceVariant;
+    final color = selected
+        ? AppFab.tabIndicatorInkOf(scheme)
+        : scheme.onSurfaceVariant;
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
     final avatarR = (iconSize * .5).clamp(9.0, 14.0);
     return Semantics(
@@ -982,33 +984,35 @@ class _HomeTabButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (spec.avatar)
-              Builder(builder: (context) {
-                final size = avatarR * 2;
-                final corners = context.avatarBorderRadius(size);
-                final face = AvatarFace(
-                  size: size,
-                  borderRadius: corners,
-                  backgroundColor: color.withValues(alpha: .18),
-                  foregroundImage: avatar,
-                  onImageError: avatar == null ? null : (_, __) {},
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      fontSize: avatarR * .9,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                      color: color,
+              Builder(
+                builder: (context) {
+                  final size = avatarR * 2;
+                  final corners = context.avatarBorderRadius(size);
+                  final face = AvatarFace(
+                    size: size,
+                    borderRadius: corners,
+                    backgroundColor: color.withValues(alpha: .18),
+                    foregroundImage: avatar,
+                    onImageError: avatar == null ? null : (_, __) {},
+                    child: Text(
+                      initials,
+                      style: TextStyle(
+                        fontSize: avatarR * .9,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                        color: color,
+                      ),
                     ),
-                  ),
-                );
-                return HaloRing(
-                  pad: 1.6,
-                  identity: HaloRingCache.person(accountId),
-                  accent: color,
-                  borderRadius: corners,
-                  child: face,
-                );
-              })
+                  );
+                  return HaloRing(
+                    pad: 1.6,
+                    identity: HaloRingCache.person(accountId),
+                    accent: color,
+                    borderRadius: corners,
+                    child: face,
+                  );
+                },
+              )
             else
               Icon(
                 selected ? spec.selectedIcon! : spec.icon!,
@@ -1023,7 +1027,9 @@ class _HomeTabButton extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 height: 1.1,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: selected
+                    ? ThemeChrome.selectedNavWeight(context)
+                    : FontWeight.w500,
                 color: color,
               ),
             ),
@@ -1184,38 +1190,3 @@ class _EmptyFeed extends StatelessWidget {
   }
 }
 
-/// Chrome around the desktop chats and posts rails.
-class _DesktopRail extends StatelessWidget {
-  const _DesktopRail({
-    required this.width,
-    required this.height,
-    required this.child,
-  });
-
-  final double width;
-  final double height;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Builder(builder: (context) {
-        final shell = ThemeChrome.floatingShell(context, lift: 2);
-        final radius = shell.borderRadius is BorderRadius
-            ? shell.borderRadius as BorderRadius
-            : context.cardBorderRadius;
-        return DecoratedBox(
-          decoration: shell,
-          child: GlassSurface(
-            alpha: AppSurfaces.cardAlphaOf(context),
-            blur: AppSurfaces.blurSigmaOf(context),
-            borderRadius: radius,
-            child: SizedBox.expand(child: child),
-          ),
-        );
-      }),
-    );
-  }
-}

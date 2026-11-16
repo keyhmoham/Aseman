@@ -33,6 +33,10 @@ class DeskController extends ChangeNotifier {
   /// Windows hidden to the dock on this screen (still open on the node).
   final Set<String> _minimized = {};
 
+  /// Windows open as floating cards over the workspace (desktop). The phone
+  /// board does not read this; a window stays on the widget grid either way.
+  final Set<String> _presented = {};
+
   int _pending = 0;
   int _interacting = 0;
   Timer? _poll;
@@ -54,6 +58,20 @@ class DeskController extends ChangeNotifier {
   bool isMinimized(String id) =>
       _minimized.contains(id) && _state.windows.any((w) => w.id == id);
 
+  /// Whether [id] is open as a floating card over the workspace.
+  bool isPresented(String id) =>
+      _presented.contains(id) && _state.windows.any((w) => w.id == id);
+
+  /// Opens [id] as a floating card: back from the dock if it was minimized,
+  /// and in front of the other cards.
+  void present(String id) {
+    if (!_state.windows.any((w) => w.id == id)) return;
+    final wasMinimized = _minimized.remove(id);
+    final added = _presented.add(id);
+    if (wasMinimized || added) _notify();
+    unawaited(raise(id));
+  }
+
   /// Shows the desk of [room] (a room id, or `home`) in [space].
   void attach(String space, String room) {
     room = room.isEmpty ? 'home' : room;
@@ -66,6 +84,7 @@ class DeskController extends ChangeNotifier {
     _pinnedOpen = false;
     _maximized = null;
     _minimized.clear();
+    _presented.clear();
     _reported = Size.zero;
     _poll?.cancel();
     _notify();
@@ -102,8 +121,10 @@ class DeskController extends ChangeNotifier {
     }
   }
 
-  Future<List<String>> _send(List<Map<String, dynamic>> ops,
-      {DeskState? optimistic}) async {
+  Future<List<String>> _send(
+    List<Map<String, dynamic>> ops, {
+    DeskState? optimistic,
+  }) async {
     if (_space.isEmpty) return const [];
     if (optimistic != null) {
       _state = optimistic;
@@ -138,23 +159,27 @@ class DeskController extends ChangeNotifier {
 
   int get _topZ => _state.windows.fold(0, (z, w) => w.z > z ? w.z : z);
 
-  Future<String?> open(String tool,
-      {String kind = '',
-      String title = '',
-      String microtool = '',
-      Map<String, dynamic> args = const {},
-      Rect? rect,
-      Size? size,
-      DeskCompact? compact}) async {
+  Future<String?> open(
+    String tool, {
+    String kind = '',
+    String title = '',
+    String microtool = '',
+    Map<String, dynamic> args = const {},
+    Rect? rect,
+    Size? size,
+    DeskCompact? compact,
+  }) async {
     final ids = await _send([
-      DeskOps.open(tool,
-          compact: compact,
-          kind: kind,
-          title: title,
-          microtool: microtool,
-          args: args,
-          rect: rect,
-          size: size)
+      DeskOps.open(
+        tool,
+        compact: compact,
+        kind: kind,
+        title: title,
+        microtool: microtool,
+        args: args,
+        rect: rect,
+        size: size,
+      ),
     ]);
     _focusTool = null;
     // A freshly opened window should be visible, not left minimized.
@@ -167,52 +192,71 @@ class DeskController extends ChangeNotifier {
   /// Opens a web page of the space (a preview gateway path,
   /// /v1/proxy/<id>/…) as a card window; [tool] is the tool it is a
   /// frontend of, if any.
-  Future<String?> openPage(String page,
-          {String tool = '', String title = '', Size? size}) =>
-      open(tool,
-          kind: webKind,
-          args: {'page': page},
-          title: title,
-          size: size ?? const Size(720, 600));
+  Future<String?> openPage(
+    String page, {
+    String tool = '',
+    String title = '',
+    Size? size,
+  }) => open(
+    tool,
+    kind: webKind,
+    args: {'page': page},
+    title: title,
+    size: size ?? const Size(720, 600),
+  );
 
   /// Opens a file of the space's workspace (`/workspace/…`) as a card
   /// window, shown with the app's file viewer.
   Future<String?> openFile(String path, {String title = '', Size? size}) =>
-      open(fileTool,
-          kind: fileKind,
-          args: {'path': path},
-          title: title.isEmpty ? path.split('/').last : title,
-          size: size ?? const Size(680, 620));
+      open(
+        fileTool,
+        kind: fileKind,
+        args: {'path': path},
+        title: title.isEmpty ? path.split('/').last : title,
+        size: size ?? const Size(680, 620),
+      );
 
   /// Opens a file shared in a chat or a post (a video to play) as a card
   /// window, shown with the app's media viewer.
-  Future<String?> openSharedFile(String fileId,
-          {String title = '', Size? size}) =>
-      open(fileTool,
-          kind: fileKind,
-          args: {'file_id': fileId},
-          title: title.isEmpty ? 'File' : title,
-          size: size ?? const Size(720, 480));
+  Future<String?> openSharedFile(
+    String fileId, {
+    String title = '',
+    Size? size,
+  }) => open(
+    fileTool,
+    kind: fileKind,
+    args: {'file_id': fileId},
+    title: title.isEmpty ? 'File' : title,
+    size: size ?? const Size(720, 480),
+  );
 
   /// Opens the project's computer, its desktop live, as a card window (the
   /// one already open is brought to the front).
-  Future<String?> openComputer({Size? size}) => open(computerTool,
-      kind: computerKind,
-      title: 'Computer',
-      size: size ?? const Size(960, 660));
+  Future<String?> openComputer({Size? size}) => open(
+    computerTool,
+    kind: computerKind,
+    title: 'Computer',
+    size: size ?? const Size(960, 660),
+  );
 
-  Future<String?> openPin(DeskPin pin) => open(pin.tool,
-      kind: pin.kind,
-      title: pin.title,
-      microtool: pin.microtool,
-      args: pin.args,
-      size: pin.size,
-      compact: pin.compact);
+  Future<String?> openPin(DeskPin pin) => open(
+    pin.tool,
+    kind: pin.kind,
+    title: pin.title,
+    microtool: pin.microtool,
+    args: pin.args,
+    size: pin.size,
+    compact: pin.compact,
+  );
 
-  Future<void> move(String id, Rect rect) => _send([DeskOps.move(id, rect)],
-      optimistic: _state.copyWith(windows: [
-        for (final w in _state.windows) w.id == id ? w.copyWith(rect: rect) : w
-      ]));
+  Future<void> move(String id, Rect rect) => _send(
+    [DeskOps.move(id, rect)],
+    optimistic: _state.copyWith(
+      windows: [
+        for (final w in _state.windows) w.id == id ? w.copyWith(rect: rect) : w,
+      ],
+    ),
+  );
 
   /// Moves window [id] on the phone board to index [order] (and gives it
   /// [shape] / [size]), at once here and then on the node.
@@ -227,14 +271,19 @@ class DeskController extends ChangeNotifier {
     final arranged = {
       for (var i = 0; i < next.length; i++)
         next[i].id: (next[i].compact ?? const DeskCompact()).copyWith(
-            order: i,
-            shape: next[i].id == id ? shape : null,
-            size: next[i].id == id ? size : null),
+          order: i,
+          shape: next[i].id == id ? shape : null,
+          size: next[i].id == id ? size : null,
+        ),
     };
-    return _send([DeskOps.arrange(id, order: at, shape: shape, size: size)],
-        optimistic: _state.copyWith(windows: [
-          for (final x in _state.windows) x.copyWith(compact: arranged[x.id])
-        ]));
+    return _send(
+      [DeskOps.arrange(id, order: at, shape: shape, size: size)],
+      optimistic: _state.copyWith(
+        windows: [
+          for (final x in _state.windows) x.copyWith(compact: arranged[x.id]),
+        ],
+      ),
+    );
   }
 
   /// Brings a window to the front.
@@ -245,29 +294,44 @@ class DeskController extends ChangeNotifier {
         (w.z == top && _state.windows.where((x) => x.z == top).length == 1)) {
       return;
     }
-    await _send([DeskOps.focus(id)],
-        optimistic: _state.copyWith(windows: [
+    await _send(
+      [DeskOps.focus(id)],
+      optimistic: _state.copyWith(
+        windows: [
           for (final x in _state.windows)
-            x.id == id ? x.copyWith(z: top + 1) : x
-        ]));
+            x.id == id ? x.copyWith(z: top + 1) : x,
+        ],
+      ),
+    );
   }
 
   Future<void> close(String id) {
     if (_maximized == id) _maximized = null;
     _minimized.remove(id);
-    return _send([DeskOps.close(id)],
-        optimistic: _state.copyWith(
-            windows: _state.windows.where((w) => w.id != id).toList()));
+    _presented.remove(id);
+    return _send(
+      [DeskOps.close(id)],
+      optimistic: _state.copyWith(
+        windows: _state.windows.where((w) => w.id != id).toList(),
+      ),
+    );
   }
 
   /// Closes every window of [tool] (the dock's close).
   Future<void> closeTool(String tool) {
     if (_focusTool == tool) _focusTool = null;
     _minimized.removeWhere(
-        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
-    return _send([DeskOps.closeTool(tool)],
-        optimistic: _state.copyWith(
-            windows: _state.windows.where((w) => w.tool != tool).toList()));
+      (id) => _state.windows.any((w) => w.id == id && w.tool == tool),
+    );
+    _presented.removeWhere(
+      (id) => _state.windows.any((w) => w.id == id && w.tool == tool),
+    );
+    return _send(
+      [DeskOps.closeTool(tool)],
+      optimistic: _state.copyWith(
+        windows: _state.windows.where((w) => w.tool != tool).toList(),
+      ),
+    );
   }
 
   /// Hides [id] to the dock on this screen without closing it on the node.
@@ -286,7 +350,8 @@ class DeskController extends ChangeNotifier {
   void restoreTool(String tool) {
     final before = _minimized.length;
     _minimized.removeWhere(
-        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
+      (id) => _state.windows.any((w) => w.id == id && w.tool == tool),
+    );
     if (_minimized.length != before) _notify();
   }
 
@@ -304,9 +369,12 @@ class DeskController extends ChangeNotifier {
     return _send([DeskOps.pin(w.id)]);
   }
 
-  Future<void> unpin(String pinId) => _send([DeskOps.unpin(pinId)],
-      optimistic: _state.copyWith(
-          pins: _state.pins.where((p) => p.id != pinId).toList()));
+  Future<void> unpin(String pinId) => _send(
+    [DeskOps.unpin(pinId)],
+    optimistic: _state.copyWith(
+      pins: _state.pins.where((p) => p.id != pinId).toList(),
+    ),
+  );
 
   /// Shows only [tool]'s windows, gathered; the same tool again (or null)
   /// shows every window where it was. Tapping a tool also restores its
@@ -319,10 +387,12 @@ class DeskController extends ChangeNotifier {
       _notify();
       return;
     }
-    final hadMinimized = _state.windows
-        .any((w) => w.tool == tool && _minimized.contains(w.id));
+    final hadMinimized = _state.windows.any(
+      (w) => w.tool == tool && _minimized.contains(w.id),
+    );
     _minimized.removeWhere(
-        (id) => _state.windows.any((w) => w.id == id && w.tool == tool));
+      (id) => _state.windows.any((w) => w.id == id && w.tool == tool),
+    );
     if (hadMinimized) {
       _focusTool = tool;
       _notify();
@@ -354,8 +424,11 @@ class DeskController extends ChangeNotifier {
     _viewportTimer?.cancel();
     _viewportTimer = Timer(const Duration(milliseconds: 700), () {
       _reported = size;
-      unawaited(api.update(_space, _room, [DeskOps.viewport(size)]).then((_) {},
-          onError: (_) {}));
+      unawaited(
+        api
+            .update(_space, _room, [DeskOps.viewport(size)])
+            .then((_) {}, onError: (_) {}),
+      );
     });
   }
 

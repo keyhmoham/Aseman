@@ -82,7 +82,8 @@ class FakeAsemanService extends AsemanService {
   ];
 
   @override
-  Future<Workspace> createSpace(String name, String description) async {
+  Future<Workspace> createSpace(String name, String description,
+      {String kind = 'room'}) async {
     final id =
         '0000000000000001${DateTime.now().microsecondsSinceEpoch.toRadixString(16).padLeft(16, '0').substring(0, 16)}';
     final created = Workspace(id: id, ownerId: 'me', name: name, role: 'owner');
@@ -195,6 +196,15 @@ class FakeAsemanService extends AsemanService {
       }
       node[segments.last] = op['value'];
     }
+  }
+
+  /// Listing installs recorded as `(listingId, spaceId)`.
+  final List<(String, String)> installs = [];
+
+  @override
+  Future<String> installListing(String listingId, {String? spaceId}) async {
+    installs.add((listingId, spaceId ?? ''));
+    return 'bot-installed';
   }
 
   @override
@@ -538,7 +548,9 @@ class FakeAsemanService extends AsemanService {
   Future<List<ChatSummary>> fetchChats({
     String kind = '',
     String query = '',
+    bool includeSaved = false,
   }) async => chats
+      .where((c) => includeSaved || !c.isAseman)
       .where((c) => kind.isEmpty || (kind == 'direct') == c.direct)
       .where(
         (c) =>
@@ -629,6 +641,28 @@ class FakeAsemanService extends AsemanService {
     );
   }
 
+  /// Direct chats read `users.dm_list`. The fixture stores those messages on
+  /// the direct space's room, the same way [fetchRoomChat] does.
+  @override
+  Future<RoomChatPage> fetchDirectChat(
+    String peer, {
+    int limit = 50,
+    DateTime? before,
+  }) async {
+    for (final chat in chats) {
+      if (!chat.direct) continue;
+      if (chat.peer?.id == peer || chat.roomId == peer) {
+        return fetchRoomChat(
+          chat.spaceId,
+          chat.roomId,
+          limit: limit,
+          before: before,
+        );
+      }
+    }
+    return const RoomChatPage();
+  }
+
   /// Earlier bodies kept when a message is edited, by message id (newest first).
   final Map<String, List<MessageEditVersion>> messageEdits = {};
 
@@ -702,11 +736,11 @@ class FakeAsemanService extends AsemanService {
       chatCalls.add('typing:$spaceId');
 
   @override
-  Future<void> pinChat(String spaceId, String roomId, bool pinned) async {
-    chatCalls.add('${pinned ? 'pin' : 'unpin'}:$spaceId');
+  Future<void> pinChat(String peer, bool pinned) async {
+    chatCalls.add('${pinned ? 'pin' : 'unpin'}:$peer');
     chats = [
       for (final c in chats)
-        c.spaceId == spaceId && c.roomId == roomId
+        (c.peer?.id == peer || (c.peer == null && c.spaceId == peer))
             ? (pinned
                   ? c.copyWith(pinnedAt: DateTime.now())
                   : c.copyWith(clearPin: true))
@@ -719,9 +753,26 @@ class FakeAsemanService extends AsemanService {
       chatCalls.add('clear:$spaceId');
 
   @override
-  Future<void> blockDirect(String spaceId, bool blocked) async {
-    chatCalls.add('${blocked ? 'block' : 'unblock'}:$spaceId');
-    chatState[spaceId] = RoomChatPage(blocked: blocked, canSend: !blocked);
+  Future<void> blockDirect(String peer, bool blocked) async {
+    chatCalls.add('${blocked ? 'block' : 'unblock'}:$peer');
+    var key = peer;
+    for (final chat in chats) {
+      if (chat.direct && chat.peer?.id == peer) {
+        key = chat.spaceId;
+        break;
+      }
+    }
+    chatState[key] = RoomChatPage(blocked: blocked, canSend: !blocked);
+  }
+
+  @override
+  Future<void> markDirectRead(String peer) async {
+    for (final chat in chats) {
+      if (chat.direct && (chat.peer?.id == peer || chat.roomId == peer)) {
+        seen.add(chat.spaceId);
+        return;
+      }
+    }
   }
 
   @override

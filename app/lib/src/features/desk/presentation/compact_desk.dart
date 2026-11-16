@@ -37,6 +37,7 @@ class CompactDesk extends StatefulWidget {
     required this.pinPreview,
     this.emptyState,
     this.topInset = 0,
+    this.floatOnOpen = false,
   });
 
   final DeskController controller;
@@ -47,6 +48,10 @@ class CompactDesk extends StatefulWidget {
   final Widget Function(DeskPin pin) pinPreview;
   final Widget? emptyState;
   final double topInset;
+
+  /// Open a tapped widget as a floating card ([DeskController.present])
+  /// instead of a bottom sheet. The desktop room desk uses this.
+  final bool floatOnOpen;
 
   @override
   State<CompactDesk> createState() => CompactDeskState();
@@ -112,23 +117,23 @@ List<BoardSlot> packBoard(List<BoardSpan> spans, int columns) {
 
 /// The outline of a widget of [shape].
 ShapeBorder boardShape(String shape) => switch (shape) {
-      'squircle' => const ContinuousRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(64)),
-        ),
-      'pill' => const StadiumBorder(),
-      'circle' => const CircleBorder(),
-      'leaf' => const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(44),
-            bottomRight: Radius.circular(44),
-            topRight: Radius.circular(12),
-            bottomLeft: Radius.circular(12),
-          ),
-        ),
-      _ => const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(26)),
-        ),
-    };
+  'squircle' => const ContinuousRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(64)),
+  ),
+  'pill' => const StadiumBorder(),
+  'circle' => const CircleBorder(),
+  'leaf' => const RoundedRectangleBorder(
+    borderRadius: BorderRadius.only(
+      topLeft: Radius.circular(44),
+      bottomRight: Radius.circular(44),
+      topRight: Radius.circular(12),
+      bottomLeft: Radius.circular(12),
+    ),
+  ),
+  _ => const RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(26)),
+  ),
+};
 
 class CompactDeskState extends State<CompactDesk> {
   static const double _gap = 12;
@@ -198,9 +203,11 @@ class CompactDeskState extends State<CompactDesk> {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _reveal(arrived.last),
         );
-        _timers.add(Timer(const Duration(milliseconds: 1600), () {
-          if (mounted) setState(() => _fresh.removeAll(arrived));
-        }));
+        _timers.add(
+          Timer(const Duration(milliseconds: 1600), () {
+            if (mounted) setState(() => _fresh.removeAll(arrived));
+          }),
+        );
       }
       _seen = ids;
     }
@@ -216,12 +223,11 @@ class CompactDeskState extends State<CompactDesk> {
       String? hinted,
       List<String> allowed,
       String fallback,
-    ) =>
-        allowed.contains(chosen)
-            ? chosen!
-            : allowed.contains(hinted)
-                ? hinted!
-                : fallback;
+    ) => allowed.contains(chosen)
+        ? chosen!
+        : allowed.contains(hinted)
+        ? hinted!
+        : fallback;
     return (
       pick(w.compact?.shape, hint?.shape, DeskCompact.shapes, 'card'),
       pick(w.compact?.size, hint?.size, DeskCompact.sizes, 'medium'),
@@ -326,15 +332,16 @@ class CompactDeskState extends State<CompactDesk> {
     // Near the edges the board scrolls along.
     if (_scroll.hasClients) {
       final view = _scroll.position.viewportDimension;
-      final y = d.globalPosition.dy -
+      final y =
+          d.globalPosition.dy -
           (context.findRenderObject()! as RenderBox)
               .localToGlobal(Offset.zero)
               .dy;
       final step = y < widget.topInset + 72
           ? -12.0
           : y > view - 180
-              ? 12.0
-              : 0.0;
+          ? 12.0
+          : 0.0;
       if (step != 0) {
         _scroll.jumpTo(
           (_scroll.offset + step).clamp(0.0, _scroll.position.maxScrollExtent),
@@ -361,6 +368,16 @@ class CompactDeskState extends State<CompactDesk> {
     if (before.indexOf(id) != at) c.arrange(id, order: at);
   }
 
+  /// Opens [w] in full: a floating card when [CompactDesk.floatOnOpen], else
+  /// a bottom sheet.
+  void _openFull(DeskWindow w) {
+    if (widget.floatOnOpen) {
+      c.present(w.id);
+      return;
+    }
+    openSheet(w);
+  }
+
   /// Opens [w] in full, in a bottom sheet.
   Future<void> openSheet(DeskWindow w) {
     final media = ElpianMediaScope.maybeOf(context);
@@ -372,7 +389,8 @@ class CompactDeskState extends State<CompactDesk> {
         child: KeyedSubtree(
           key: ValueKey('sheet-${window.id}'),
           child: Builder(
-              builder: (context) => widget.windowContent(context, window)),
+            builder: (context) => widget.windowContent(context, window),
+          ),
         ),
       ),
     );
@@ -390,7 +408,7 @@ class CompactDeskState extends State<CompactDesk> {
         size: size,
         pinned: c.isPinned(w),
         onLook: (shape, size) => c.arrange(w.id, shape: shape, size: size),
-        onOpen: () => openSheet(w),
+        onOpen: () => _openFull(w),
         onPin: () => c.togglePin(w),
         onClose: () => c.close(w.id),
       ),
@@ -507,7 +525,7 @@ class CompactDeskState extends State<CompactDesk> {
       width: rect.width,
       height: rect.height,
       child: GestureDetector(
-        onTap: () => openSheet(w),
+        onTap: () => _openFull(w),
         onLongPressStart: (d) => _dragStart(w, d, rect),
         onLongPressMoveUpdate: (d) => _dragMove(d, width),
         onLongPressEnd: (_) => _dragEnd(),
@@ -529,18 +547,21 @@ class CompactDeskState extends State<CompactDesk> {
               shape: shape,
               size: size,
               title: w.label,
-              accent: ToolAvatar.schemeFor(w.tool, Theme.of(context).brightness)
-                  .primary,
+              accent: ToolAvatar.schemeFor(
+                w.tool,
+                Theme.of(context).brightness,
+              ).primary,
               onHint: (hint) {
                 if (_hints[w.id] != hint && mounted) {
                   setState(() => _hints[w.id] = hint);
                 }
               },
-              onExpand: () => openSheet(w),
+              onExpand: () => _openFull(w),
               child: KeyedSubtree(
                 key: ValueKey('compact-${w.id}'),
                 child: Builder(
-                    builder: (context) => widget.windowContent(context, w)),
+                  builder: (context) => widget.windowContent(context, w),
+                ),
               ),
             ),
           ),
@@ -575,8 +596,10 @@ class CompactWidgetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tool =
-        ToolAvatar.schemeFor(window.tool, Theme.of(context).brightness);
+    final tool = ToolAvatar.schemeFor(
+      window.tool,
+      Theme.of(context).brightness,
+    );
     final border = boardShape(shape);
     final round = shape == 'circle';
     final pill = shape == 'pill';
@@ -584,9 +607,9 @@ class CompactWidgetTile extends StatelessWidget {
     final inset = round
         ? 18.0
         : pill
-            // (A capsule's ends curve in deep: keep clear of them.)
-            ? 34.0
-            : 14.0;
+        // (A capsule's ends curve in deep: keep clear of them.)
+        ? 34.0
+        : 14.0;
     final header = Row(
       children: [
         ToolAvatar(tool: window.tool, name: window.name, size: small ? 22 : 26),
@@ -598,7 +621,9 @@ class CompactWidgetTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
         ] else
@@ -630,9 +655,7 @@ class CompactWidgetTile extends StatelessWidget {
           shape: border is OutlinedBorder
               ? border.copyWith(
                   side: BorderSide(
-                    color: fresh
-                        ? accent
-                        : AppSurfaces.cardBorder(scheme),
+                    color: fresh ? accent : AppSurfaces.cardBorder(scheme),
                     width: fresh ? 2 : 1,
                   ),
                 )
@@ -734,8 +757,9 @@ class _WindowSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final w =
-            controller.state.windows.where((x) => x.id == windowId).firstOrNull;
+        final w = controller.state.windows
+            .where((x) => x.id == windowId)
+            .firstOrNull;
         if (w == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).maybePop();
@@ -749,71 +773,68 @@ class _WindowSheet extends StatelessWidget {
         final pinned = controller.isPinned(w);
         // Host [showAppSheet] sizes the chrome; fill whatever height it gives.
         return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md + 4, 0, AppSpacing.xs, AppSpacing.xs),
-                child: Row(
-                  children: [
-                    ToolAvatar(tool: w.tool, name: w.name, size: 34),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md + 4,
+                0,
+                AppSpacing.xs,
+                AppSpacing.xs,
+              ),
+              child: Row(
+                children: [
+                  ToolAvatar(tool: w.tool, name: w.name, size: 34),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          w.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        if (subtitle.isNotEmpty)
                           Text(
-                            w.label,
+                            subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
-                          if (subtitle.isNotEmpty)
-                            Text(
-                              subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
-                    if (pinned)
-                      SoftMetaChip(
-                        label: 'Pinned',
-                        icon: Icons.push_pin,
-                        accent: scheme.primary,
-                      ),
-                    IconButton(
-                      tooltip: pinned ? 'Unpin' : 'Pin to the pinned desk',
-                      onPressed: () => controller.togglePin(w),
-                      icon: Icon(
-                        pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                      ),
+                  ),
+                  if (pinned)
+                    SoftMetaChip(
+                      label: 'Pinned',
+                      icon: Icons.push_pin,
+                      accent: scheme.primary,
                     ),
-                    IconButton(
-                      tooltip: 'Minimize',
-                      onPressed: () {
-                        controller.minimize(w.id);
-                        Navigator.of(context).maybePop();
-                      },
-                      icon: const Icon(Icons.minimize_rounded),
+                  IconButton(
+                    tooltip: pinned ? 'Unpin' : 'Pin to the pinned desk',
+                    onPressed: () => controller.togglePin(w),
+                    icon: Icon(
+                      pinned ? Icons.push_pin : Icons.push_pin_outlined,
                     ),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    tooltip: 'Minimize',
+                    onPressed: () {
+                      controller.minimize(w.id);
+                      Navigator.of(context).maybePop();
+                    },
+                    icon: const Icon(Icons.minimize_rounded),
+                  ),
+                ],
               ),
-              Divider(
-                height: 1,
-                color: AppSurfaces.cardBorder(scheme),
-              ),
-              Expanded(child: content(w)),
-            ],
+            ),
+            Divider(height: 1, color: AppSurfaces.cardBorder(scheme)),
+            Expanded(child: content(w)),
+          ],
         );
       },
     );
@@ -885,9 +906,9 @@ class _WidgetMenuState extends State<_WidgetMenu> {
       if (widget.window.argsSummary.isNotEmpty) widget.window.argsSummary,
     ].join('  ·  ');
     Widget label(String title) => Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-          child: EyebrowLabel(title),
-        );
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: EyebrowLabel(title),
+    );
     return Padding(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md + 4,
@@ -920,8 +941,9 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                           widget.window.label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: text.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         Text(
                           subtitle.isEmpty ? 'Board widget' : subtitle,
@@ -934,9 +956,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                       ],
                     ),
                   ),
-                  SoftMetaChip(
-                    label: _sizeLabels[_size] ?? _size,
-                  ),
+                  SoftMetaChip(label: _sizeLabels[_size] ?? _size),
                 ],
               ),
             ),
@@ -950,10 +970,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                     SegmentedButton<String>(
                       segments: [
                         for (final s in DeskCompact.sizes)
-                          ButtonSegment(
-                            value: s,
-                            label: Text(_sizeLabels[s]!),
-                          ),
+                          ButtonSegment(value: s, label: Text(_sizeLabels[s]!)),
                       ],
                       selected: {_size},
                       onSelectionChanged: (v) => _set(size: v.first),
@@ -986,8 +1003,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                                 duration: const Duration(milliseconds: 180),
                                 curve: Curves.easeOutCubic,
                                 width: s == 'pill' ? 76 : 64,
-                                padding:
-                                    const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
                                 decoration: softSurfaceDecoration(
                                   scheme,
                                   accent: scheme.primary,
@@ -1005,7 +1021,7 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                                         color: selected
                                             ? scheme.primary
                                             : scheme.onSurfaceVariant
-                                                .withValues(alpha: .35),
+                                                  .withValues(alpha: .35),
                                         shape: boardShape(s),
                                       ),
                                     ),
@@ -1064,8 +1080,9 @@ class _WidgetMenuState extends State<_WidgetMenu> {
                   tooltip: 'Delete window',
                   style: IconButton.styleFrom(
                     foregroundColor: scheme.error,
-                    backgroundColor:
-                        scheme.errorContainer.withValues(alpha: .55),
+                    backgroundColor: scheme.errorContainer.withValues(
+                      alpha: .55,
+                    ),
                   ),
                   onPressed: () {
                     widget.onClose();

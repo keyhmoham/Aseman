@@ -15,10 +15,9 @@ import '../data/gadgets_api.dart';
 import 'gadgets_controller.dart';
 import 'gadgets_panel.dart';
 
-/// The gadgets handle: a bump on the screen's right edge, just under the
-/// workspace switcher's rocket, on every page of the shell. Tapping it opens
-/// the [GadgetManager] — a bottom sheet on phones, a floating panel beside
-/// the handle on desktop.
+/// The gadgets handle: a bump centered on the screen's right edge, on every
+/// page of the shell. Tapping it opens the [GadgetManager] — a bottom sheet
+/// on phones, a floating panel beside the handle on desktop.
 class GadgetsEdgeHandle extends StatelessWidget {
   const GadgetsEdgeHandle({
     super.key,
@@ -36,7 +35,7 @@ class GadgetsEdgeHandle extends StatelessWidget {
   /// open, used to open a gadget page once the manager closes.
   final BuildContext hostContext;
 
-  static const _width = 28.0, _height = 120.0, _gap = 2.0;
+  static const _width = 28.0, _height = 120.0;
 
   @override
   Widget build(BuildContext context) {
@@ -48,11 +47,7 @@ class GadgetsEdgeHandle extends StatelessWidget {
       child: SafeArea(
         child: Align(
           alignment: Alignment.centerRight,
-          child: Transform.translate(
-            // Stack under the rocket: half of it, a hair of gap, half of us.
-            offset: const Offset(
-                0, SwitcherEdgeHandle.height / 2 + _gap + _height / 2),
-            child: Tooltip(
+          child: Tooltip(
               message: 'Gadgets',
               child: Semantics(
                 button: true,
@@ -95,7 +90,6 @@ class GadgetsEdgeHandle extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         ),
       ),
     );

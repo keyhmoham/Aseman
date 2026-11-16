@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,7 @@ import 'package:aseman/src/features/home/presentation/workspace_screen.dart';
 import 'package:aseman/src/features/messenger/presentation/chat_page.dart';
 import 'package:aseman/src/features/messenger/presentation/messenger_panel.dart';
 import 'package:aseman/src/features/search_feed/presentation/search_feed_screen.dart';
+import 'package:aseman/src/shared/widgets/profile_menu.dart';
 import 'package:aseman/src/shared/widgets/workspace_header.dart';
 
 import '../../fake_aseman_service.dart';
@@ -20,6 +23,13 @@ Finder profileAvatar() => find.descendant(
 );
 
 Future<void> openAtlas(WidgetTester tester) async {
+  await tester.tap(
+    find.descendant(
+      of: find.byType(NavigationRail),
+      matching: find.text('Chats'),
+    ),
+  );
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Atlas Collective').first);
   await tester.pumpAndSettle();
   await tester.tap(find.text('general').first);
@@ -80,9 +90,11 @@ void main() {
       find.descendant(of: find.byType(MessengerPanel), matching: finder);
 
   /// Matches inside the open chat only — the workspace under a floating
-  /// direct-chat modal can host another [RoomChat] with the same chrome.
-  Finder inChat(Finder finder) =>
-      find.descendant(of: find.byType(ChatPage), matching: finder);
+  /// direct-chat modal can host another [ChatPage] with the same chrome.
+  Finder inChat(Finder finder) => find.descendant(
+    of: find.byType(ChatPage).last,
+    matching: finder,
+  );
 
   Future<_MessengerService> openMessenger(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
@@ -99,11 +111,9 @@ void main() {
       AsemanApp(dependencies: AppDependencies.withService(service)),
     );
     await tester.pumpAndSettle();
-    // Messages lives in the workspace profile menu, not the feed's.
-    await openAtlas(tester);
-    await tester.tap(profileAvatar());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Messages').last);
+    final nav = AsemanApp.navigatorKey.currentContext!;
+    final deps = tester.widget<AsemanApp>(find.byType(AsemanApp)).dependencies;
+    unawaited(showMessenger(nav, deps));
     await tester.pumpAndSettle();
     return service;
   }
@@ -126,7 +136,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(profileAvatar());
       await tester.pumpAndSettle();
-      expect(find.text('Store'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ProfileMenuBody),
+          matching: find.text('Store'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Wallet'), findsOneWidget);
       expect(find.text('Invitations'), findsNothing);
       await tester.tapAt(const Offset(8, 8));
@@ -181,7 +197,8 @@ void main() {
       await tester.tap(closeChat);
       await tester.pumpAndSettle();
       expect(find.text('Search chats'), findsOneWidget);
-      expect(find.byType(ChatPage), findsNothing);
+      // The home assistant stays open behind the messenger.
+      expect(find.byType(ChatPage), findsOneWidget);
     },
   );
 
@@ -225,6 +242,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    if (size.width >= 840) {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationRail),
+          matching: find.text('Chats'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
   }
 
   /// Enough direct chats that the list is taller than either the phone tab
@@ -322,6 +348,7 @@ void main() {
 
       expect(find.byType(ChatPage), findsNothing);
       expect(find.byType(WorkspaceScreen), findsOneWidget);
+      expect(find.text('Search chats'), findsOneWidget);
       expect(find.text('general desk'), findsOneWidget);
       expect(find.text('My desk'), findsNothing);
       expect(find.text('Message room…'), findsOneWidget);
@@ -461,12 +488,17 @@ void main() {
     final service = await openMessenger(tester);
     await tester.tap(inMessenger(find.text('AlphaBot')));
     await tester.pumpAndSettle();
-    await tester.enterText(inChat(find.byType(TextField)).last, 'Draft the kickoff agenda');
+    await tester.enterText(
+      inChat(find.byType(TextField)).last,
+      'Draft the kickoff agenda',
+    );
+    await tester.pump();
     await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.sent, hasLength(1));
     expect(service.sent.single.space, FakeAsemanService.agentDirectId);
-    expect(service.sent.single.mentions, ['bot-alpha']);
+    // A bare note names nobody: the founding peer of the direct space runs.
+    expect(service.sent.single.mentions, isEmpty);
     // The read cursor follows the open chat.
     expect(service.seen, contains(FakeAsemanService.agentDirectId));
   });
@@ -544,6 +576,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Reply to Maya Chen'), findsOneWidget);
     await tester.enterText(inChat(find.byType(TextField)).last, 'Sure');
+    await tester.pump();
     await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.sent.single.replyTo, 'm1');
@@ -555,6 +588,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Edit message'), findsOneWidget);
     await tester.enterText(inChat(find.byType(TextField)).last, 'Yes, at ten');
+    await tester.pump();
     await tester.tap(inChat(find.byTooltip('Send')));
     await tester.pumpAndSettle();
     expect(service.chatCalls, contains('edit:m2'));
@@ -603,7 +637,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Block'));
     await tester.pumpAndSettle();
-    expect(service.chatCalls, contains('block:${FakeAsemanService.directId}'));
+    expect(service.chatCalls, contains('block:00000000000000010000000000000042'));
     expect(find.textContaining('You blocked this chat'), findsOneWidget);
     expect(inChat(find.byTooltip('Send')), findsNothing);
 
@@ -611,7 +645,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unblock'));
     await tester.pumpAndSettle();
-    expect(inChat(find.byTooltip('Send')), findsOneWidget);
+    expect(inChat(find.byTooltip('Record a voice message')), findsOneWidget);
   });
 
   testWidgets('a long-pressed direct chat is pinned to the top of the list', (

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/layout/breakpoints.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 
@@ -21,8 +22,18 @@ Future<bool> reportToAdmins(BuildContext context, AsemanService service,
     String roomId = '',
     String peer = '',
     String messageId = ''}) async {
-  final result = await showAppDialog<(String, String)>(
-      context: context, builder: (_) => _ReportDialog(chat: messageId.isEmpty));
+  final wide = MediaQuery.sizeOf(context).width >= Breakpoints.expanded;
+  final result = wide
+      ? await showDockedPanel<(String, String)>(
+          context: context,
+          width: 420,
+          barrierLabel: 'Close report',
+          builder: (_) => _ReportDialog(chat: messageId.isEmpty, docked: true),
+        )
+      : await showAppDialog<(String, String)>(
+          context: context,
+          builder: (_) => _ReportDialog(chat: messageId.isEmpty),
+        );
   if (result == null || !context.mounted) return false;
   try {
     if (peer.isNotEmpty) {
@@ -47,10 +58,13 @@ Future<bool> reportToAdmins(BuildContext context, AsemanService service,
 }
 
 class _ReportDialog extends StatefulWidget {
-  const _ReportDialog({required this.chat});
+  const _ReportDialog({required this.chat, this.docked = false});
 
   /// A whole chat rather than one message.
   final bool chat;
+
+  /// Full-height drawer from the right, used on a desktop window.
+  final bool docked;
 
   @override
   State<_ReportDialog> createState() => _ReportDialogState();
@@ -69,53 +83,79 @@ class _ReportDialogState extends State<_ReportDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final form = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              widget.chat
+                  ? 'The node\'s admins will see the latest messages of this chat.'
+                  : 'The node\'s admins will see this message and the ones before it.',
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+          const SizedBox(height: 8),
+          RadioGroup<String>(
+              groupValue: _reason,
+              onChanged: (v) => setState(() => _reason = v),
+              child: Column(children: [
+                for (final (value, label) in reportReasons)
+                  RadioListTile<String>(
+                      value: value,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(label))
+              ])),
+          const SizedBox(height: 8),
+          TextField(
+              controller: _note,
+              maxLength: 1000,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                  labelText: 'Anything to add (optional)',
+                  border: OutlineInputBorder()))
+        ]);
+    final actions = [
+      TextButton(
+          onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      FilledButton(
+          onPressed: _reason == null
+              ? null
+              : () => Navigator.pop(context, (_reason!, _note.text)),
+          child: const Text('Report'))
+    ];
+    if (widget.docked) {
+      return Material(
+        color: scheme.surface,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Icon(Icons.flag_outlined, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.chat ? 'Report this chat' : 'Report this message',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                Expanded(child: SingleChildScrollView(child: form)),
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return AlertDialog(
         icon: const Icon(Icons.flag_outlined),
         title: Text(widget.chat ? 'Report this chat' : 'Report this message'),
-        content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(
-                      widget.chat
-                          ? 'The node\'s admins will see the latest messages of this chat.'
-                          : 'The node\'s admins will see this message and the ones before it.',
-                      style: TextStyle(
-                          fontSize: 13, color: scheme.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  RadioGroup<String>(
-                      groupValue: _reason,
-                      onChanged: (v) => setState(() => _reason = v),
-                      child: Column(children: [
-                        for (final (value, label) in reportReasons)
-                          RadioListTile<String>(
-                              value: value,
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(label))
-                      ])),
-                  const SizedBox(height: 8),
-                  TextField(
-                      controller: _note,
-                      maxLength: 1000,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                          labelText: 'Anything to add (optional)',
-                          border: OutlineInputBorder()))
-                ]))),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: _reason == null
-                  ? null
-                  : () => Navigator.pop(context, (_reason!, _note.text)),
-              child: const Text('Report'))
-        ]);
+        content: SizedBox(width: 420, child: SingleChildScrollView(child: form)),
+        actions: actions);
   }
 }

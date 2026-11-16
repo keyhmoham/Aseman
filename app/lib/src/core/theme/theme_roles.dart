@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'aseman_tokens.dart';
+import 'default_theme_packs.dart';
 import 'theme_pack.dart';
 
 /// Pack-aware colour roles for widgets that used to hardcode Material Accents
@@ -64,9 +65,12 @@ abstract final class ThemeRoles {
     return Theme.of(context).colorScheme.primary;
   }
 
-  /// Quiet selected-row fill (never a loud primaryContainer wash).
+  /// Selected-row fill. Paper uses the accent's secondary container tone.
   static Color selectedFill(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+      return scheme.secondaryContainer;
+    }
     final accent = partAccent(context, ThemePartId.selection);
     return Color.alphaBlend(
       accent.withValues(alpha: .10),
@@ -75,8 +79,12 @@ abstract final class ThemeRoles {
   }
 
   /// Ink drawn on [selectedFill] (icons, labels).
-  static Color selectedInk(BuildContext context) =>
-      partAccent(context, ThemePartId.selection);
+  static Color selectedInk(BuildContext context) {
+    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+      return Theme.of(context).colorScheme.onSecondaryContainer;
+    }
+    return partAccent(context, ThemePartId.selection);
+  }
 
   /// Neutral icon / empty-state well (pack surface, not a container wash).
   static Color wellFill(BuildContext context) =>
@@ -86,9 +94,12 @@ abstract final class ThemeRoles {
   static Color wellInk(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;
 
-  /// Soft "mine" / highlighted bubble — part accent at low alpha on surface.
+  /// Highlighted bubble. Paper uses the accent's primary container tone.
   static Color bubbleFill(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+      return scheme.primaryContainer;
+    }
     final accent = partAccent(context, ThemePartId.bubbles);
     return Color.alphaBlend(
       accent.withValues(alpha: .12),

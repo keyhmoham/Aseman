@@ -29,10 +29,15 @@ class GridColumn {
 
   factory GridColumn.fromSpec(Object? spec) {
     final m = spec is Map ? asMap(spec) : {'field': spec};
-    final f = '${m['field'] ?? m['key'] ?? m['name'] ?? ''}';
+    final named =
+        '${m['field'] ?? m['key'] ?? m['name'] ?? m['id'] ?? m['accessor'] ?? ''}';
+    final label =
+        '${m['label'] ?? m['title'] ?? m['header'] ?? (named.isEmpty ? '' : _title(named))}';
+    // A column that only has a heading still has to read a field.
+    final f = named.isEmpty ? label : named;
     return GridColumn(
       field: f,
-      label: '${m['label'] ?? m['title'] ?? _title(f)}',
+      label: label.isEmpty ? _title(f) : label,
       type: '${m['type'] ?? 'text'}',
       format: looseStr(m['format']),
       align: looseStr(m['align']),
@@ -118,13 +123,16 @@ class _DataGridState extends State<DataGrid> {
     _ascending = widget.props['sortDirection'] != 'desc';
   }
 
+  List<GridColumn> _declaredColumns(Object? spec) {
+    if (spec is! List || spec.isEmpty) return const [];
+    return [for (final c in spec) GridColumn.fromSpec(c)]
+        .where((c) => c.field.isNotEmpty)
+        .toList();
+  }
+
   List<GridColumn> _columns(List<Map<String, dynamic>> rows) {
-    final spec = widget.props['columns'];
-    if (spec is List && spec.isNotEmpty) {
-      return [for (final c in spec) GridColumn.fromSpec(c)]
-          .where((c) => c.field.isNotEmpty)
-          .toList();
-    }
+    final declared = _declaredColumns(widget.props['columns']);
+    if (declared.isNotEmpty) return declared;
     final first = rows.isEmpty ? const <String, dynamic>{} : rows.first;
     return [
       for (final e in first.entries)
@@ -146,8 +154,16 @@ class _DataGridState extends State<DataGrid> {
   Widget build(BuildContext context) {
     final p = VizPalette.of(context);
     final props = widget.props;
-    final rows = asRows(props['data'] ?? props['rows']);
-    final columns = _columns(rows);
+    final declared = _declaredColumns(props['columns']);
+    final rows = tableRows(props['data'] ?? props['rows'],
+        [for (final c in declared) c.field]);
+    final columns = declared.isNotEmpty ? declared : _columns(rows);
+    for (final row in rows) {
+      alignRowToColumns(
+          row,
+          [for (final c in columns) c.field],
+          [for (final c in columns) c.label]);
+    }
     final dense = asBool(props['dense']);
     final striped = asBool(props['striped']);
     final searchable = asBool(props['search']);
@@ -390,7 +406,7 @@ class _DataGridState extends State<DataGrid> {
 
   Widget _cell(
       GridColumn c, Map<String, dynamic> row, TextStyle style, VizPalette p) {
-    final v = field(row, c.field);
+    final v = looseField(row, c.field, label: c.label);
     switch (c.type) {
       case 'trend':
         return TrendText(

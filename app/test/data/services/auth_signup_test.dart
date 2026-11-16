@@ -14,6 +14,7 @@ class _RecordingClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     sent['$namespace.$action'] = body;
     switch ('$namespace.$action') {

@@ -16,9 +16,9 @@ void main() {
     expect(first.accent, AppSettingsController.defaultAccent);
     expect(
       first.accent.toARGB32(),
-      DefaultThemePacks.sky.defaultPalette.accent.toARGB32(),
+      DefaultThemePacks.paper.defaultPalette.accent.toARGB32(),
     );
-    expect(DefaultThemePacks.sky.defaultPalette.id, 'blue');
+    expect(DefaultThemePacks.paper.defaultPalette.id, 'ink');
 
     first.setThemeMode(ThemeMode.dark);
     first.setPalette(

@@ -22,12 +22,16 @@ class AccountHubContent extends StatefulWidget {
     required this.onAction,
     required this.onNotifications,
     required this.notificationsSupported,
+    this.shrinkWrap = false,
   });
   final AccountArea area;
   final Map<String, dynamic> results;
   final AccountAction onAction;
   final ValueChanged<bool> onNotifications;
   final bool notificationsSupported;
+
+  /// Size to the content so settings can scroll this area with the page.
+  final bool shrinkWrap;
 
   @override
   State<AccountHubContent> createState() => _AccountHubContentState();
@@ -37,6 +41,10 @@ class _AccountHubContentState extends State<AccountHubContent> {
   @override
   Widget build(BuildContext context) => ListView(
         key: PageStorageKey(widget.area.name),
+        shrinkWrap: widget.shrinkWrap,
+        physics: widget.shrinkWrap
+            ? const NeverScrollableScrollPhysics()
+            : null,
         padding: const EdgeInsets.only(top: 4, bottom: 28),
         children: [
           switch (widget.area) {

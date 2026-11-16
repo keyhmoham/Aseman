@@ -4,12 +4,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/theme/theme_chrome.dart';
 import '../../core/theme/theme_roles.dart';
-import '../../shared/widgets/avatar_face.dart';
 import '../../data/models/agent_humanoid.dart';
 import '../../shared/widgets/avatar.dart';
+import '../../shared/widgets/avatar_face.dart';
+import '../../shared/widgets/overlay_panels.dart';
 
 /// Persisted look of an AI agent avatar (Aseman or any other agent DM).
 ///
@@ -1063,20 +1065,27 @@ class _Soft3dAvatarPainter extends CustomPainter {
       old.phase != phase;
 }
 
-/// Compact sheet to tweak skin, hair, and accent.
+/// Compact sheet to tweak skin, hair, and accent. On a desktop window it is a
+/// full-height drawer from the right edge.
 Future<BrainAvatarPrefs?> showBrainAvatarSettings(
   BuildContext context, {
   required BrainAvatarPrefs prefs,
   required Color appAccent,
 }) {
-  return showModalBottomSheet<BrainAvatarPrefs>(
+  final sheet = _AvatarSettingsSheet(initial: prefs, appAccent: appAccent);
+  if (MediaQuery.sizeOf(context).width < Breakpoints.expanded) {
+    return showModalBottomSheet<BrainAvatarPrefs>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => sheet,
+    );
+  }
+  return showDockedPanel<BrainAvatarPrefs>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => _AvatarSettingsSheet(
-      initial: prefs,
-      appAccent: appAccent,
-    ),
+    width: 420,
+    barrierLabel: 'Close avatar',
+    builder: (_) => sheet,
   );
 }
 
@@ -1109,28 +1118,20 @@ class _AvatarSettingsSheetState extends State<_AvatarSettingsSheet> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accent = prefs.accentOr(widget.appAccent);
-    return Material(
-      color: scheme.surface.withValues(alpha: .96),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+    final docked = MediaQuery.sizeOf(context).width >= Breakpoints.expanded;
+    final body = <Widget>[
+      if (!docked)
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.outlineVariant,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        ),
+      if (!docked) const SizedBox(height: 16),
               Row(
                 children: [
                   BrainAvatar(prefs: prefs, accent: accent, size: 64),
@@ -1220,8 +1221,26 @@ class _AvatarSettingsSheetState extends State<_AvatarSettingsSheet> {
                 },
                 child: const Text('Save'),
               ),
-            ],
-          ),
+    ];
+    return Material(
+      color: scheme.surface.withValues(alpha: .96),
+      borderRadius: docked
+          ? BorderRadius.zero
+          : const BorderRadius.vertical(top: Radius.circular(24)),
+      child: SafeArea(
+        top: docked,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: docked
+              ? ListView(
+                  padding: EdgeInsets.zero,
+                  children: body,
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: body,
+                ),
         ),
       ),
     );

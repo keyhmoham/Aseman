@@ -278,6 +278,8 @@ void main() {
     await tester.pumpAndSettle();
     await openSpaceRoom(tester);
 
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Apps'));
     await tester.pumpAndSettle();
     expect(find.text('GitHub'), findsOneWidget);

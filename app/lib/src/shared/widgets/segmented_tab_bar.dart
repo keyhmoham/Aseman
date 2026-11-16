@@ -106,8 +106,13 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
     final compact = widget.compact;
     final w = widget.width ?? (compact ? 320 : 440);
     final base = Theme.of(context).textTheme.labelLarge ?? const TextStyle();
-    final selectedStyle =
-        base.copyWith(fontSize: 12.5, fontWeight: FontWeight.w800);
+    final selectedStyle = base.copyWith(
+      fontSize: 12.5,
+      fontWeight: ThemeChrome.selectedNavWeight(
+        context,
+        fallback: FontWeight.w800,
+      ),
+    );
     final unselectedStyle =
         base.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500);
     final showIcons = icons != null && !compact;
@@ -134,8 +139,7 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
             constraints.hasBoundedWidth ? math.min(w, constraints.maxWidth) : w;
         // Shrink to the tabs when they fit; otherwise fill the room and
         // let the tabs scroll.
-        final navH =
-            tokens?.language.denseControlHeight ?? 40;
+        final navH = tokens?.language.denseControlHeight ?? 40;
         final barH = navH + 12;
         final iconSz = (tokens?.language.iconSize ?? 22) - 5;
         return Container(
@@ -146,7 +150,9 @@ class _SegmentedTabBarState extends State<SegmentedTabBar>
           decoration: BoxDecoration(
             color: tokens?.control('nav_pill').fill == FillKind.glass
                 ? AppSurfaces.overlay(scheme, tokens: tokens)
-                : AppSurfaces.card(scheme, tokens: tokens),
+                : ThemeChrome.isPaper(context)
+                    ? scheme.surfaceContainer
+                    : AppSurfaces.card(scheme, tokens: tokens),
             borderRadius: context.navPillBorderRadius,
             border: Border.all(
               color: AppSurfaces.cardBorder(scheme).withValues(

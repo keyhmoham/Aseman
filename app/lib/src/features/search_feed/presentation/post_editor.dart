@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/app_shape.dart';
@@ -66,7 +67,7 @@ Future<String?> showMarkupEditor(
     publishIcon: publishIcon,
     maxLength: maxLength,
   ),
-  breakpoint: 820,
+  breakpoint: Breakpoints.expanded,
   maxWidth: 1180,
   maxHeight: 860,
   heightFactor: .96,

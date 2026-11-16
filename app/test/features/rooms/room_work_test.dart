@@ -276,6 +276,34 @@ void main() {
     await _close(tester);
   });
 
+  testWidgets('work opens as a full-height drawer on a desktop window', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pumpChat(tester, _Node());
+    await tester.tap(find.byTooltip('Work'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    final copy = find.text('No agent has worked in this room yet.');
+    expect(copy, findsOneWidget);
+    expect(tester.getTopLeft(copy).dx, greaterThan(900));
+    RenderObject? node = tester.renderObject(copy);
+    var fullHeight = false;
+    while (node != null) {
+      if (node is RenderBox && (node.size.height - 900).abs() < 1) {
+        fullHeight = true;
+        expect(node.size.width, lessThanOrEqualTo(520));
+        break;
+      }
+      node = node.parent;
+    }
+    expect(fullHeight, isTrue);
+    await _close(tester);
+  });
+
   test('the controller keeps only its room\'s work', () async {
     final node = _Node()
       ..live = [_run('t1', 'running'), _run('t9', 'running', room: 'room-2')]

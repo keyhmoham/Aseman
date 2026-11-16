@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../data/models/post.dart';
 import '../../../data/models/profile.dart';
 import '../../../shared/widgets/avatar.dart';
@@ -31,7 +32,7 @@ Future<void> showCommentsSheet(
     dependencies: dependencies,
     post: post,
     onCount: onCount,
-    inBottomSheet: MediaQuery.sizeOf(context).width < 720,
+    inBottomSheet: MediaQuery.sizeOf(context).width < Breakpoints.compact,
   ),
   breakpoint: 720,
   maxWidth: 600,

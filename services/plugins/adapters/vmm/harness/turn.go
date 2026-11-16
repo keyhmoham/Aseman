@@ -56,6 +56,25 @@ type session struct {
 	// inflight counts the turn's gateway calls still being served (model,
 	// decision and platform calls), which meter what they use onto the turn.
 	inflight atomic.Int64
+	// surfaces are AG-UI cards this turn shows above its answer.
+	surfaces []string
+}
+
+func (s *session) noteSurfaces(bodies []string) {
+	if len(bodies) == 0 {
+		return
+	}
+	s.mu.Lock()
+	s.surfaces = append(s.surfaces, bodies...)
+	s.mu.Unlock()
+}
+
+func (s *session) takeSurfaces() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.surfaces
+	s.surfaces = nil
+	return out
 }
 
 // begin marks one gateway call of the turn as in flight; the returned func
@@ -242,7 +261,7 @@ func (a *Adapter) Prompt(ctx context.Context, vmID string, turn vmm.AgentTurn) (
 	if err == nil {
 		a.learnLater(s, out.Transcript)
 	}
-	return strings.TrimSpace(out.Reply), err
+	return vmm.JoinSurfaces(strings.TrimSpace(out.Reply), s.takeSurfaces()), err
 }
 
 // Observe implements vmm.AgentRuntime. The runtime reads the room through the
@@ -270,7 +289,7 @@ func (a *Adapter) Reply(ctx context.Context, vmID string, turn vmm.AgentTurn) (b
 	if !out.Answered && err == nil {
 		return false, "", nil
 	}
-	return true, strings.TrimSpace(out.Reply), err
+	return true, vmm.JoinSurfaces(strings.TrimSpace(out.Reply), s.takeSurfaces()), err
 }
 
 // waiting reports whether the agent has an open question in the turn's room

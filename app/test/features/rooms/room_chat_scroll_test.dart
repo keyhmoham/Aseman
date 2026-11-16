@@ -38,9 +38,6 @@ Future<void> _open(WidgetTester tester, List<RoomMessage> messages) async {
       ),
     ),
   ));
-  // Restore waits for a stable maxScrollExtent across frames.
-  await tester.pumpAndSettle();
-  await tester.pump();
   await tester.pump();
 }
 
@@ -88,6 +85,30 @@ void main() {
     final scroll = await _controllerOf(tester);
     expect(scroll, isNotNull);
     expect(scroll!.offset, closeTo(scroll.position.maxScrollExtent, 1));
+    expect(scroll.position.activity, isA<IdleScrollActivity>());
+  });
+
+  testWidgets('messages are already at the bottom on the first frame',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          height: 400,
+          child: RoomChat(
+            room: 'general',
+            messages: _many(),
+            spaceId: 'space-1',
+            roomId: 'room-2',
+            bare: true,
+          ),
+        ),
+      ),
+    ));
+    final scroll = await _controllerOf(tester);
+    expect(scroll, isNotNull);
+    expect(scroll!.offset, closeTo(scroll.position.maxScrollExtent, 1));
+    expect(scroll.position.activity, isA<IdleScrollActivity>());
+    expect(scroll.position.activity!.velocity, 0);
   });
 
   testWidgets('saved near-bottom returns to the live end', (tester) async {

@@ -175,6 +175,17 @@ class _BlockView extends StatelessWidget {
               ),
           ]),
         );
+      case BlockKind.callout:
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _CalloutCard(
+            tone: block.tone,
+            lines: block.inline,
+            onLinkTap: onLinkTap,
+            headers: headers,
+            resolveUrl: resolveUrl,
+          ),
+        );
       case BlockKind.quote:
         return Container(
           margin: const EdgeInsets.only(bottom: 6),
@@ -184,16 +195,22 @@ class _BlockView extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border(left: BorderSide(color: scheme.primary, width: 3)),
           ),
-          child: Text.rich(
-              _inline(context, _run,
-                  onLinkTap: onLinkTap,
-                  headers: headers,
-                  resolveUrl: resolveUrl),
-              style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.45,
-                  fontStyle: FontStyle.italic,
-                  color: scheme.onSurfaceVariant)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final line in block.inline)
+                Text.rich(
+                    _inline(context, line,
+                        onLinkTap: onLinkTap,
+                        headers: headers,
+                        resolveUrl: resolveUrl),
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.45,
+                        fontStyle: FontStyle.italic,
+                        color: scheme.onSurfaceVariant)),
+            ],
+          ),
         );
       case BlockKind.code:
         final brightness = Theme.of(context).brightness;
@@ -235,7 +252,13 @@ class _BlockView extends StatelessWidget {
         return Divider(
             height: 20, color: scheme.outlineVariant.withValues(alpha: .5));
       case BlockKind.table:
-        final rows = block.rows ?? const [];
+        final grid = block.cells ??
+            [
+              for (final row in block.rows ?? const <List<InlineToken>>[])
+                [for (final cell in row) [cell]],
+            ];
+        if (grid.isEmpty) return const SizedBox.shrink();
+        final columns = grid.fold<int>(0, (n, row) => row.length > n ? row.length : n);
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           clipBehavior: Clip.antiAlias,
@@ -244,35 +267,42 @@ class _BlockView extends StatelessWidget {
               borderRadius: AppShape.borderRadius(context, 12),
               border: Border.all(
                   color: scheme.outlineVariant.withValues(alpha: .5))),
-          child: Table(
-            columnWidths: const {},
-            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-            children: [
-              for (var r = 0; r < rows.length; r++)
-                TableRow(
-                  decoration: r == 0
-                      ? BoxDecoration(
-                          color: scheme.primary.withValues(alpha: .12))
-                      : null,
-                  children: [
-                    for (var c = 0; c < rows[r].length; c++)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 5),
-                        child: Text.rich(
-                            _inline(context, [rows[r][c]],
-                                onLinkTap: onLinkTap,
-                                headers: headers,
-                                resolveUrl: resolveUrl),
-                            style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: r == 0
-                                    ? FontWeight.w800
-                                    : FontWeight.w500)),
-                      ),
-                  ],
-                ),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Table(
+              defaultColumnWidth: const IntrinsicColumnWidth(),
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [
+                for (var r = 0; r < grid.length; r++)
+                  TableRow(
+                    decoration: r == 0
+                        ? BoxDecoration(
+                            color: scheme.primary.withValues(alpha: .12))
+                        : null,
+                    children: [
+                      for (var c = 0; c < columns; c++)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          child: Text.rich(
+                              _inline(
+                                  context,
+                                  c < grid[r].length
+                                      ? grid[r][c]
+                                      : const <InlineToken>[],
+                                  onLinkTap: onLinkTap,
+                                  headers: headers,
+                                  resolveUrl: resolveUrl),
+                              style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: r == 0
+                                      ? FontWeight.w800
+                                      : FontWeight.w500)),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
           ),
         );
       case BlockKind.chart:
@@ -492,58 +522,180 @@ class _ChartWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final type = '${data['type'] ?? 'bar'}'.toLowerCase();
-    final labels = [
-      for (final l in data['labels'] is List ? data['labels'] as List : const [])
-        '$l',
-    ];
-    final raw = data['values'] is List ? data['values'] as List : const [];
-    final values = raw.whereType<num>().map((n) => n.toDouble()).toList();
-    if (values.isEmpty) {
-      return const SizedBox.shrink();
+    final title = '${data['title'] ?? ''}'.trim();
+    final labels = <String>[];
+    final values = <double>[];
+    void add(String label, double? value) {
+      if (value == null) return;
+      labels.add(label);
+      values.add(value);
     }
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(14),
-          border:
-              Border.all(color: scheme.outlineVariant.withValues(alpha: .5))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(
-              type == 'line'
-                  ? Icons.show_chart_rounded
-                  : Icons.bar_chart_rounded,
-              size: 16,
-              color: scheme.primary),
-          const SizedBox(width: 6),
-          Text(type == 'line' ? 'Line chart' : 'Bar chart',
-              style:
-                  const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-        ]),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 110,
-          child: CustomPaint(
-            size: const Size(double.infinity, 110),
-            painter: _ChartPainter(
-                type: type, values: values, color: scheme.primary),
-          ),
-        ),
-        if (labels.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Row(children: [
-            for (final l in labels)
+
+    final points = data['points'];
+    if (points is List && points.isNotEmpty) {
+      for (var i = 0; i < points.length; i++) {
+        final p = points[i];
+        if (p is Map) {
+          add('${p['label'] ?? p['x'] ?? p['name'] ?? i + 1}',
+              _chartNum(p['value'] ?? p['y']));
+        } else {
+          add('${i + 1}', _chartNum(p));
+        }
+      }
+    } else {
+      final rawLabels =
+          data['labels'] is List ? data['labels'] as List : const [];
+      final raw = data['values'] is List ? data['values'] as List : const [];
+      for (var i = 0; i < raw.length; i++) {
+        add(i < rawLabels.length ? '${rawLabels[i]}' : '${i + 1}',
+            _chartNum(raw[i]));
+      }
+    }
+    if (values.isEmpty) return const SizedBox.shrink();
+    final maxV = values.fold<double>(0, (a, b) => b.abs() > a ? b.abs() : a);
+    final max = maxV <= 0 ? 1.0 : maxV;
+    return LayoutBuilder(builder: (context, box) {
+      final width = box.maxWidth.isFinite ? box.maxWidth : 280.0;
+      return SizedBox(
+        width: width,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: scheme.outlineVariant.withValues(alpha: .5))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(
+                  type == 'line'
+                      ? Icons.show_chart_rounded
+                      : Icons.bar_chart_rounded,
+                  size: 16,
+                  color: scheme.primary),
+              const SizedBox(width: 6),
               Expanded(
-                child: Text(l,
-                    textAlign: TextAlign.center,
+                child: Text(
+                    title.isNotEmpty
+                        ? title
+                        : (type == 'line' ? 'Line chart' : 'Bar chart'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 8)),
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w800)),
               ),
+            ]),
+            const SizedBox(height: 10),
+            if (type == 'line')
+              SizedBox(
+                height: 88,
+                width: width - 24,
+                child: CustomPaint(
+                  painter: _ChartPainter(
+                      type: type, values: values, color: scheme.primary),
+                ),
+              )
+            else
+              for (var i = 0; i < values.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(children: [
+                    SizedBox(
+                      width: 72,
+                      child: Text(labels[i],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11)),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (values[i].abs() / max).clamp(0.02, 1),
+                          minHeight: 8,
+                          color: scheme.primary,
+                          backgroundColor: scheme.primary.withValues(alpha: .12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_chartLabel(values[i]),
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+            if (type == 'line' && labels.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(labels.join('  ·  '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10, color: scheme.onSurfaceVariant)),
+            ],
           ]),
-        ],
+        ),
+      );
+    });
+  }
+}
+
+double? _chartNum(Object? v) {
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v.trim().replaceAll(',', ''));
+  return null;
+}
+
+String _chartLabel(double v) {
+  if (v == v.roundToDouble() && v.abs() < 1e15) return v.toInt().toString();
+  return v.toStringAsFixed(v.abs() >= 10 ? 1 : 2);
+}
+
+class _CalloutCard extends StatelessWidget {
+  const _CalloutCard({
+    required this.tone,
+    required this.lines,
+    this.onLinkTap,
+    this.headers = const {},
+    this.resolveUrl,
+  });
+
+  final String tone;
+  final List<List<InlineToken>> lines;
+  final Future<void> Function(String)? onLinkTap;
+  final Map<String, String> headers;
+  final String Function(String url)? resolveUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = switch (tone) {
+      'warning' || 'caution' => scheme.tertiary,
+      'important' => scheme.error,
+      _ => scheme.primary,
+    };
+    final label = tone.isEmpty ? 'Note' : tone[0].toUpperCase() + tone.substring(1);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: color, width: 3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+                color: color)),
+        for (final line in lines)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text.rich(_inline(context, line,
+                onLinkTap: onLinkTap,
+                headers: headers,
+                resolveUrl: resolveUrl)),
+          ),
       ]),
     );
   }

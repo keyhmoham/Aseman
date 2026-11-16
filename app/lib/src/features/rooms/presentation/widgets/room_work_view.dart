@@ -147,13 +147,11 @@ class RoomWorkNeeds extends StatelessWidget {
 /// waiting request can be dropped and a failed one run again.
 Future<void> showRoomWork(BuildContext context, RoomWorkController work,
         {void Function(WorkEntry failed)? onRunAgain}) =>
-    showAdaptivePanel<void>(
+    showFloatingPanel(
       context,
       RoomWorkPanel(work: work, onRunAgain: onRunAgain),
-      breakpoint: 720,
       maxWidth: 520,
-      maxHeight: 640,
-      heightFactor: .7,
+      barrierLabel: 'Close work',
     );
 
 class RoomWorkPanel extends StatelessWidget {

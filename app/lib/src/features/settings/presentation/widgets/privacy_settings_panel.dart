@@ -33,8 +33,15 @@ Future<void> showPrivacySettings(
     );
 
 class PrivacySettingsPanel extends StatefulWidget {
-  const PrivacySettingsPanel({super.key, required this.dependencies});
+  const PrivacySettingsPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
+
+  /// Draw the choices in the settings page instead of a floating panel.
+  final bool embedded;
 
   @override
   State<PrivacySettingsPanel> createState() => _PrivacySettingsPanelState();
@@ -93,6 +100,55 @@ class _PrivacySettingsPanelState extends State<PrivacySettingsPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final body = _loading
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(_error!, style: TextStyle(color: scheme.error)),
+                ),
+              for (final f in _fields) ...[
+                SoftCard(
+                  showOrb: false,
+                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      QuietTile(
+                        icon: f.$3,
+                        label: f.$2,
+                        trailing: const SizedBox.shrink(),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.sm,
+                          0,
+                          AppSpacing.sm,
+                          0,
+                        ),
+                        child: SegmentedButton<String>(
+                          segments: [
+                            for (final a in _audiences)
+                              ButtonSegment(value: a.$1, label: Text(a.$2)),
+                          ],
+                          selected: {_prefs[f.$1]!},
+                          onSelectionChanged: (v) => _set(f.$1, v.first),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+            ],
+          );
+    if (widget.embedded) return body;
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Privacy',
@@ -103,43 +159,7 @@ class _PrivacySettingsPanelState extends State<PrivacySettingsPanel> {
           ? const SkeletonPage()
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-              children: [
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(_error!,
-                        style: TextStyle(color: scheme.error)),
-                  ),
-                for (final f in _fields) ...[
-                  SoftCard(
-                    showOrb: false,
-                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        QuietTile(
-                          icon: f.$3,
-                          label: f.$2,
-                          trailing: const SizedBox.shrink(),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.sm, 0, AppSpacing.sm, 0),
-                          child: SegmentedButton<String>(
-                            segments: [
-                              for (final a in _audiences)
-                                ButtonSegment(value: a.$1, label: Text(a.$2)),
-                            ],
-                            selected: {_prefs[f.$1]!},
-                            onSelectionChanged: (v) => _set(f.$1, v.first),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-              ],
+              children: [body],
             ),
     );
   }

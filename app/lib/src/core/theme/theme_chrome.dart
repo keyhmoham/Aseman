@@ -6,6 +6,7 @@ import 'app_shape.dart';
 import 'app_surfaces.dart';
 import 'aseman_tokens.dart';
 import 'control_look.dart';
+import 'default_theme_packs.dart';
 import 'design_language.dart';
 
 /// Single entry for chrome that must follow the active theme pack.
@@ -520,6 +521,25 @@ abstract final class ThemeChrome {
     return color.withValues(alpha: .12);
   }
 
+  /// Radial sky / mist washes. Flat packs (Paper) stay on solid surfaces.
+  ///
+  /// Missing tokens keep the Sky default so unthemed previews do not go blank.
+  static bool paintsAtmosphere(BuildContext context) {
+    final atmosphere = AsemanTokens.maybeOf(context)?.atmosphere ?? 'sky';
+    return atmosphere == 'sky' || atmosphere == 'mist';
+  }
+
+  /// The built-in Paper pack: print-like Material 3, no sky glow.
+  static bool isPaper(BuildContext context) =>
+      AsemanTokens.maybeOf(context)?.packId == DefaultThemePacks.paperId;
+
+  /// Selected navigation captions. Paper matches the expressive rail (w500).
+  static FontWeight selectedNavWeight(
+    BuildContext context, {
+    FontWeight fallback = FontWeight.w700,
+  }) =>
+      isPaper(context) ? FontWeight.w500 : fallback;
+
   /// Whether frost/blur should run for card-like surfaces under this pack.
   static bool wantsGlassBlur(BuildContext context, {String slot = 'card'}) {
     final tokens = AsemanTokens.maybeOf(context);
@@ -720,6 +740,14 @@ abstract final class ThemeChrome {
     final card = tokens?.control('card');
     final accentColor = accent ?? scheme.primary;
     final cardFill = AppSurfaces.card(scheme, tokens: tokens);
+    final fillKind = card?.fill ?? FillKind.solid;
+    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    if (paper &&
+        (fillKind == FillKind.solid || fillKind == FillKind.tonal)) {
+      if (selected) return scheme.secondaryContainer;
+      if (wash) return scheme.primaryContainer;
+      return scheme.surfaceContainerHigh;
+    }
     if (selected) {
       return Color.alphaBlend(accentColor.withValues(alpha: .10), cardFill);
     }
@@ -727,7 +755,6 @@ abstract final class ThemeChrome {
       return Color.alphaBlend(accentColor.withValues(alpha: .05), cardFill);
     }
     // Prefer opaque pack surface for in-page cards; glass stays for overlays.
-    final fillKind = card?.fill ?? FillKind.solid;
     return switch (fillKind) {
       FillKind.solid || FillKind.tonal => scheme.surface,
       FillKind.glass || FillKind.gradient => cardFill,
@@ -828,7 +855,10 @@ abstract final class ThemeChrome {
     final corners = input?.borderRadius ?? BorderRadius.circular(
       input?.shape == ShapeKind.stadium ? 999 : (tokens?.radiusControl ?? 16),
     );
-    final fill = switch (input?.fill) {
+    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    final fill = paper
+        ? scheme.surfaceContainerHighest
+        : switch (input?.fill) {
       FillKind.solid => scheme.surface,
       FillKind.glass || FillKind.gradient =>
         AppSurfaces.overlay(scheme, tokens: tokens),
@@ -952,7 +982,12 @@ abstract final class ThemeChrome {
       );
     }
     final Color fill;
-    if (mine) {
+    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    if (paper) {
+      // Two steps of the same accent: saturated container for you, a quieter
+      // surface step for everyone else.
+      fill = mine ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+    } else if (mine) {
       fill = scheme.primaryContainer;
     } else if (agent) {
       fill = scheme.primary.withValues(alpha: .10);

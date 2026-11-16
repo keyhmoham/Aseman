@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_shape.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../data/models/bot.dart';
@@ -363,7 +364,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final body = _loading
         ? const SkeletonList(item: SkeletonCard(mediaHeight: 0), spacing: 10)
         : _error != null
@@ -404,7 +405,7 @@ class _AgentsScreenState extends State<AgentsScreen> {
                     ..._createActions,
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 6),
                 Expanded(child: body),
               ],
             )
@@ -456,35 +457,58 @@ class _AgentsTab extends StatelessWidget {
       );
     }
     final running = agents.where((b) => b.status == 'running').length;
-    return ListView(
-      padding: const EdgeInsets.only(top: 4, bottom: 18),
-      children: [
-        FleetMetricStrip(cells: [
-          FleetMetric(
-              label: 'Total',
-              value: '${agents.length}',
-              color: AppColors.primaryOf(context)),
-          FleetMetric(
-              label: 'Running',
-              value: '$running',
-              color: AppColors.successOf(context),
-              live: running > 0),
-        ]),
-        const SizedBox(height: 14),
-        for (var i = 0; i < agents.length; i++)
-          StaggerIn(
-            index: i,
-            child: _AgentCard(
-              key: ValueKey(agents[i].id),
-              service: service,
-              onAvatar: (id) => onAvatar(agents[i], id),
-              bot: agents[i],
-              onChat: () => onChat(agents[i]),
-              onEdit: () => onEdit(agents[i]),
-              onToggle: () => onToggle(agents[i]),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final columns = switch (AppWindowClass.fromWidth(box.maxWidth)) {
+          AppWindowClass.compact => 1,
+          AppWindowClass.medium => 2,
+          AppWindowClass.expanded => 3,
+          _ => 4,
+        };
+        final gap = 12.0;
+        final tileWidth = columns == 1
+            ? box.maxWidth
+            : (box.maxWidth - (columns - 1) * gap) / columns;
+        return ListView(
+          padding: const EdgeInsets.only(top: 4, bottom: 18),
+          children: [
+            FleetMetricStrip(cells: [
+              FleetMetric(
+                  label: 'Total',
+                  value: '${agents.length}',
+                  color: AppColors.primaryOf(context)),
+              FleetMetric(
+                  label: 'Running',
+                  value: '$running',
+                  color: AppColors.successOf(context),
+                  live: running > 0),
+            ]),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (var i = 0; i < agents.length; i++)
+                  SizedBox(
+                    width: tileWidth,
+                    child: StaggerIn(
+                      index: i,
+                      child: _AgentCard(
+                        key: ValueKey(agents[i].id),
+                        service: service,
+                        onAvatar: (id) => onAvatar(agents[i], id),
+                        bot: agents[i],
+                        onChat: () => onChat(agents[i]),
+                        onEdit: () => onEdit(agents[i]),
+                        onToggle: () => onToggle(agents[i]),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -513,13 +537,12 @@ class _ToolsTab extends StatelessWidget {
       );
     }
     return LayoutBuilder(builder: (context, box) {
-      final columns = box.maxWidth > 900
-          ? 4
-          : box.maxWidth > 600
-              ? 3
-              : box.maxWidth > 380
-                  ? 2
-                  : 1;
+      final columns = switch (AppWindowClass.fromWidth(box.maxWidth)) {
+        AppWindowClass.compact => 1,
+        AppWindowClass.medium => 2,
+        AppWindowClass.expanded => 3,
+        _ => 4,
+      };
       final gap = 12.0;
       final width = (box.maxWidth - (columns - 1) * gap) / columns;
       return ListView(

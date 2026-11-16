@@ -8,8 +8,15 @@ import 'assistant_common.dart';
 /// Slack, Teams and SMS, background research and the morning brief. Accounts
 /// like Google are apps: they are added and connected in Apps.
 class ConnectionsPanel extends StatelessWidget {
-  const ConnectionsPanel({super.key, required this.dependencies});
+  const ConnectionsPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
+
+  /// Draw the channels in the settings page instead of their own screen.
+  final bool embedded;
 
   static const _channelNames = {
     'telegram': 'Telegram',
@@ -39,12 +46,12 @@ class ConnectionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LoadedPanel(
     title: 'Connections',
+    embedded: embedded,
     load: _load,
     build: (context, data, reload) {
       final channels = jsonMap(data['channels']);
       final settings = jsonMap(jsonMap(data['proactive'])['settings']);
-      return ListView(
-        children: [
+      final children = <Widget>[
           const PanelSection(
             title: 'Gmail, Calendar and other accounts',
             children: [
@@ -57,8 +64,14 @@ class ConnectionsPanel extends StatelessWidget {
           if (channels['missing'] != true) _channels(context, channels, reload),
           if (settings.isNotEmpty) _proactive(context, settings, reload),
           const SizedBox(height: 32),
-        ],
-      );
+      ];
+      if (embedded) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        );
+      }
+      return ListView(children: children);
     },
   );
 

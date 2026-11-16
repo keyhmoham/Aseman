@@ -94,16 +94,33 @@ func (s *Service) uiPresentTool(ctx context.Context, spaceID identity.ID, argsJS
 		return "", errs.InvalidArgument("placement must be chat, desk, or auto")
 	}
 	surf.Layout = placement
+	// The answer the person reads is where the card has to be. A separate post
+	// lands in another room, and the chat only keeps the takeaway.
+	if vmm.NoteSurface(ctx, "") {
+		carried := surf
+		carried.Layout = "chat"
+		body, err := agui.FormatMessage(in.Caption, carried)
+		if err != nil {
+			return "", errs.Wrap(errs.CodeInternal, err, "encode agui")
+		}
+		vmm.NoteSurface(ctx, body)
+		if placement != "desk" {
+			return "showing it with your answer: say the takeaway in a sentence or two and do not repeat the card", nil
+		}
+	}
 
 	sender, err := s.toolSender(ctx)
-	if err != nil {
-		return "", err
+	var roomID identity.ID
+	if err == nil {
+		roomID, err = s.toolRoom(ctx, in.Room)
 	}
-	roomID, err := s.toolRoom(ctx, in.Room)
-	if err != nil {
-		return "", err
+	if err == nil {
+		err = helper.CheckContextAccess(ctx, s.R, spaceID, roomID, true)
 	}
-	if err := helper.CheckContextAccess(ctx, s.R, spaceID, roomID, true); err != nil {
+	if err != nil {
+		if vmm.NoteSurface(ctx, "") {
+			return "showing it with your answer: say the takeaway in a sentence or two and do not repeat the card", nil
+		}
 		return "", err
 	}
 
@@ -124,11 +141,17 @@ func (s *Service) uiPresentTool(ctx context.Context, spaceID identity.ID, argsJS
 		}
 		_, ids, err := s.UpdateDesk(ctx, spaceID, roomID, sender.String(), []DeskOp{op})
 		if err != nil {
+			if vmm.NoteSurface(ctx, "") {
+				return "showing it with your answer: say the takeaway in a sentence or two and do not repeat the card", nil
+			}
 			return "", err
 		}
 		id := ""
 		if len(ids) > 0 {
 			id = ids[0]
+		}
+		if vmm.NoteSurface(ctx, "") {
+			return fmt.Sprintf("showing it with your answer (also on the desk, window=%s): say the takeaway in a sentence or two and do not repeat the card", id), nil
 		}
 		caption := strings.TrimSpace(in.Caption)
 		if caption == "" {

@@ -48,6 +48,7 @@ class _LibraryPanel extends StatelessWidget {
     this.onConnectApp,
     this.onOpenSettings,
     required this.openRoom,
+    this.direct = false,
   });
   final String? room;
   final String workspace;
@@ -90,6 +91,10 @@ class _LibraryPanel extends StatelessWidget {
   /// Opens the space's settings, from the button under the tabs.
   final VoidCallback? onOpenSettings;
 
+  /// A direct chat: the same rail, without Rooms, Files, Computer, Memory
+  /// or Previews. Those belong to a workspace.
+  final bool direct;
+
   /// The first of the space's facility tabs (Files, Computer, Memory,
   /// Previews), which follow the library tabs.
   static const facilitiesTab = 8;
@@ -121,8 +126,22 @@ class _LibraryPanel extends StatelessWidget {
     'Memory',
     'Previews',
   ];
+
+  /// Tabs a direct chat keeps: agents, apps and the media library.
+  static const directTabs = <int>[1, 2, 3, 4, 5, 6, 7];
+
+  int get _active {
+    if (!direct) return tab;
+    return directTabs.contains(tab) ? tab : directTabs.first;
+  }
+
   @override
-  Widget build(BuildContext context) => _Panel(
+  Widget build(BuildContext context) {
+    final active = _active;
+    final shown = direct
+        ? directTabs
+        : [for (var i = 0; i < icons.length; i++) i];
+    return _Panel(
     flat: flat,
     child: Row(
       children: [
@@ -147,9 +166,10 @@ class _LibraryPanel extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (var i = 0; i < icons.length; i++) ...[
+                        for (final i in shown) ...[
                           // Rooms, the library, then the space's facilities.
-                          if (i == 1 || i == facilitiesTab)
+                          // A direct chat splits agents and apps from media.
+                          if (direct ? i == 3 : (i == 1 || i == facilitiesTab))
                             Container(
                               width: 26,
                               height: 1,
@@ -173,7 +193,7 @@ class _LibraryPanel extends StatelessWidget {
                                     width: 42,
                                     height: 42,
                                     decoration: BoxDecoration(
-                                      color: i == tab
+                                      color: i == active
                                           ? ThemeRoles.selectedFill(context)
                                           : Colors.transparent,
                                       borderRadius: AppShape.borderRadius(context, 16),
@@ -181,7 +201,7 @@ class _LibraryPanel extends StatelessWidget {
                                     child: Icon(
                                       icons[i],
                                       size: 20,
-                                      color: i == tab
+                                      color: i == active
                                           ? ThemeRoles.selectedInk(context)
                                           : Theme.of(
                                               context,
@@ -231,7 +251,7 @@ class _LibraryPanel extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            labels[tab],
+                            labels[active],
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
@@ -253,18 +273,18 @@ class _LibraryPanel extends StatelessWidget {
                       ),
                     ),
                     // A facility tab carries its own actions.
-                    if (tab < facilitiesTab) ...[
+                    if (active < facilitiesTab) ...[
                       IconButton.filledTonal(
                         visualDensity: VisualDensity.compact,
-                        tooltip: 'Find ${labels[tab].toLowerCase()}',
+                        tooltip: 'Find ${labels[active].toLowerCase()}',
                         onPressed: onSearch,
                         icon: const Icon(Icons.search_rounded, size: 18),
                       ),
                       const SizedBox(width: 3),
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        tooltip: tab == 0 ? 'New room' : 'Add',
-                        onPressed: tab == 0 ? onCreateRoom : null,
+                        tooltip: active == 0 ? 'New room' : 'Add',
+                        onPressed: active == 0 ? onCreateRoom : null,
                         icon: const Icon(Icons.add_rounded, size: 19),
                       ),
                     ],
@@ -287,8 +307,8 @@ class _LibraryPanel extends StatelessWidget {
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: KeyedSubtree(
-                      key: ValueKey('$workspace-$room-$tab'),
-                      child: _libraryContent(context),
+                      key: ValueKey('$workspace-$room-$active'),
+                      child: _libraryContent(context, active),
                     ),
                   ),
                 ),
@@ -299,7 +319,9 @@ class _LibraryPanel extends StatelessWidget {
       ],
     ),
   );
-  Widget _libraryContent(BuildContext context) {
+  }
+
+  Widget _libraryContent(BuildContext context, int tab) {
     if (tab == 0) {
       return ListView.separated(
         padding: EdgeInsets.zero,
@@ -460,6 +482,84 @@ class _LibraryPanel extends StatelessWidget {
     return const _LibraryEmpty(
       icon: Icons.folder_outlined,
       message: 'Nothing here yet. Upload files to your workspace.',
+    );
+  }
+}
+
+/// The workspace library rail for a direct chat: same chrome, without the
+/// workspace-only tabs (rooms, files, computer, memory, previews).
+class DirectChatLibrary extends StatelessWidget {
+  const DirectChatLibrary({
+    super.key,
+    required this.title,
+    required this.tab,
+    required this.onTab,
+    required this.dependencies,
+    required this.spaceId,
+    required this.roomId,
+    this.agents = const [],
+    this.apps = const [],
+    this.allBots = const [],
+    this.onAddBot,
+    this.onRemoveBot,
+    this.onAddApp,
+    this.onOpenApp,
+    this.appConnections = const {},
+    this.onConnectApp,
+    this.fileRevision = 0,
+    this.card = false,
+  });
+
+  final String title;
+  final int tab;
+  final ValueChanged<int> onTab;
+  final AppDependencies dependencies;
+  final String spaceId;
+  final String roomId;
+  final List<Bot> agents;
+  final List<Bot> apps;
+  final List<Bot> allBots;
+  final ValueChanged<Bot>? onAddBot;
+  final ValueChanged<Bot>? onRemoveBot;
+  final VoidCallback? onAddApp;
+  final ValueChanged<Bot>? onOpenApp;
+  final Map<String, ({String auth, bool connected, String name})>
+  appConnections;
+  final void Function(Bot bot, bool reconnect)? onConnectApp;
+  final int fileRevision;
+
+  /// Glass card, for the desktop flyout. The drawer stays flat.
+  final bool card;
+
+  @override
+  Widget build(BuildContext context) {
+    return ThemeSlotHost(
+      slot: FeatureSlots.workspaceRail,
+      child: ThemeSlotHost(
+        slot: ThemeChromeSlots.workspaceRail,
+        child: _LibraryPanel(
+          direct: true,
+          room: title,
+          workspace: title,
+          rooms: const [],
+          spaceBots: [...agents, ...apps],
+          allBots: allBots,
+          tab: tab,
+          flat: !card,
+          dependencies: dependencies,
+          spaceId: spaceId,
+          roomId: roomId,
+          fileRevision: fileRevision,
+          onTab: onTab,
+          onAddBot: onAddBot,
+          onRemoveBot: onRemoveBot,
+          onAddApp: onAddApp,
+          onOpenApp: onOpenApp,
+          appConnections: appConnections,
+          onConnectApp: onConnectApp,
+          openRoom: (_) {},
+        ),
+      ),
     );
   }
 }

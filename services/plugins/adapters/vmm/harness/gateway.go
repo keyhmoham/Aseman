@@ -222,7 +222,10 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	}
 	// Every action is decided and recorded before it runs, and runs with the
 	// person's secrets put in; what comes back hides them again.
-	call := scoped{Context: ctx, values: s.base}
+	// Cards ride on the answer the person reads. A separate post lands in
+	// another room, and the chat only shows the takeaway.
+	sink := &vmm.SurfaceSink{}
+	call := scoped{Context: ctx, values: vmm.WithSurfaceSink(s.base, sink)}
 	body, decision, err := a.govern(call, s, name, in.Body)
 	if err != nil {
 		return errorResponse(err), nil
@@ -242,6 +245,7 @@ func (a *Adapter) serveCall(ctx context.Context, req *network.Request) (*network
 	if out := gate.Finish(call, a.k, decision, string(resp.Body), nil); out != string(resp.Body) {
 		resp.Body = []byte(out)
 	}
+	s.noteSurfaces(sink.Bodies())
 	if name == "spaces.message_send" {
 		var sent struct {
 			MessageID string `json:"message_id"`

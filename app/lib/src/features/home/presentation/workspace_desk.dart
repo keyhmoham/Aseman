@@ -2,8 +2,11 @@ part of 'workspace_screen.dart';
 
 /// The room's desk: tools' frontends as floating card windows (opened by
 /// people from the library and by agents showing results) and the dock. An
-/// empty desk shows the machine. On desktop, [underlay] holds the left/right
-/// panels under the windows so cards can float over them.
+/// empty desk shows the machine. On a phone the windows are a widget grid.
+/// On the desktop room desk ([board]) they are that same grid, and opening
+/// one floats a card over the whole screen. Elsewhere on a wide surface the
+/// windows themselves are the floating cards. On that desktop, [underlay]
+/// holds the left/right panels under the windows so cards can float over them.
 class _CenterDesk extends StatelessWidget {
   const _CenterDesk({
     required this.workspace,
@@ -15,6 +18,7 @@ class _CenterDesk extends StatelessWidget {
     required this.roomId,
     this.underlay,
     this.topContentInset = 0,
+    this.board = false,
   });
   final String workspace;
   final String? room;
@@ -25,6 +29,9 @@ class _CenterDesk extends StatelessWidget {
   final String roomId;
   final Widget? underlay;
   final double topContentInset;
+
+  /// Widget grid, as on a phone. Opening a widget floats its card.
+  final bool board;
 
   Widget _frontend(String tool, ShownResult? shown) => ToolFrontendView(
     key: ValueKey('$tool/${shown?.microtool}/${shown?.args}'),
@@ -70,7 +77,7 @@ class _CenterDesk extends StatelessWidget {
       ? _AppPinPreview(name: p.name)
       : _frontend(p.tool, p.shown);
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState(BuildContext context, {required bool widgets}) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
@@ -81,13 +88,22 @@ class _CenterDesk extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               room == null ? 'My desk' : '$room desk',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: ThemeChrome.isPaper(context)
+                    ? FontWeight.w500
+                    : FontWeight.w900,
+              ),
             ),
             const SizedBox(height: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Text(
-                'App results open here as windows. Ask an agent, or open an app from the library.',
+                widgets
+                    ? (board
+                          ? 'Apps sit here as widgets. Open one and it floats over the workspace.'
+                          : 'App results open here as widgets. Ask an agent, or open an app from the library.')
+                    : 'App results open here as windows. Ask an agent, or open an app from the library.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
               ),
@@ -104,11 +120,14 @@ class _CenterDesk extends StatelessWidget {
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _WorkspacePatternPainter(workspace)),
+          if (ThemeChrome.paintsAtmosphere(context))
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _WorkspacePatternPainter(workspace),
+                ),
+              ),
             ),
-          ),
           Positioned.fill(
             // Every window's images, videos and audio load from the space's
             // project files, stored files and the node, as this person.
@@ -117,22 +136,26 @@ class _CenterDesk extends StatelessWidget {
               // Phones: the windows as compact widgets on a board, each
               // opened in a bottom sheet; wider screens: floating card windows.
               child: LayoutBuilder(
-                builder: (context, box) => box.maxWidth < compactDeskWidth
-                    ? CompactDesk(
-                        controller: controller,
-                        topInset: topContentInset,
-                        windowContent: _windowContent,
-                        pinPreview: _pinPreview,
-                        emptyState: _emptyState(context),
-                      )
-                    : FloatingDesk(
-                        controller: controller,
-                        topInset: topContentInset,
-                        underlay: underlay,
-                        windowContent: _windowContent,
-                        pinPreview: _pinPreview,
-                        emptyState: _emptyState(context),
-                      ),
+                builder: (context, box) {
+                  final widgets = board || box.maxWidth < compactDeskWidth;
+                  return widgets
+                      ? CompactDesk(
+                          controller: controller,
+                          topInset: topContentInset,
+                          floatOnOpen: board,
+                          windowContent: _windowContent,
+                          pinPreview: _pinPreview,
+                          emptyState: _emptyState(context, widgets: true),
+                        )
+                      : FloatingDesk(
+                          controller: controller,
+                          topInset: topContentInset,
+                          underlay: underlay,
+                          windowContent: _windowContent,
+                          pinPreview: _pinPreview,
+                          emptyState: _emptyState(context, widgets: false),
+                        );
+                },
               ),
             ),
           ),
@@ -434,14 +457,16 @@ class _MachineFace extends StatelessWidget {
             height: 168,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: .28),
-                  blurRadius: 48,
-                ),
-              ],
+              boxShadow: ThemeChrome.paintsAtmosphere(context)
+                  ? [
+                      BoxShadow(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: .28),
+                        blurRadius: 48,
+                      ),
+                    ]
+                  : null,
             ),
             child: Image.asset(
               'assets/images/only_orb.webp',
@@ -456,3 +481,77 @@ class _MachineFace extends StatelessWidget {
   }
 }
 
+/// Floating cards for the desktop workspace, on the root overlay so they
+/// move over the library, the chat, the room desk and the rest of the window.
+/// Empty space does not take taps. Only windows opened from the widget grid,
+/// the library, or an agent are shown; the grid itself stays in the desk pane.
+class _DeskFloatLayer extends StatelessWidget {
+  const _DeskFloatLayer({
+    required this.controller,
+    required this.dependencies,
+    required this.spaceId,
+    required this.roomId,
+  });
+
+  final DeskController controller;
+  final AppDependencies dependencies;
+  final String spaceId;
+  final String roomId;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    return ElpianMediaScope(
+      resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,
+      child: FloatingDesk(
+        controller: controller,
+        topInset: pad.top,
+        bottomInset: pad.bottom,
+        captureSurface: false,
+        onlyPresented: true,
+        showDock: false,
+        windowContent: (context, window) => DeskSurfaceContent(
+          dependencies: dependencies,
+          spaceId: spaceId,
+          roomId: roomId,
+          window: window,
+        ),
+        pinPreview: (_) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+/// Hosts [_DeskFloatLayer] on the root overlay for as long as this widget
+/// is mounted (the desktop pane layout).
+class _DeskWindowPortal extends StatefulWidget {
+  const _DeskWindowPortal({required this.layer, required this.child});
+
+  final Widget layer;
+  final Widget child;
+
+  @override
+  State<_DeskWindowPortal> createState() => _DeskWindowPortalState();
+}
+
+class _DeskWindowPortalState extends State<_DeskWindowPortal> {
+  final OverlayPortalController _portal = OverlayPortalController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _portal.show();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OverlayPortal(
+      controller: _portal,
+      overlayLocation: OverlayChildLocation.rootOverlay,
+      overlayChildBuilder: (context) => widget.layer,
+      child: widget.child,
+    );
+  }
+}

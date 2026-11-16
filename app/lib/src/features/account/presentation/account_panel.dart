@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/notifications/push_notification_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
@@ -60,10 +61,17 @@ Future<void> showAccountPanel(
 /// One account area (invitations, wallet, usage or account), backed directly
 /// by the platform action contract.
 class AccountPanel extends StatefulWidget {
-  const AccountPanel(
-      {super.key, required this.dependencies, required this.area});
+  const AccountPanel({
+    super.key,
+    required this.dependencies,
+    required this.area,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
   final AccountArea area;
+
+  /// Draw the area in the settings page instead of a modal panel.
+  final bool embedded;
 
   @override
   State<AccountPanel> createState() => _AccountPanelState();
@@ -152,8 +160,26 @@ class _AccountPanelState extends State<AccountPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 720;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final area = widget.area;
+    final body = loading
+        ? (widget.embedded
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : const SkeletonPage(padding: EdgeInsets.zero))
+        : AccountHubContent(
+            key: ValueKey(area),
+            area: area,
+            results: results,
+            shrinkWrap: widget.embedded,
+            onAction: (namespace, action, body) =>
+                run(_Endpoint(namespace, action, body)),
+            onNotifications: setNotifications,
+            notificationsSupported: PushNotificationService.supported,
+          );
+    if (widget.embedded) return body;
     return PanelScaffold(
       compact: compact,
       header: PanelHeader(
@@ -168,17 +194,7 @@ class _AccountPanelState extends State<AccountPanel> {
               icon: const Icon(Icons.refresh_rounded))
         ],
       ),
-      body: loading
-          ? const SkeletonPage(padding: EdgeInsets.zero)
-          : AccountHubContent(
-              key: ValueKey(area),
-              area: area,
-              results: results,
-              onAction: (namespace, action, body) =>
-                  run(_Endpoint(namespace, action, body)),
-              onNotifications: setNotifications,
-              notificationsSupported: PushNotificationService.supported,
-            ),
+      body: body,
     );
   }
 }

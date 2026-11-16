@@ -99,6 +99,52 @@ Some **bold** and *italic* with a [link](https://example.com) and `code`.
         isTrue);
   });
 
+  test('fenced charts, callouts and media links are visual blocks', () {
+    final blocks = parseRichMarkdown([
+      '> [!WARNING]',
+      '> look out',
+      '',
+      '[clip](https://cdn.example.com/note.mp3)',
+      '',
+      '```chart',
+      'title: Sales',
+      'Jan: 3',
+      'Feb: 9',
+      '```',
+      '',
+      '```spark',
+      'Mon: 1',
+      'Tue: 4',
+      '```',
+      '',
+      '```ts',
+      'const n = 1',
+      '```',
+    ].join('\n'));
+    expect(blocks[0].kind, BlockKind.callout);
+    expect(blocks[0].tone, 'warning');
+    expect(blocks[0].inline.first.map((t) => t.text).join(), 'look out');
+    expect(blocks[1].kind, BlockKind.audio);
+    expect(blocks[2].kind, BlockKind.chart);
+    expect(blocks[2].chart?['type'], 'bar');
+    expect(blocks[2].chart?['title'], 'Sales');
+    expect(blocks[2].chart?['values'], [3, 9]);
+    expect(blocks[3].kind, BlockKind.chart);
+    expect(blocks[3].chart?['type'], 'line');
+    expect(blocks[4].kind, BlockKind.code);
+    expect(blocks[4].language, 'ts');
+  });
+
+  test('a table keeps cells, including an empty one', () {
+    final blocks = parseRichMarkdown('| A | B |\n|---|---|\n| 1 |  |');
+    final table = blocks.single;
+    expect(table.cells, isNotNull);
+    expect(table.cells!.length, 2);
+    expect(table.cells!.first.length, 2);
+    expect(table.cells!.last.length, 2);
+    expect(table.cells!.last.last.map((t) => t.text).join(), '');
+  });
+
   test('underscores emphasise at word edges only, and fences keep their language',
       () {
     final tokens = parseInline('_soft_ and __loud__ but snake_case_name');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/theme_chrome.dart';
 import 'sky_ui.dart';
 
 /// Soft empty state for modal panels and tab lists: a [SkyIconBadge],
@@ -46,7 +47,9 @@ class PanelEmpty extends StatelessWidget {
               style: TextStyle(
                   fontSize: compact ? 13 : 17,
                   letterSpacing: -.3,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: ThemeChrome.isPaper(context)
+                      ? FontWeight.w500
+                      : FontWeight.w800,
                   color: scheme.onSurface)),
           SizedBox(height: compact ? AppSpacing.xxs : AppSpacing.xs - 2),
           Text(message,

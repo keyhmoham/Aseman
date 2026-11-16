@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/search_feed/presentation/rich_post_content.dart';
 import '../features/tools/ui_kit/kit.dart';
 import '../shared/widgets/glass_surface.dart';
 import '../shared/widgets/overlay_panels.dart';
@@ -28,6 +29,16 @@ class AgUiSurfaceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final body = _surface(context);
+      if (constraints.maxWidth.isFinite) return body;
+      // A chat column can pass an unbounded width. Cards, charts and the
+      // kit's rows need a finite one or they fail to lay out.
+      return SizedBox(width: 320, child: body);
+    });
+  }
+
+  Widget _surface(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final root = surface.root;
     if (root == null) {
@@ -112,6 +123,22 @@ class AgUiSurfaceView extends StatelessWidget {
           ],
         );
       case 'Card':
+        final subtitle = '${props['subtitle'] ?? props['description'] ?? ''}'.trim();
+        final body = props['content'] ?? props['body'] ?? props['text'];
+        final recordSource = props['items'] ??
+            props['fields'] ??
+            props['pairs'] ??
+            props['entries'] ??
+            props['facts'] ??
+            props['metrics'] ??
+            (props['data'] is Map || props['data'] is List ? props['data'] : null);
+        final childIsRecord = kids.any((k) {
+          if (k is! Map) return false;
+          final t = typeOf(Map<String, dynamic>.from(k));
+          return t == 'KeyValue' || t == 'Stat' || t == 'DataGrid' || t == 'Table';
+        });
+        final showRecord =
+            !childIsRecord && recordPairs(recordSource).isNotEmpty;
         return AppCard(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -123,6 +150,22 @@ class AgUiSurfaceView extends StatelessWidget {
                 if ('${props['title'] ?? ''}'.isNotEmpty)
                   Text('${props['title']}',
                       style: const TextStyle(fontWeight: FontWeight.w700)),
+                if (subtitle.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 6),
+                    child: Text(subtitle,
+                        style: const TextStyle(fontSize: 12, height: 1.3)),
+                  ),
+                if (body is String && body.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: RichPostContent(body),
+                  ),
+                if (showRecord)
+                  KeyValueList(props: {
+                    if (recordSource is List) 'items': recordSource,
+                    if (recordSource is Map) 'data': recordSource,
+                  }),
                 ...kids.map(_node),
               ],
             ),
@@ -144,9 +187,14 @@ class AgUiSurfaceView extends StatelessWidget {
           ),
         );
       case 'Text':
+        final text =
+            '${props['content'] ?? props['text'] ?? props['value'] ?? props['body'] ?? props['message'] ?? ''}'
+                .trim();
+        if (text.isEmpty) return const SizedBox.shrink();
+        return Text(text, style: const TextStyle(fontSize: 13, height: 1.35));
       case 'Markdown':
-        return Text('${props['content'] ?? props['text'] ?? props['value'] ?? ''}',
-            style: const TextStyle(fontSize: 13, height: 1.35));
+        return RichPostContent(
+            '${props['content'] ?? props['text'] ?? props['value'] ?? ''}');
       case 'Empty':
         return Text('${props['text'] ?? props['title'] ?? 'Nothing here'}',
             style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic));
@@ -223,12 +271,40 @@ class AgUiSurfaceView extends StatelessWidget {
           if (props['data'] == null && props['rows'] != null) 'data': props['rows'],
         }, kids);
       default:
+        if (type == 'Chart') return _chartOrFacts(props, kids);
         if (kitBuilders.containsKey(type)) {
-          return _kit(type, props, kids);
+          final kitProps = switch (type) {
+            'Sparkline' => chartPropsForKit(props),
+            'Callout' => calloutPropsForKit(props),
+            _ => props,
+          };
+          return _kit(type, kitProps, kids);
         }
         return Text('Unknown AG-UI node: $type',
             style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic));
     }
+  }
+
+  /// A chart with numbers draws. One whose fields are words (a conditions
+  /// card handed over as a chart) shows those fields. One with nothing
+  /// draws nothing, so the card is not a tall empty plot.
+  Widget _chartOrFacts(Map<String, dynamic> props, List<dynamic> kids) {
+    final kitProps = chartPropsForKit(props);
+    return Builder(builder: (context) {
+      final spec = ChartSpec.fromProps(kitProps, VizPalette.of(context));
+      if (spec.rows.isNotEmpty && spec.series.isNotEmpty) {
+        return _kit('Chart', kitProps, kids);
+      }
+      final data = kitProps['data'] ??
+          kitProps['points'] ??
+          kitProps['values'] ??
+          kitProps['rows'];
+      if (recordPairs(data).isEmpty) return const SizedBox.shrink();
+      return KeyValueList(props: {
+        if (data is List) 'items': data,
+        if (data is Map) 'data': data,
+      });
+    });
   }
 
   Widget _kit(String type, Map<String, dynamic> props, List<dynamic> kids) {

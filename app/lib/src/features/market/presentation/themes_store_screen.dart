@@ -119,66 +119,53 @@ class _ThemesStoreScreenState extends State<ThemesStoreScreen> {
           AppSpacing.xxl,
         ),
         children: [
-          SoftCard(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                SkyIconBadge(
-                  icon: Icons.palette_rounded,
-                  size: 44,
+          _ThemeMasthead(
+            onCreate: _openStudio,
+            subtitle: 'Colors, glass, shapes, and shell layout',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Included with Decillion',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.2,
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const EyebrowLabel('THEMES'),
-                      Text(
-                        'Restyle the whole app',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      Text(
-                        'Colors, glass, shapes, and shell layout',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Swipe the shelf. Applying one restyles the whole app.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 248,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: DefaultThemePacks.all.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final pack = DefaultThemePacks.all[i];
+                return SizedBox(
+                  width: 176,
+                  child: _ThemePoster(
+                    name: pack.meta.name,
+                    description: pack.meta.description,
+                    colors: pack.meta.previewColors,
+                    active: activeId == pack.id,
+                    onApply: () => _applyBuiltin(pack),
                   ),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: _openStudio,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Create'),
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Built in',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          for (final pack in DefaultThemePacks.all) ...[
-            _ThemePackTile(
-              name: pack.meta.name,
-              description: pack.meta.description,
-              colors: pack.meta.previewColors,
-              active: activeId == pack.id,
-              onApply: () => _applyBuiltin(pack),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Text(
             'From the store',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
+                  letterSpacing: -.2,
                 ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -198,21 +185,35 @@ class _ThemesStoreScreenState extends State<ThemesStoreScreen> {
                   'Create one in Theme Studio, or ask Aseman to design one.',
             )
           else
-            for (final listing in _listings) ...[
-              _ThemePackTile(
-                name: listing.name,
-                description: listing.description,
-                colors: const [],
-                active: activeId != null &&
-                    ThemePackScope.maybeOf(context)?.listingId == listing.id,
-                onApply: () => _installListing(listing),
-                trailing: Text(
-                  listing.price <= 0 ? 'Free' : '${listing.price}',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final columns = (width / 190).floor().clamp(1, 4);
+                final tileWidth =
+                    (width - (columns - 1) * 12) / columns;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final listing in _listings)
+                      SizedBox(
+                        width: tileWidth,
+                        height: 248,
+                        child: _ThemePoster(
+                          name: listing.name,
+                          description: listing.description,
+                          colors: const [],
+                          price: listing.price <= 0 ? 'Free' : '${listing.price}',
+                          active: activeId != null &&
+                              ThemePackScope.maybeOf(context)?.listingId ==
+                                  listing.id,
+                          onApply: () => _installListing(listing),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );
@@ -220,14 +221,81 @@ class _ThemesStoreScreenState extends State<ThemesStoreScreen> {
   }
 }
 
-class _ThemePackTile extends StatelessWidget {
-  const _ThemePackTile({
+class _ThemeMasthead extends StatelessWidget {
+  const _ThemeMasthead({required this.onCreate, required this.subtitle});
+
+  final VoidCallback onCreate;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = scheme.brightness == Brightness.dark;
+    return SoftCard(
+      wash: true,
+      elevated: true,
+      padding: EdgeInsets.zero,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              scheme.tertiaryContainer.withValues(alpha: dark ? .7 : .95),
+              Color.alphaBlend(
+                scheme.primaryContainer.withValues(alpha: dark ? .4 : .5),
+                scheme.surface,
+              ),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const SkyIconBadge(icon: Icons.palette_rounded, size: 44),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const EyebrowLabel('THEMES'),
+                    Text(
+                      'Restyle the whole app',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Create'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemePoster extends StatelessWidget {
+  const _ThemePoster({
     required this.name,
     required this.description,
     required this.colors,
     required this.active,
     required this.onApply,
-    this.trailing,
+    this.price,
   });
 
   final String name;
@@ -235,46 +303,59 @@ class _ThemePackTile extends StatelessWidget {
   final List<Color> colors;
   final bool active;
   final VoidCallback onApply;
-  final Widget? trailing;
+  final String? price;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return SoftCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
+      selected: active,
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Swatch(colors: colors.isEmpty ? [scheme.primary, scheme.tertiary] : colors),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          _Swatch(
+            colors: colors.isEmpty ? [scheme.primary, scheme.tertiary] : colors,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          if (description.isNotEmpty)
+            Text(
+              description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.25,
+                  ),
+            ),
+          const Spacer(),
+          Row(
+            children: [
+              if (price != null)
                 Text(
-                  name,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+                  price!,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                 ),
-                if (description.isNotEmpty)
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                  ),
-              ],
-            ),
-          ),
-          if (trailing != null) ...[
-            trailing!,
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          FilledButton(
-            onPressed: active ? null : onApply,
-            child: Text(active ? 'Active' : 'Apply'),
+              const Spacer(),
+              FilledButton(
+                onPressed: active ? null : onApply,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: Text(active ? 'Active' : 'Apply'),
+              ),
+            ],
           ),
         ],
       ),
@@ -289,22 +370,46 @@ class _Swatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = colors.take(3).toList();
+    final shown = colors.take(4).toList();
     return SizedBox(
-      width: 52,
-      height: 52,
+      height: 92,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: AppShape.borderRadius(context, 16),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant,
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .7),
           ),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: shown.length == 1
-                ? [shown.first, shown.first]
-                : shown,
+            colors: shown.length == 1 ? [shown.first, shown.first] : shown,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Row(
+              children: [
+                for (final color in shown.take(3))
+                  Container(
+                    width: 14,
+                    height: 14,
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: .85),
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

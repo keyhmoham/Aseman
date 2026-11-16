@@ -1,13 +1,20 @@
 import 'package:aseman/src/core/theme/app_surfaces.dart';
 import 'package:aseman/src/core/theme/app_theme.dart';
 import 'package:aseman/src/core/theme/aseman_tokens.dart';
+import 'package:aseman/src/core/theme/default_theme_packs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final (name, theme) in [
-    ('dark', AppTheme.darkWith(Colors.teal)),
-    ('light', AppTheme.lightWith(Colors.teal)),
+    (
+      'dark',
+      AppTheme.darkWith(Colors.teal, pack: DefaultThemePacks.sky),
+    ),
+    (
+      'light',
+      AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.sky),
+    ),
   ]) {
     test('$name theme gives every modal surface the same colour and scrim', () {
       // The pack's tokens set the overlay opacity (Sky: its own per mode).
@@ -191,7 +198,7 @@ void main() {
   });
 
   test('light glass stays translucent', () {
-    final theme = AppTheme.light;
+    final theme = AppTheme.fromPack(DefaultThemePacks.sky, Brightness.light);
     final tokens = theme.extension<AsemanTokens>()!;
     final scheme = theme.colorScheme;
     // The opacities are the pack's (Sky light: cards .96, modal chrome .88).

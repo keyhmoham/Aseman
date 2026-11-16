@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
@@ -23,7 +24,8 @@ import 'sky_ui.dart';
 
 /// Layout numbers for the floating glass [WorkspaceHeader] so every host
 /// page can reserve matching top space. Pass [compact] from the same
-/// breakpoint the header uses (`width < 820`): phones keep a near-edge pill;
+/// breakpoint the header uses (`width < Breakpoints.expanded`): phones keep a
+/// near-edge pill;
 /// desktop keeps a wide gutter and caps the pill at [desktopMaxWidth] so it
 /// stays compact instead of stretching across the screen.
 abstract final class FloatingAppBarLayout {
@@ -42,12 +44,13 @@ abstract final class FloatingAppBarLayout {
   /// Distance from the safe-area top to the pill.
   static double topMargin(bool compact) => compact ? 16 : 20;
 
-  /// Distance from the screen's left/right edges to the pill. Desktop keeps
-  /// a wide gutter; on very wide windows [desktopMaxWidth] adds still more.
-  static double horizontalMargin(bool compact) => compact ? 16 : 128;
+  /// Distance from the screen's left/right edges to the pill. Aligns with the
+  /// Material 3 page margin; on very wide windows [desktopMaxWidth] absorbs
+  /// the extra width instead of stretching the bar.
+  static double horizontalMargin(bool compact) => compact ? 16 : 24;
 
   /// Widest the desktop pill grows. Extra window width stays as side margin.
-  static const double desktopMaxWidth = 840;
+  static const double desktopMaxWidth = 1200;
 
   /// Top space hosts should reserve inside scrollable / page content so the
   /// first paint clears the bar; when that content scrolls, it passes under.
@@ -68,23 +71,25 @@ abstract final class FloatingAppBarLayout {
   }
 
   static EdgeInsets margin(bool compact) => EdgeInsets.fromLTRB(
-      horizontalMargin(compact), topMargin(compact), horizontalMargin(compact), 0);
+    horizontalMargin(compact),
+    topMargin(compact),
+    horizontalMargin(compact),
+    0,
+  );
 }
 
 /// Icon buttons inside the short pill: the theme's 48px target would force
 /// the bar taller than the avatar. Shape / ink follow the active pack.
-ButtonStyle _barIconStyle(BuildContext context) =>
-    context.barIconButtonStyle(
-      iconSize: (AsemanTokens.maybeOf(context)?.language.iconSize ?? 22) - 4,
-    );
+ButtonStyle _barIconStyle(BuildContext context) => context.barIconButtonStyle(
+  iconSize: (AsemanTokens.maybeOf(context)?.language.iconSize ?? 22) - 4,
+);
 
 /// Shared floating top app bar of the workspace and the feed: a long glass
 /// pill over the page. ASEMAN sits in the middle. On the right: the widgets /
 /// windows library, and on wide screens the account avatar beside it. Phones
 /// hide the avatar (profile lives in Home's You tab). On the workspace the
-/// left edge is a Home pill that returns to the feed. On the feed the left
-/// edge holds the notifications. On the workspace the switcher opens from the
-/// [SwitcherEdgeHandle] (hidden on the feed). Hosts overlay this bar and use
+/// left edge is a Home pill that returns to the chats list. On the feed the
+/// left edge holds the notifications. Hosts overlay this bar and use
 /// [FloatingAppBarLayout.contentInset] so content starts clear of it.
 /// Optional callbacks hide the corresponding controls.
 class WorkspaceHeader extends StatelessWidget {
@@ -103,9 +108,12 @@ class WorkspaceHeader extends StatelessWidget {
     this.onOpenAdmin,
     this.onOpenProfile,
     this.onOpenWidgetsLibrary,
+    this.onOpenLibrary,
+    this.onOpenSpaceFeed,
     this.handle = '',
     this.accountId = '',
     this.avatar,
+    this.anchored = false,
   });
 
   final String? room;
@@ -131,13 +139,40 @@ class WorkspaceHeader extends StatelessWidget {
   final VoidCallback? onOpenAdmin;
 
   /// Opens the profile menu. Shown only on wide screens; phones use You.
-  final VoidCallback? onOpenProfile;
+  final void Function(BuildContext anchor)? onOpenProfile;
 
   /// Opens the widgets / windows library (sheet on phones, modal on desktop).
   final VoidCallback? onOpenWidgetsLibrary;
 
+  /// Opens the rooms, agents and apps library as a floating card.
+  final VoidCallback? onOpenLibrary;
+
+  /// Opens the space feed when the desktop layout cannot dock it as a pane.
+  final VoidCallback? onOpenSpaceFeed;
+
+  /// Full-width Material bar. Desktop pages use this instead of the floating pill.
+  final bool anchored;
+
   @override
   Widget build(BuildContext context) {
+    if (anchored && !compact) {
+      return _AnchoredWorkspaceBar(
+        title: feed ? 'Home' : (room ?? 'Workspace'),
+        room: room,
+        onOpenNotifications: onOpenNotifications,
+        unreadNotifications: unreadNotifications,
+        onBackToFeed: onBackToFeed,
+        onGoHome: onGoHome,
+        onOpenAdmin: onOpenAdmin,
+        onOpenProfile: onOpenProfile,
+        onOpenWidgetsLibrary: onOpenWidgetsLibrary,
+        onOpenLibrary: onOpenLibrary,
+        onOpenSpaceFeed: onOpenSpaceFeed,
+        handle: handle,
+        accountId: accountId,
+        avatar: avatar,
+      );
+    }
     final header = context.panelHeaderRecipe;
     final radius = header.shape == ShapeKind.stadium
         ? BorderRadius.circular(FloatingAppBarLayout.height)
@@ -146,133 +181,178 @@ class WorkspaceHeader extends StatelessWidget {
     final iconStyle = _barIconStyle(context);
     // Material paints elevation shadows that follow [shape], so pack radii
     // apply to the floating bar's shadow — not only its glass fill.
+    final atmospheric = ThemeChrome.paintsAtmosphere(context);
     final bar = Material(
       color: Colors.transparent,
-      elevation: math.max(header.elevation, 6),
-      shadowColor: Colors.black.withValues(alpha: .35),
+      elevation: atmospheric
+          ? math.max(header.elevation, 6)
+          : header.elevation.clamp(0, 1).toDouble(),
+      shadowColor: Colors.black.withValues(alpha: atmospheric ? .35 : .12),
       shape: shape,
       clipBehavior: Clip.antiAlias,
       child: GlassSurface(
         alpha: AppSurfaces.cardAlphaOf(context),
         blur: AppSurfaces.blurSigmaOf(context),
         borderRadius: radius,
-        border: false,
+        border: !atmospheric,
         child: SizedBox(
           height: FloatingAppBarLayout.height,
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
-            child: Row(children: [
-              Expanded(
-                  child: Row(children: [
-                if (feed && onOpenNotifications != null)
-                  IconButton(
-                      style: iconStyle,
-                      tooltip: 'Notifications',
-                      onPressed: onOpenNotifications,
-                      icon: Badge(
-                          isLabelVisible: unreadNotifications > 0,
-                          label: Text(unreadNotifications > 99
-                              ? '99+'
-                              : '$unreadNotifications'),
-                          child: const Icon(Icons.notifications_none_rounded)))
-                else if (onBackToFeed != null)
-                  _HomePill(onPressed: onBackToFeed),
-                // Room path (hall shortcut + room title) is desktop-only;
-                // on phones the Desk / Feed|Chat tabs already cover
-                // navigation.
-                if (room != null && !compact) ...[
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right_rounded, size: 18),
-                  if (onGoHome != null)
-                    IconButton(
-                        style: iconStyle,
-                        onPressed: onGoHome,
-                        tooltip: 'Workspace home',
-                        icon: const Icon(Icons.home_outlined)),
-                  Flexible(
-                      child: Text(room!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600)))
-                ],
-              ])),
-              SizedBox(width: compact ? 6 : 10),
-              Text('ASEMAN',
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      if (onOpenLibrary != null)
+                        IconButton(
+                          style: iconStyle,
+                          tooltip: 'Library',
+                          onPressed: onOpenLibrary,
+                          icon: const Icon(Icons.menu_rounded),
+                        ),
+                      if (feed && onOpenNotifications != null)
+                        IconButton(
+                          style: iconStyle,
+                          tooltip: 'Notifications',
+                          onPressed: onOpenNotifications,
+                          icon: Badge(
+                            isLabelVisible: unreadNotifications > 0,
+                            label: Text(
+                              unreadNotifications > 99
+                                  ? '99+'
+                                  : '$unreadNotifications',
+                            ),
+                            child: const Icon(Icons.notifications_none_rounded),
+                          ),
+                        )
+                      else if (onBackToFeed != null)
+                        _HomePill(onPressed: onBackToFeed),
+                      // Room path (hall shortcut + room title) is desktop-only;
+                      // on phones the Desk / Feed|Chat tabs already cover
+                      // navigation.
+                      if (room != null && !compact) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right_rounded, size: 18),
+                        if (onGoHome != null)
+                          IconButton(
+                            style: iconStyle,
+                            onPressed: onGoHome,
+                            tooltip: 'Workspace home',
+                            icon: const Icon(Icons.home_outlined),
+                          ),
+                        Flexible(
+                          child: Text(
+                            room!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                SizedBox(width: compact ? 6 : 10),
+                Text(
+                  'ASEMAN',
                   maxLines: 1,
                   style: TextStyle(
-                      fontSize: compact ? 13.5 : 14.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
-                      color: Theme.of(context).colorScheme.onSurface)),
-              SizedBox(width: compact ? 6 : 10),
-              Expanded(
+                    fontSize: compact ? 13.5 : 14.5,
+                    fontWeight: ThemeChrome.isPaper(context)
+                        ? FontWeight.w500
+                        : FontWeight.w800,
+                    letterSpacing: 1.4,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                SizedBox(width: compact ? 6 : 10),
+                Expanded(
                   child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                    if (!compact) ...[
-                      const Flexible(child: _LivePill()),
-                      const SizedBox(width: 6),
-                    ],
-                    if (!compact && onOpenAdmin != null) ...[
-                      IconButton.filledTonal(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (!compact) ...[
+                        const Flexible(child: _LivePill()),
+                        const SizedBox(width: 6),
+                      ],
+                      if (!compact && onOpenAdmin != null) ...[
+                        IconButton.filledTonal(
                           style: iconStyle,
                           onPressed: onOpenAdmin,
-                          icon: const Icon(Icons.space_dashboard_outlined)),
-                      const SizedBox(width: 6),
-                    ],
-                    if (onOpenWidgetsLibrary != null)
-                      IconButton(
+                          icon: const Icon(Icons.space_dashboard_outlined),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (!compact && onOpenSpaceFeed != null) ...[
+                        IconButton(
+                          style: iconStyle,
+                          tooltip: 'Space feed',
+                          onPressed: onOpenSpaceFeed,
+                          icon: const Icon(Icons.dynamic_feed_outlined),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      if (onOpenWidgetsLibrary != null)
+                        IconButton(
                           style: iconStyle,
                           tooltip: 'Widgets & windows',
                           onPressed: onOpenWidgetsLibrary,
-                          icon: const Icon(Icons.widgets_outlined)),
-                    if (!compact && onOpenProfile != null) ...[
-                      if (onOpenWidgetsLibrary != null)
-                        const SizedBox(width: 4),
-                      Builder(builder: (context) {
-                        final ar = FloatingAppBarLayout.avatarRadius;
-                        final size = ar * 2;
-                        final corners = context.avatarBorderRadius(size);
-                        final circular = corners.topLeft.x >= ar * .95;
-                        final face = AvatarFace(
-                          size: size,
-                          borderRadius: corners,
-                          backgroundColor: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: .18),
-                          foregroundImage: avatar,
-                          onImageError: avatar == null ? null : (_, __) {},
-                          child: Text(
-                            handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
-                          ),
-                        );
-                        return Tooltip(
-                          message: profileTooltip,
-                          child: InkWell(
-                            onTap: onOpenProfile,
-                            customBorder: circular
-                                ? const CircleBorder()
-                                : RoundedRectangleBorder(
-                                    borderRadius: corners),
-                            child: HaloRing(
-                              pad: 1.8,
-                              identity: HaloRingCache.person(accountId),
+                          icon: const Icon(Icons.widgets_outlined),
+                        ),
+                      if (!compact && onOpenProfile != null) ...[
+                        if (onOpenWidgetsLibrary != null)
+                          const SizedBox(width: 4),
+                        Builder(
+                          builder: (context) {
+                            final ar = FloatingAppBarLayout.avatarRadius;
+                            final size = ar * 2;
+                            final corners = context.avatarBorderRadius(size);
+                            final circular = corners.topLeft.x >= ar * .95;
+                            final face = AvatarFace(
+                              size: size,
                               borderRadius: corners,
-                              child: face,
-                            ),
-                          ),
-                        );
-                      }),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: .18),
+                              foregroundImage: avatar,
+                              onImageError: avatar == null ? null : (_, __) {},
+                              child: Text(
+                                handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1,
+                                ),
+                              ),
+                            );
+                            return Tooltip(
+                              message: profileTooltip,
+                              child: InkWell(
+                                onTap: () => onOpenProfile!(context),
+                                customBorder: circular
+                                    ? const CircleBorder()
+                                    : RoundedRectangleBorder(
+                                        borderRadius: corners,
+                                      ),
+                                child: HaloRing(
+                                  pad: 1.8,
+                                  identity: HaloRingCache.person(accountId),
+                                  borderRadius: corners,
+                                  child: face,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ],
-                  ])),
-            ]),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -288,6 +368,164 @@ class WorkspaceHeader extends StatelessWidget {
                 : FloatingAppBarLayout.desktopMaxWidth,
           ),
           child: bar,
+        ),
+      ),
+    );
+  }
+}
+
+/// A 64dp Material bar for desktop pages. Actions stay; the floating pill does not.
+class _AnchoredWorkspaceBar extends StatelessWidget {
+  const _AnchoredWorkspaceBar({
+    required this.title,
+    required this.room,
+    required this.unreadNotifications,
+    required this.handle,
+    required this.accountId,
+    this.onOpenNotifications,
+    this.onBackToFeed,
+    this.onGoHome,
+    this.onOpenAdmin,
+    this.onOpenProfile,
+    this.onOpenWidgetsLibrary,
+    this.onOpenLibrary,
+    this.onOpenSpaceFeed,
+    this.avatar,
+  });
+
+  final String title;
+  final String? room;
+  final int unreadNotifications;
+  final String handle;
+  final String accountId;
+  final VoidCallback? onOpenNotifications;
+  final VoidCallback? onBackToFeed;
+  final VoidCallback? onGoHome;
+  final VoidCallback? onOpenAdmin;
+  final void Function(BuildContext anchor)? onOpenProfile;
+  final VoidCallback? onOpenWidgetsLibrary;
+  final VoidCallback? onOpenLibrary;
+  final VoidCallback? onOpenSpaceFeed;
+  final ImageProvider? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final iconStyle = _barIconStyle(context);
+    return Material(
+      color: scheme.surfaceContainer,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: .5),
+            ),
+          ),
+        ),
+        child: SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                if (onOpenLibrary != null)
+                  IconButton(
+                    tooltip: 'Library',
+                    onPressed: onOpenLibrary,
+                    icon: const Icon(Icons.menu_rounded),
+                  ),
+                if (onBackToFeed != null)
+                  IconButton(
+                    tooltip: 'Home',
+                    onPressed: onBackToFeed,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                if (onOpenNotifications != null)
+                  IconButton(
+                    style: iconStyle,
+                    tooltip: 'Notifications',
+                    onPressed: onOpenNotifications,
+                    icon: Badge(
+                      isLabelVisible: unreadNotifications > 0,
+                      label: Text(
+                        unreadNotifications > 99
+                            ? '99+'
+                            : '$unreadNotifications',
+                      ),
+                      child: const Icon(Icons.notifications_none_rounded),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                if (room != null && onGoHome != null)
+                  IconButton(
+                    tooltip: 'Workspace home',
+                    onPressed: onGoHome,
+                    icon: const Icon(Icons.home_outlined),
+                  ),
+                const _LivePill(),
+                if (onOpenAdmin != null)
+                  IconButton.filledTonal(
+                    style: iconStyle,
+                    tooltip: 'Admin',
+                    onPressed: onOpenAdmin,
+                    icon: const Icon(Icons.space_dashboard_outlined),
+                  ),
+                if (onOpenSpaceFeed != null)
+                  IconButton(
+                    style: iconStyle,
+                    tooltip: 'Space feed',
+                    onPressed: onOpenSpaceFeed,
+                    icon: const Icon(Icons.dynamic_feed_outlined),
+                  ),
+                if (onOpenWidgetsLibrary != null)
+                  IconButton(
+                    style: iconStyle,
+                    tooltip: 'Widgets & windows',
+                    onPressed: onOpenWidgetsLibrary,
+                    icon: const Icon(Icons.widgets_outlined),
+                  ),
+                if (onOpenProfile != null)
+                  Builder(
+                    builder: (context) => Tooltip(
+                      message: WorkspaceHeader.profileTooltip,
+                      child: InkWell(
+                        onTap: () => onOpenProfile!(context),
+                        customBorder: const CircleBorder(),
+                        child: HaloRing(
+                          pad: 1.5,
+                          identity: HaloRingCache.person(accountId),
+                          borderRadius: BorderRadius.circular(16),
+                          child: AvatarFace(
+                            size: 32,
+                            borderRadius: BorderRadius.circular(16),
+                            backgroundColor: scheme.primary.withValues(
+                              alpha: .18,
+                            ),
+                            foregroundImage: avatar,
+                            onImageError: avatar == null ? null : (_, __) {},
+                            child: Text(
+                              handle.isEmpty ? 'ME' : handle[0].toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -345,52 +583,8 @@ class _HomePill extends StatelessWidget {
   }
 }
 
-/// The workspace switcher's handle: a bump stuck to the screen's right edge,
-/// centered vertically, with a rocket in it. Tapping it opens the switcher.
-class SwitcherEdgeHandle extends StatelessWidget {
-  const SwitcherEdgeHandle({super.key, required this.onTap});
-  final VoidCallback onTap;
-
-  static const _width = 30.0, _height = 168.0;
-
-  /// Height of the bump, so other edge handles can stack under it.
-  static const height = _height;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Positioned.fill(
-        child: SafeArea(
-            child: Align(
-                alignment: Alignment.centerRight,
-                child: Tooltip(
-                    message: 'Switch workspace',
-                    child: Semantics(
-                        button: true,
-                        label: 'Switch workspace',
-                        child: GestureDetector(
-                            onTap: onTap,
-                            behavior: HitTestBehavior.opaque,
-                            child: CustomPaint(
-                                painter: EdgeBumpPainter(
-                                    fill: ThemeRoles.selectedFill(context),
-                                    shadow: scheme.shadow),
-                                child: SizedBox(
-                                    width: _width,
-                                    height: _height,
-                                    child: Align(
-                                        alignment: const Alignment(.3, 0),
-                                        child: Icon(
-                                            Icons.rocket_launch_rounded,
-                                            size: 17,
-                                            color: ThemeRoles.selectedInk(
-                                                context)))))))))));
-  }
-}
-
 /// A bell-shaped bump growing out of the right edge, tapering to nothing at
-/// its top and bottom. Shared by the screen-edge handles (workspace switcher,
-/// gadgets).
+/// its top and bottom. Used by the gadgets handle.
 class EdgeBumpPainter extends CustomPainter {
   const EdgeBumpPainter({required this.fill, required this.shadow});
   final Color fill;
@@ -424,16 +618,22 @@ class _LivePill extends StatelessWidget {
         vertical: context.chipRecipe.paddingV.clamp(3, 8),
       ),
       decoration: context.metaChipDecoration(accent: success),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.circle, color: success, size: 7),
-        const SizedBox(width: 7),
-        Text('Live now',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, color: success, size: 7),
+          const SizedBox(width: 7),
+          Text(
+            'Live now',
             style: TextStyle(
-                fontSize: 11,
-                letterSpacing: -.1,
-                fontWeight: FontWeight.w700,
-                color: success))
-      ]),
+              fontSize: 11,
+              letterSpacing: -.1,
+              fontWeight: FontWeight.w700,
+              color: success,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -449,18 +649,20 @@ class _LivePill extends StatelessWidget {
 /// Visual language: celestial "sky portals" — soft atmospheric glow, a docked
 /// current workspace, and luminous portal tiles with name-hashed accents.
 class WorkspacePicker extends StatefulWidget {
-  const WorkspacePicker(
-      {super.key,
-      required this.current,
-      required this.onPick,
-      this.onOpenFeed,
-      this.feedSelected = false,
-      this.dependencies,
-      this.onSettings,
-      this.embedded = false,
-      this.inBottomSheet = false,
-      this.dense = false});
+  const WorkspacePicker({
+    super.key,
+    required this.current,
+    required this.onPick,
+    this.onOpenFeed,
+    this.feedSelected = false,
+    this.dependencies,
+    this.onSettings,
+    this.embedded = false,
+    this.inBottomSheet = false,
+    this.dense = false,
+  });
   final String current;
+
   /// [spaceId] is set when the tile is a known project (preferred for loading).
   final void Function(String name, {String spaceId}) onPick;
   final VoidCallback? onOpenFeed;
@@ -549,30 +751,29 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 820;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.expanded;
     final embedded = widget.embedded;
-    final inSheet =
-        widget.inBottomSheet || AppSheetScope.inSheetOf(context);
+    final inSheet = widget.inBottomSheet || AppSheetScope.inSheetOf(context);
     final dense = widget.dense;
     final names = _names;
     final showFeed = _showFeed;
-    final reduceMotion =
-        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final pad = dense
         ? AppSpacing.sm
         : (embedded || inSheet ? AppSpacing.md : AppSpacing.xl - 2);
 
     // Sheet / floating panel / embedded rail paint the frost; keep clear.
     final body = Material(
-        color: Colors.transparent,
-        child: SizedBox(
-          width: embedded ? null : 780,
-          child: ConstrainedBox(
-            constraints: embedded
-                ? const BoxConstraints.expand()
-                : BoxConstraints(maxHeight: compact ? double.infinity : 640),
-            child: Stack(
-              children: [
+      color: Colors.transparent,
+      child: SizedBox(
+        width: embedded ? null : 780,
+        child: ConstrainedBox(
+          constraints: embedded
+              ? const BoxConstraints.expand()
+              : BoxConstraints(maxHeight: compact ? double.infinity : 640),
+          child: Stack(
+            children: [
+              if (ThemeChrome.paintsAtmosphere(context))
                 Positioned.fill(
                   child: IgnorePointer(
                     child: CustomPaint(
@@ -580,157 +781,172 @@ class _WorkspacePickerState extends State<WorkspacePicker> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsets.all(pad),
-                  child: Column(
-                      mainAxisSize: embedded || inSheet
-                          ? MainAxisSize.max
-                          : MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SkySectionHeader(
-                          icon: embedded
-                              ? Icons.workspaces_rounded
-                              : Icons.rocket_launch_rounded,
-                          title: embedded ? 'Spaces' : 'Switch workspace',
-                          subtitle: embedded
-                              ? 'Open a workspace or start a new one'
-                              : 'Drift between rooms, desks and feeds',
-                          dense: dense,
-                          onClose: embedded
-                              ? null
-                              : () => Navigator.pop(context),
-                        ),
-                        SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
-                        if (!dense) ...[
-                          _DockedHere(
-                            feedSelected: widget.feedSelected,
-                            currentName: widget.current,
-                            avatar: widget.feedSelected
-                                ? null
-                                : _avatarOf(widget.current),
-                            roomCount: widget.feedSelected
-                                ? null
-                                : _roomCountFor(widget.current),
-                            onOpenFeed: widget.onOpenFeed,
-                            onOpenCurrent: widget.feedSelected ||
-                                    widget.current.isEmpty
-                                ? null
-                                : () {
-                                    var id = '';
-                                    for (final s in spaces) {
-                                      if (s.name == widget.current) {
-                                        id = s.id;
-                                        break;
-                                      }
-                                    }
-                                    widget.onPick(widget.current,
-                                        spaceId: id);
-                                  },
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                        SoftSearchField(
-                          dense: dense,
-                          autofocus: !embedded,
-                          hintText: 'Search workspaces…',
-                          onChanged: (v) => setState(() => query = v),
-                        ),
-                        SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
-                        Flexible(
-                            child: LayoutBuilder(builder: (context, gridBox) {
+              Padding(
+                padding: EdgeInsets.all(pad),
+                child: Column(
+                  mainAxisSize: embedded || inSheet
+                      ? MainAxisSize.max
+                      : MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkySectionHeader(
+                      icon: embedded
+                          ? Icons.workspaces_rounded
+                          : Icons.rocket_launch_rounded,
+                      title: embedded ? 'Spaces' : 'Switch workspace',
+                      subtitle: embedded
+                          ? 'Open a workspace or start a new one'
+                          : 'Drift between rooms, desks and feeds',
+                      dense: dense,
+                      onClose: embedded ? null : () => Navigator.pop(context),
+                    ),
+                    SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
+                    if (!dense) ...[
+                      _DockedHere(
+                        feedSelected: widget.feedSelected,
+                        currentName: widget.current,
+                        avatar: widget.feedSelected
+                            ? null
+                            : _avatarOf(widget.current),
+                        roomCount: widget.feedSelected
+                            ? null
+                            : _roomCountFor(widget.current),
+                        onOpenFeed: widget.onOpenFeed,
+                        onOpenCurrent:
+                            widget.feedSelected || widget.current.isEmpty
+                            ? null
+                            : () {
+                                var id = '';
+                                for (final s in spaces) {
+                                  if (s.name == widget.current) {
+                                    id = s.id;
+                                    break;
+                                  }
+                                }
+                                widget.onPick(widget.current, spaceId: id);
+                              },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+                    SoftSearchField(
+                      dense: dense,
+                      autofocus: !embedded,
+                      hintText: 'Search workspaces…',
+                      onChanged: (v) => setState(() => query = v),
+                    ),
+                    SizedBox(height: dense ? AppSpacing.sm : AppSpacing.md),
+                    Flexible(
+                      child: LayoutBuilder(
+                        builder: (context, gridBox) {
                           final tileExtent = dense ? 126.0 : 168.0;
+                          final maxCols = embedded ? 6 : 3;
                           final cols = math.max(
-                              1,
-                              (gridBox.maxWidth / (dense ? 132 : 176))
-                                  .floor()
-                                  .clamp(1, 3));
+                            1,
+                            (gridBox.maxWidth / (dense ? 132 : 176))
+                                .floor()
+                                .clamp(1, maxCols),
+                          );
                           if (loading) {
                             return SkeletonGrid(
-                                maxCrossAxisExtent: 220,
-                                mainAxisExtent: tileExtent);
+                              maxCrossAxisExtent: 220,
+                              mainAxisExtent: tileExtent,
+                            );
                           }
-                          final count =
-                              names.length + 1 + (showFeed ? 1 : 0);
+                          final count = names.length + 1 + (showFeed ? 1 : 0);
                           return GridView.builder(
-                              shrinkWrap: !embedded,
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: cols,
-                                      mainAxisSpacing: dense ? 10 : 14,
-                                      crossAxisSpacing: dense ? 10 : 14,
-                                      mainAxisExtent: tileExtent),
-                              itemCount: count,
-                              itemBuilder: (context, i) {
-                                Widget tile;
-                                var stagger = i;
-                                if (showFeed) {
-                                  if (i == 0) {
-                                    tile = _PortalTile(
-                                      dense: dense,
-                                      selected: widget.feedSelected,
-                                      accent: scheme.primary,
-                                      title: 'Home',
-                                      subtitle: 'Your feed',
-                                      icon: Icons.home_rounded,
-                                      onTap: widget.onOpenFeed!,
-                                    );
-                                    return StaggerIn(
-                                        index: 0,
-                                        reduceMotion: reduceMotion,
-                                        child: tile);
-                                  }
-                                  i -= 1;
-                                }
-                                if (i == names.length) {
-                                  tile = _NewPortalTile(
-                                      dense: dense, onTap: _create);
+                            shrinkWrap: !embedded,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: cols,
+                                  mainAxisSpacing: dense ? 10 : 14,
+                                  crossAxisSpacing: dense ? 10 : 14,
+                                  mainAxisExtent: tileExtent,
+                                ),
+                            itemCount: count,
+                            itemBuilder: (context, i) {
+                              Widget tile;
+                              var stagger = i;
+                              if (showFeed) {
+                                if (i == 0) {
+                                  tile = _PortalTile(
+                                    dense: dense,
+                                    selected: widget.feedSelected,
+                                    accent: scheme.primary,
+                                    title: 'Home',
+                                    subtitle: 'Your feed',
+                                    icon: Icons.home_rounded,
+                                    onTap: widget.onOpenFeed!,
+                                  );
                                   return StaggerIn(
-                                      index: stagger,
-                                      reduceMotion: reduceMotion,
-                                      child: tile);
+                                    index: 0,
+                                    reduceMotion: reduceMotion,
+                                    child: tile,
+                                  );
                                 }
-                                final name = names[i];
-                                final selected = !widget.feedSelected &&
-                                    name == widget.current;
-                                final space = spaces.firstWhere(
-                                    (s) => s.name == name,
-                                    orElse: () => Workspace(
-                                        id: '', ownerId: '', name: name));
-                                final accent =
-                                    portalAccentFor(name, scheme, context);
-                                tile = _PortalTile(
+                                i -= 1;
+                              }
+                              if (i == names.length) {
+                                tile = _NewPortalTile(
                                   dense: dense,
-                                  selected: selected,
-                                  accent: accent,
-                                  title: name,
-                                  subtitle:
-                                      '${_roomCountFor(name)} rooms',
-                                  avatar: _avatarOf(name),
-                                  initials: name
-                                      .substring(
-                                          0, math.min(2, name.length))
-                                      .toUpperCase(),
-                                  onTap: () => widget.onPick(name,
-                                      spaceId: space.id),
-                                  onSettings: widget.onSettings != null &&
-                                          space.id.isNotEmpty
-                                      ? () => widget.onSettings!(space)
-                                      : null,
-                                  settingsTooltip: 'Settings for $name',
+                                  onTap: _create,
                                 );
                                 return StaggerIn(
-                                    index: stagger,
-                                    reduceMotion: reduceMotion,
-                                    child: tile);
-                              });
-                        })),
-                      ]),
+                                  index: stagger,
+                                  reduceMotion: reduceMotion,
+                                  child: tile,
+                                );
+                              }
+                              final name = names[i];
+                              final selected =
+                                  !widget.feedSelected &&
+                                  name == widget.current;
+                              final space = spaces.firstWhere(
+                                (s) => s.name == name,
+                                orElse: () =>
+                                    Workspace(id: '', ownerId: '', name: name),
+                              );
+                              final accent = portalAccentFor(
+                                name,
+                                scheme,
+                                context,
+                              );
+                              tile = _PortalTile(
+                                dense: dense,
+                                selected: selected,
+                                accent: accent,
+                                title: name,
+                                subtitle: '${_roomCountFor(name)} rooms',
+                                avatar: _avatarOf(name),
+                                initials: name
+                                    .substring(0, math.min(2, name.length))
+                                    .toUpperCase(),
+                                onTap: () =>
+                                    widget.onPick(name, spaceId: space.id),
+                                onSettings:
+                                    widget.onSettings != null &&
+                                        space.id.isNotEmpty
+                                    ? () => widget.onSettings!(space)
+                                    : null,
+                                settingsTooltip: 'Settings for $name',
+                              );
+                              return StaggerIn(
+                                index: stagger,
+                                reduceMotion: reduceMotion,
+                                child: tile,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ));
+        ),
+      ),
+    );
     if (embedded || inSheet) return body;
     return SafeArea(child: Center(child: body));
   }
@@ -909,8 +1125,11 @@ class _DockedHere extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.north_east_rounded,
-                    size: 18, color: scheme.onSurfaceVariant),
+                Icon(
+                  Icons.north_east_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
               ],
             ),
           ),
@@ -957,6 +1176,7 @@ class _PortalTile extends StatelessWidget {
     );
     final avatarR = dense ? 18.0 : 22.0;
     final glowCorners = context.avatarBorderRadius(72);
+    final atmospheric = ThemeChrome.paintsAtmosphere(context);
 
     return Material(
       color: Colors.transparent,
@@ -967,99 +1187,120 @@ class _PortalTile extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.all(dense ? 12 : 16),
-          decoration: BoxDecoration(
-            borderRadius: corners,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: selected
-                  ? [
-                      accent.withValues(alpha: .18),
-                      ThemeRoles.selectedFill(context),
-                    ]
-                  : [
-                      scheme.surfaceContainerHighest.withValues(alpha: .55),
-                      accent.withValues(alpha: .08),
-                    ],
-            ),
-            border: Border.all(
-              color: selected
-                  ? accent.withValues(alpha: .85)
-                  : AppSurfaces.cardBorder(scheme),
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: accent.withValues(alpha: .28),
-                      blurRadius: 22,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .06),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-          ),
+          decoration: atmospheric
+              ? BoxDecoration(
+                  borderRadius: corners,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: selected
+                        ? [
+                            accent.withValues(alpha: .18),
+                            ThemeRoles.selectedFill(context),
+                          ]
+                        : [
+                            scheme.surfaceContainerHighest.withValues(
+                              alpha: .55,
+                            ),
+                            accent.withValues(alpha: .08),
+                          ],
+                  ),
+                  border: Border.all(
+                    color: selected
+                        ? accent.withValues(alpha: .85)
+                        : AppSurfaces.cardBorder(scheme),
+                    width: selected ? 1.6 : 1,
+                  ),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: accent.withValues(alpha: .28),
+                            blurRadius: 22,
+                            offset: const Offset(0, 8),
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: .06),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                )
+              : BoxDecoration(
+                  borderRadius: corners,
+                  color: selected
+                      ? scheme.surfaceContainerHigh
+                      : scheme.surfaceContainer,
+                  border: Border.all(
+                    color: selected ? scheme.outline : scheme.outlineVariant,
+                  ),
+                ),
           child: Stack(
             children: [
-              Positioned(
-                right: -18,
-                top: -22,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      borderRadius: glowCorners,
-                      gradient: RadialGradient(
-                        colors: [
-                          accent.withValues(alpha: selected ? .28 : .12),
-                          accent.withValues(alpha: 0),
-                        ],
+              if (atmospheric)
+                Positioned(
+                  right: -18,
+                  top: -22,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        borderRadius: glowCorners,
+                        gradient: RadialGradient(
+                          colors: [
+                            accent.withValues(alpha: selected ? .28 : .12),
+                            accent.withValues(alpha: 0),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Builder(builder: (context) {
-                        final size = avatarR * 2;
-                        final faceCorners = context.avatarBorderRadius(size);
-                        return HaloRing(
-                          accent: accent,
-                          borderRadius: faceCorners,
-                          child: AvatarFace(
-                            size: size,
+                      Builder(
+                        builder: (context) {
+                          final size = avatarR * 2;
+                          final faceCorners = context.avatarBorderRadius(size);
+                          return HaloRing(
+                            accent: accent,
                             borderRadius: faceCorners,
-                            backgroundColor: scheme.surface,
-                            foregroundImage: avatar,
-                            onImageError: avatar == null ? null : (_, __) {},
-                            child: icon != null
-                                ? Icon(icon,
-                                    color: accent, size: dense ? 18 : 22)
-                                : Text(
-                                    initials ?? '?',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: dense ? 11 : 13,
+                            child: AvatarFace(
+                              size: size,
+                              borderRadius: faceCorners,
+                              backgroundColor: scheme.surface,
+                              foregroundImage: avatar,
+                              onImageError: avatar == null ? null : (_, __) {},
+                              child: icon != null
+                                  ? Icon(
+                                      icon,
                                       color: accent,
+                                      size: dense ? 18 : 22,
+                                    )
+                                  : Text(
+                                      initials ?? '?',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: dense ? 11 : 13,
+                                        color: accent,
+                                      ),
                                     ),
-                                  ),
-                          ),
-                        );
-                      }),
+                            ),
+                          );
+                        },
+                      ),
                       const Spacer(),
                       if (selected)
-                        Icon(Icons.check_circle_rounded,
-                            size: dense ? 16 : 18, color: accent),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: dense ? 16 : 18,
+                          color: accent,
+                        ),
                     ],
                   ),
                   const Spacer(),
@@ -1177,10 +1418,7 @@ class _NewPortalTile extends StatelessWidget {
 }
 
 class _DashedRRectPainter extends CustomPainter {
-  const _DashedRRectPainter({
-    required this.color,
-    required this.borderRadius,
-  });
+  const _DashedRRectPainter({required this.color, required this.borderRadius});
   final Color color;
   final BorderRadius borderRadius;
 
@@ -1211,7 +1449,6 @@ class _DashedRRectPainter extends CustomPainter {
       old.color != color || old.borderRadius != borderRadius;
 }
 
-
 /// Asks for a workspace name and creates it — the same flow as the
 /// switcher's **New workspace** tile. Returns null if cancelled or create
 /// failed (failure shows a snackbar).
@@ -1228,8 +1465,9 @@ Future<Workspace?> promptCreateWorkspace(
     return await dependencies.service.createSpace(name.trim(), '');
   } catch (e) {
     if (!context.mounted) return null;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Create failed: $e')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Create failed: $e')));
     return null;
   }
 }
@@ -1265,8 +1503,9 @@ class _CreateWorkspaceDialogState extends State<_CreateWorkspaceDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () {
             final v = controller.text.trim();

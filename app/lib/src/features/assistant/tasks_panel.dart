@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/theme_roles.dart';
 import '../../shared/widgets/glass_surface.dart';
@@ -105,7 +106,7 @@ class _TasksPanelState extends State<TasksPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final gutter = compact ? 16.0 : 26.0;
     final tasks = _tasks.where((t) => _matches(t, _filter)).toList();
     final brief = jsonMap(jsonMap(_data?['brief'])['brief']);

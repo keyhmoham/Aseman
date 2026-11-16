@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
@@ -26,8 +27,8 @@ import '../../search_feed/presentation/rich_post_parser.dart'
 import 'chat_page.dart';
 import 'requests_panel.dart';
 
-/// Opens the messenger: a bottom sheet on phones, a floating window on wider
-/// screens.
+/// Opens the messenger: a bottom sheet on phones, a full-height sheet stuck
+/// to the trailing edge on wider screens.
 Future<void> showMessenger(
   BuildContext context,
   AppDependencies dependencies,
@@ -58,6 +59,7 @@ class MessengerPanel extends StatefulWidget {
     this.topContentInset = 0,
     this.onOpenSpaceRoom,
     this.onOpenWorkspace,
+    this.onSelect,
   });
 
   final AppDependencies dependencies;
@@ -85,6 +87,10 @@ class MessengerPanel extends StatefulWidget {
   /// Opens a newly created space on the workspace page (same as picking it
   /// in the workspace switcher). Set on the home chats list.
   final ValueChanged<String>? onOpenWorkspace;
+
+  /// Desktop list-detail: selecting a chat fills the detail pane instead of
+  /// pushing a route or opening the workspace.
+  final ValueChanged<ChatSummary>? onSelect;
 
   @override
   State<MessengerPanel> createState() => _MessengerPanelState();
@@ -119,6 +125,7 @@ class _MessengerPanelState extends State<MessengerPanel> {
               topContentInset: widget.topContentInset,
               onOpenSpaceRoom: widget.onOpenSpaceRoom,
               onOpenWorkspace: widget.onOpenWorkspace,
+              onSelect: widget.onSelect,
               onClose: widget.embedded
                   ? null
                   : () => Navigator.of(context).pop(),
@@ -175,6 +182,7 @@ class _ChatList extends StatefulWidget {
     this.topContentInset = 0,
     this.onOpenSpaceRoom,
     this.onOpenWorkspace,
+    this.onSelect,
   });
 
   final AppDependencies dependencies;
@@ -200,6 +208,9 @@ class _ChatList extends StatefulWidget {
   /// See [MessengerPanel.onOpenWorkspace].
   final ValueChanged<String>? onOpenWorkspace;
 
+  /// See [MessengerPanel.onSelect].
+  final ValueChanged<ChatSummary>? onSelect;
+
   @override
   State<_ChatList> createState() => _ChatListState();
 }
@@ -207,6 +218,10 @@ class _ChatList extends StatefulWidget {
 class _ChatListState extends State<_ChatList> {
   final _search = TextEditingController();
   List<ChatSummary> _chats = const [];
+
+  /// Owned agents keyed by bot id and account id, so a chat row uses the same
+  /// face as the open conversation instead of a look seeded from the account.
+  Map<String, Bot> _agents = const {};
   int _requests = 0;
   bool _loading = true;
   String? _error;
@@ -220,6 +235,17 @@ class _ChatListState extends State<_ChatList> {
   AsemanService get _service => widget.dependencies.service;
   String get _me =>
       widget.dependencies.sessionController.session?.accountId ?? '';
+
+  /// The agent record behind a direct chat, when this account owns it.
+  Bot? _agentFor(ChatSummary chat) {
+    final peer = chat.peer;
+    if (peer == null || !peer.isAgent) return null;
+    if (peer.botId.isNotEmpty) {
+      final byBot = _agents[peer.botId];
+      if (byBot != null) return byBot;
+    }
+    return _agents[peer.id];
+  }
 
   @override
   void initState() {
@@ -240,13 +266,25 @@ class _ChatListState extends State<_ChatList> {
     _refreshing = true;
     try {
       // Expo: Personal = users.dm_threads (minus saved); Rooms = spaces.space_list.
-      final results = await Future.wait([
+      final results = await Future.wait<Object>([
         _service.fetchChats(),
         _service.fetchProjectChats(),
+        _service.fetchBots(limit: 200).catchError((_) => const <Bot>[]),
       ]);
       if (!mounted) return;
+      final bots = results[2] as List<Bot>;
+      final agents = <String, Bot>{};
+      for (final bot in bots) {
+        if (!bot.isAgent) continue;
+        if (bot.id.isNotEmpty) agents[bot.id] = bot;
+        if (bot.accountId.isNotEmpty) agents[bot.accountId] = bot;
+      }
       setState(() {
-        _chats = [...results[0], ...results[1]];
+        _chats = [
+          ...(results[0] as List<ChatSummary>),
+          ...(results[1] as List<ChatSummary>),
+        ];
+        _agents = agents;
         _loading = false;
         _error = null;
       });
@@ -269,6 +307,11 @@ class _ChatListState extends State<_ChatList> {
   }
 
   Future<void> _open(ChatSummary chat) async {
+    final select = widget.onSelect;
+    if (select != null) {
+      select(chat);
+      return;
+    }
     // A project's room, from the home chats list, opens that room in its
     // workspace. Direct chats, and rooms in the floating messenger, open here.
     final openRoom = widget.onOpenSpaceRoom;
@@ -446,7 +489,12 @@ class _ChatListState extends State<_ChatList> {
           !(q.isEmpty || chat.spaceName.toLowerCase().contains(q))) {
         continue;
       }
-      rooms.add(_SpaceEntry(chat.spaceId)..rooms.add(chat));
+      final existing = rooms.where((space) => space.spaceId == chat.spaceId);
+      if (existing.isEmpty) {
+        rooms.add(_SpaceEntry(chat.spaceId)..rooms.add(chat));
+      } else {
+        existing.first.rooms.add(chat);
+      }
     }
     final entries = <_ChatEntry>[...directs, ...rooms];
     entries.sort(_newerFirst);
@@ -527,7 +575,7 @@ class _ChatListState extends State<_ChatList> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final dense = widget.dense;
     final gutter = dense ? 12.0 : (compact || widget.embedded ? 16.0 : 26.0);
     final shown = _shown;
@@ -630,6 +678,7 @@ class _ChatListState extends State<_ChatList> {
         _ChatTile(
           chat: chat,
           me: _me,
+          agent: _agentFor(chat),
           dense: dense,
           onTap: () => _open(chat),
           onMenu: (at, anchor) => _chatMenu(chat, at: at, anchor: anchor),
@@ -671,6 +720,7 @@ class _ChatListState extends State<_ChatList> {
                       onOpen: _open,
                       onMenu: (chat, at, anchor) =>
                           _chatMenu(chat, at: at, anchor: anchor),
+                      agentOf: _agentFor,
                     )
                   : const SizedBox(width: double.infinity),
             ),
@@ -950,11 +1000,13 @@ class _SpaceRooms extends StatelessWidget {
     required this.dense,
     required this.onOpen,
     required this.onMenu,
+    this.agentOf,
   });
 
   final List<ChatSummary> rooms;
   final String me;
   final bool dense;
+  final Bot? Function(ChatSummary chat)? agentOf;
   final ValueChanged<ChatSummary> onOpen;
   final void Function(ChatSummary chat, Offset at, BuildContext anchor) onMenu;
 
@@ -980,6 +1032,7 @@ class _SpaceRooms extends StatelessWidget {
                 _ChatTile(
                   chat: room,
                   me: me,
+                  agent: agentOf?.call(room),
                   dense: dense,
                   topic: true,
                   onTap: () => onOpen(room),
@@ -999,12 +1052,14 @@ class _ChatTile extends StatelessWidget {
     required this.me,
     required this.onTap,
     required this.onMenu,
+    this.agent,
     this.dense = false,
     this.topic = false,
   });
 
   final ChatSummary chat;
   final String me;
+  final Bot? agent;
   final bool dense;
 
   /// A room shown under its space, rather than as its own chat.
@@ -1051,6 +1106,7 @@ class _ChatTile extends StatelessWidget {
                       chat: chat,
                       radius: topic ? (dense ? 15 : 18) : (dense ? 18 : 24),
                       userId: me,
+                      agent: agent,
                     ),
                     if (chat.working)
                       Positioned(
@@ -1584,7 +1640,7 @@ class _NewChatPageState extends State<_NewChatPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final gutter = compact ? 16.0 : 26.0;
     final raw = _query.text.trim();
     final pastedId = RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(raw);

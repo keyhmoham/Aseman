@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
 import '../../../core/deferred/deferred_loader.dart';
+import '../../navigation/presentation/deferred_destination.dart';
 import 'workspace_screen.dart' deferred as workspace;
 
 /// The way into the workspace library from the feed and the shell: the
@@ -57,6 +58,7 @@ Widget workspaceScreen({
   String? initialRoomId,
   VoidCallback? onBackToFeed,
   ValueChanged<String>? onWorkspaceChanged,
+  bool desktopShell = false,
 }) => workspace.WorkspaceScreen(
   key: key,
   dependencies: dependencies,
@@ -66,4 +68,31 @@ Widget workspaceScreen({
   initialRoomId: initialRoomId,
   onBackToFeed: onBackToFeed,
   onWorkspaceChanged: onWorkspaceChanged,
+  desktopShell: desktopShell,
+);
+
+/// The workspace, shown once its library has loaded.
+Widget deferredWorkspaceScreen({
+  Key? key,
+  required AppDependencies dependencies,
+  required String initialWorkspace,
+  String? initialSpaceId,
+  String? initialRoom,
+  String? initialRoomId,
+  VoidCallback? onBackToFeed,
+  ValueChanged<String>? onWorkspaceChanged,
+  bool desktopShell = false,
+}) => DeferredDestination(
+  key: key,
+  loader: _workspace,
+  builder: (_) => workspaceScreen(
+    dependencies: dependencies,
+    initialWorkspace: initialWorkspace,
+    initialSpaceId: initialSpaceId,
+    initialRoom: initialRoom,
+    initialRoomId: initialRoomId,
+    onBackToFeed: onBackToFeed,
+    onWorkspaceChanged: onWorkspaceChanged,
+    desktopShell: desktopShell,
+  ),
 );

@@ -8,7 +8,7 @@ import (
 )
 
 // SamplePacks returns built-in catalogue themes mirrored from the Flutter
-// DefaultThemePacks (high contrast + compact; Sky stays client-default).
+// DefaultThemePacks (high contrast + compact; Paper stays client-default).
 func SamplePacks() []sampleTheme {
 	return []sampleTheme{
 		{

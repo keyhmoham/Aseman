@@ -1,10 +1,13 @@
 import 'dart:async';
-import '../../../core/theme/app_shape.dart';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/app_layout.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/settings/app_settings.dart';
+import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_chrome.dart';
@@ -26,9 +29,11 @@ import '../../calls/call_page.dart' deferred as call_page;
 import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../gadgets/presentation/gadgets_overlay.dart';
+import '../../home/presentation/workspace_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
+import '../../tools/connect/add_app.dart';
+import '../../tools/connect/mcp_connect_dialog.dart';
 import 'dm_desk_panel.dart' deferred as dm_desk;
-import 'dm_facility_sheet.dart';
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
 import '../../../core/deferred/deferred_loader.dart';
@@ -44,14 +49,15 @@ Future<void> loadChatScreens() async {
 }
 
 /// Opens [chat]: on a wide screen a direct chat (or personal Aseman) is a
-/// floating modal; project rooms and compact widths keep a full-page push
+/// full-height sheet stuck to the trailing edge; project rooms and compact
+/// widths keep a full-page push
 /// on the root navigator (so an embedded chats tab never hosts the chat).
 Future<void> showChat(
   BuildContext context,
   AppDependencies dependencies,
   ChatSummary chat,
 ) {
-  final wide = MediaQuery.sizeOf(context).width >= 820;
+  final wide = MediaQuery.sizeOf(context).width >= Breakpoints.expanded;
   if (wide && chat.direct) {
     return showFloatingPanel(
       context,
@@ -120,7 +126,22 @@ class _ChatPageState extends State<ChatPage> {
 
   /// 0 = Desk, 1 = Chat (same order as space mobile tabs).
   int _surface = 1;
-  final _pages = PageController(initialPage: 1);
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  /// Library rail selection. Agents, matching the first direct-chat tab.
+  int _libraryTab = 1;
+  List<Bot> _allBots = const [];
+  Map<String, ({String auth, bool connected, String name})> _connections =
+      const {};
+
+  /// Desktop: the desk is a pane beside the chat, so the Desk/Chat tabs hide.
+  bool _deskBeside = false;
+
+  /// The desktop library card is open over the chat.
+  bool _libraryOpen = false;
+
+  /// Work and Routines for the collapsing header, filled by [RoomChat].
+  final _roomChrome = RoomChatChrome();
 
   /// Collapse progress for the AI avatar header (0 expanded → 1 collapsed).
   double _avatarCollapse = 0;
@@ -139,7 +160,9 @@ class _ChatPageState extends State<ChatPage> {
   bool get _isAiChat =>
       chat.isAseman || (chat.direct && (chat.peer?.isAgent ?? false));
 
-  bool get _showDualTabs => chat.direct;
+  /// Phones keep Desk and Chat as tabs. A wide window puts the desk beside
+  /// the chat, the way a workspace room does.
+  bool get _showDualTabs => chat.direct && !_deskBeside;
 
   @override
   void initState() {
@@ -198,7 +221,6 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _poll?.cancel();
-    _pages.dispose();
     _desk.dispose();
     _voice?.removeListener(_onVoice);
     _voice?.dispose();
@@ -299,12 +321,21 @@ class _ChatPageState extends State<ChatPage> {
         // the participant and any other agents on that conversation's space.
         final agents = <Bot>[];
         final apps = <Bot>[];
+        var all = const <Bot>[];
+        var connections =
+            const <String, ({String auth, bool connected, String name})>{};
         if (!chat.saved) {
           final assistant = await _service.fetchDmAssistant();
           if (assistant != null) agents.add(assistant);
         }
         if (chat.spaceId.isNotEmpty) {
           final bots = await _service.fetchSpaceBots(chat.spaceId);
+          try {
+            all = await _service.fetchBots();
+          } catch (_) {}
+          try {
+            connections = await _service.toolConnections(chat.spaceId);
+          } catch (_) {}
           for (final b in bots) {
             if (b.isAgent) {
               if (!agents.any((a) => a.id == b.id || a.accountId == b.accountId)) {
@@ -337,6 +368,8 @@ class _ChatPageState extends State<ChatPage> {
           setState(() {
             _agents = agents;
             _apps = apps;
+            _allBots = all;
+            _connections = connections;
           });
         }
         return;
@@ -693,6 +726,24 @@ class _ChatPageState extends State<ChatPage> {
       !(chat.peer?.isAgent ?? false) &&
       (chat.peer?.id.isNotEmpty ?? false);
 
+  /// Work and routines stay on the direct-chat bar. The room list header
+  /// that usually holds them is hidden under the collapsing avatar.
+  List<Widget> _directHeaderActions() => [
+        IconButton(
+          tooltip: 'Work',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _roomChrome.openWork?.call(),
+          icon: const Icon(Icons.history_rounded),
+        ),
+        IconButton(
+          tooltip: 'Routines',
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _roomChrome.openRoutines?.call(),
+          icon: const Icon(Icons.schedule_rounded),
+        ),
+        ..._callActions(),
+      ];
+
   List<Widget> _callActions() {
     if (!_canCall) return const [];
     final peer = chat.peer!;
@@ -734,26 +785,125 @@ class _ChatPageState extends State<ChatPage> {
   void _selectSurface(int value) {
     if (_surface == value) return;
     setState(() => _surface = value);
-    _pages.animateToPage(
-      value,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
   }
 
-  void _openFacility() {
-    unawaited(showDmFacilitySheet(
-      context,
-      dependencies: widget.dependencies,
-      spaceId: chat.spaceId,
-      roomId: chat.roomId,
-      title: chat.title,
-      agents: _agents,
-      apps: _apps,
-      peer: chat.peer,
-      onChanged: _loadAgents,
-    ));
+  void _openLibrary() {
+    if (_deskBeside) {
+      setState(() => _libraryOpen = !_libraryOpen);
+      return;
+    }
+    _scaffoldKey.currentState?.openDrawer();
   }
+
+  bool _isPeerAgent(Bot bot) {
+    final peer = chat.peer;
+    if (peer == null || !peer.isAgent) return false;
+    return bot.id == peer.botId ||
+        bot.accountId == peer.id ||
+        bot.id == peer.id ||
+        (peer.botId.isNotEmpty && bot.accountId == peer.botId);
+  }
+
+  Future<void> _addLibraryBot(Bot bot) async {
+    if (chat.spaceId.isEmpty) return;
+    try {
+      await _service.addBotToSpace(chat.spaceId, bot.id);
+      if (bot.kind == 'tool' && mounted) {
+        await connectMcpToolIfNeeded(
+          context,
+          _service,
+          botId: bot.id,
+          spaceId: chat.spaceId,
+          name: bot.name,
+        );
+      }
+      await _loadAgents();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not add: $e')),
+      );
+    }
+  }
+
+  Future<void> _removeLibraryBot(Bot bot) async {
+    if (_isPeerAgent(bot)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The other participant cannot be removed from this chat.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (chat.spaceId.isEmpty) return;
+    try {
+      await _service.removeBotFromSpace(chat.spaceId, bot.id);
+      await _loadAgents();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove: $e')),
+      );
+    }
+  }
+
+  Future<void> _addLibraryApp() async {
+    if (chat.spaceId.isEmpty) return;
+    final added = await showAddApp(
+      context,
+      _service,
+      spaceId: chat.spaceId,
+    );
+    if (added) await _loadAgents();
+  }
+
+  Future<void> _connectLibraryApp(Bot bot, bool reconnect) async {
+    if (chat.spaceId.isEmpty) return;
+    final connected = await connectMcpTool(
+      context,
+      _service,
+      botId: bot.id,
+      spaceId: chat.spaceId,
+      name: bot.name,
+      reconnect: reconnect,
+    );
+    if (connected && mounted) await _loadAgents();
+  }
+
+  void _openLibraryApp(Bot bot) {
+    if (chat.spaceId.isEmpty) return;
+    if (bot.isUnifiedTool) {
+      _desk.open(bot.id, title: bot.name);
+      if (_libraryOpen) setState(() => _libraryOpen = false);
+      if (_showDualTabs) _selectSurface(0);
+      return;
+    }
+  }
+
+  Widget _library({bool card = false}) => DirectChatLibrary(
+    title: chat.title,
+    tab: _libraryTab,
+    onTab: (tab) {
+      setState(() => _libraryTab = tab);
+      if (_showDualTabs) _scaffoldKey.currentState?.closeDrawer();
+    },
+    dependencies: widget.dependencies,
+    spaceId: chat.spaceId,
+    roomId: chat.roomId,
+    agents: _agents,
+    apps: _apps,
+    allBots: _allBots,
+    onAddBot: _addLibraryBot,
+    onRemoveBot: _removeLibraryBot,
+    onAddApp: _addLibraryApp,
+    onOpenApp: _openLibraryApp,
+    appConnections: _connections,
+    onConnectApp: _connectLibraryApp,
+    card: card,
+  );
 
   Future<void> _openVoiceSheet() async {
     final voice = _voice;
@@ -776,7 +926,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (!_showDualTabs || _surface != 1) return false;
+    if (!chat.direct) return false;
+    // The desk tab has no collapsing bar. Beside the desk, the chat scrolls.
+    if (_showDualTabs && _surface != 1) return false;
     if (n.metrics.axis != Axis.vertical) return false;
     final next = (n.metrics.pixels / 120).clamp(0.0, 1.0);
     if ((next - _avatarCollapse).abs() > 0.02) {
@@ -795,15 +947,15 @@ class _ChatPageState extends State<ChatPage> {
   double get _avatarCollapsed => 56.0;
 
   double get _avatarHeaderHeight {
-    if (!_showDualTabs) return 0;
+    if (!chat.direct) return 0;
     return _avatarExpanded +
         (_avatarCollapsed - _avatarExpanded) * _avatarCollapse;
   }
 
   /// Collapsing avatar + Desk/Chat tabs; rides up as the avatar collapses.
   double get _chromeHeight {
-    if (!_showDualTabs) return 0;
-    return _avatarHeaderHeight + _tabsBarHeight;
+    if (!chat.direct) return 0;
+    return _avatarHeaderHeight + (_showDualTabs ? _tabsBarHeight : 0);
   }
 
   String get _headerSubtitle {
@@ -835,6 +987,21 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        // The library needs its icon rail plus a readable list, and the chat
+        // needs a composer. Below that, phones and narrow columns keep the
+        // drawer and the Desk/Chat tabs.
+        final beside = chat.direct &&
+            box.maxWidth >= 900 &&
+            !AppHeightClass.fromHeight(box.maxHeight).isCompact;
+        _deskBeside = beside;
+        return _buildChat(context, box);
+      },
+    );
+  }
+
+  Widget _buildChat(BuildContext context, BoxConstraints box) {
     final peer = chat.peer;
     final canPop = Navigator.of(context).canPop();
     final modal = widget.asModal;
@@ -843,8 +1010,9 @@ class _ChatPageState extends State<ChatPage> {
     final topPad = MediaQuery.paddingOf(context).top;
     final bottomInset = widget.bottomInset;
     final chrome = _chromeHeight;
-    // Every direct chat uses the outer collapsing avatar + Desk/Chat tabs.
-    final useOuterAvatar = _showDualTabs;
+    // Every direct chat keeps the collapsing avatar. Phones add Desk/Chat
+    // tabs; a wide window puts the desk in a pane instead.
+    final useOuterAvatar = chat.direct;
 
     Widget chatBody = NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
@@ -893,23 +1061,24 @@ class _ChatPageState extends State<ChatPage> {
             : chat.blocked
                 ? 'You blocked this chat. Unblock it from the menu to write.'
                 : 'You can\'t reply to this chat.',
+        chrome: useOuterAvatar ? _roomChrome : null,
         headerActions: useOuterAvatar
             ? const []
             : [
                 if (_showDualTabs)
                   IconButton(
-                    tooltip: 'Room',
-                    icon: const Icon(Icons.dashboard_customize_outlined),
-                    onPressed: _openFacility,
+                    tooltip: 'Library',
+                    icon: const Icon(Icons.menu_rounded),
+                    onPressed: _openLibrary,
                   ),
                 ..._callActions(),
                 const SizedBox(width: 2),
                 _menu(),
               ],
         bare: true,
-        flat: embedded || _showDualTabs,
+        flat: embedded || chat.direct,
         showListHeader: !useOuterAvatar,
-        topContentInset: _showDualTabs ? topPad + chrome : 0,
+        topContentInset: chat.direct ? topPad + chrome : 0,
         bottomContentInset: embedded ? bottomInset : 0,
         hint: chat.isAseman ? 'Message Aseman…' : 'Message ${chat.title}…',
         subtitle: chat.isAseman
@@ -962,7 +1131,101 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     Widget body;
-    if (!_showDualTabs) {
+    if (_deskBeside) {
+      final deskWidth = AppLayout.roomDeskPaneWidth(
+        innerWidth: box.maxWidth,
+        libraryWidth: 0,
+      );
+      body = Stack(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: AppPane(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Column(
+                          children: [
+                            if (chat.isAseman)
+                              BrainProposalsBar(
+                                dependencies: widget.dependencies,
+                              ),
+                            Expanded(child: chatBody),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        top: topPad,
+                        left: 0,
+                        right: 0,
+                        child: _CollapsingDmHeader(
+                          height: _avatarHeaderHeight,
+                          collapse: _avatarCollapse,
+                          title: chat.title,
+                          subtitle: _headerSubtitle,
+                          avatarBuilder: _headerAvatar,
+                          leading: embedded || !(modal || canPop)
+                              ? null
+                              : IconButton(
+                                  tooltip: modal ? 'Close' : 'Back',
+                                  onPressed: () =>
+                                      Navigator.of(context).maybePop(),
+                                  icon: Icon(
+                                    modal
+                                        ? Icons.close_rounded
+                                        : Icons.arrow_back_rounded,
+                                  ),
+                                ),
+                          onRoom: _openLibrary,
+                          onCustomize: _isAiChat ? _editAvatar : null,
+                          actions: _directHeaderActions(),
+                          menu: _menu(),
+                        ),
+                      ),
+                      if (_isAiChat)
+                        Positioned(
+                          right: 18,
+                          bottom:
+                              _voiceFabBottom + (embedded ? bottomInset : 0),
+                          child: _VoiceFab(
+                            active:
+                                (_voice?.state.status ??
+                                    BrainVoiceStatus.idle) !=
+                                BrainVoiceStatus.idle,
+                            onPressed: _openVoiceSheet,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const PaneDivider(),
+              AppPane(
+                width: deskWidth,
+                child: _DeferredDmDeskPanel(
+                  dependencies: widget.dependencies,
+                  controller: _desk,
+                  spaceId: chat.spaceId,
+                  roomId: chat.roomId,
+                  title: chat.title,
+                  board: true,
+                  topInset: 0,
+                  bottomInset: embedded ? bottomInset : 0,
+                ),
+              ),
+            ],
+          ),
+            SpaceLibraryFlyout(
+              open: _libraryOpen,
+              top: topPad + _avatarHeaderHeight,
+              onDismiss: () => setState(() => _libraryOpen = false),
+              builder: (_) => _library(card: true),
+            ),
+        ],
+      );
+    } else if (!_showDualTabs) {
       body = Column(
         children: [
           if (chat.isAseman)
@@ -974,9 +1237,9 @@ class _ChatPageState extends State<ChatPage> {
       body = Stack(
         children: [
           Positioned.fill(
-            child: PageView(
-              controller: _pages,
-              onPageChanged: (v) => setState(() => _surface = v),
+            child: IndexedStack(
+              index: _surface,
+              sizing: StackFit.expand,
               children: [
                 _DeferredDmDeskPanel(
                   dependencies: widget.dependencies,
@@ -1023,9 +1286,9 @@ class _ChatPageState extends State<ChatPage> {
                               ? Icons.close_rounded
                               : Icons.arrow_back_rounded),
                         ),
-                  onRoom: _openFacility,
+                  onRoom: _showDualTabs ? _openLibrary : null,
                   onCustomize: _isAiChat ? _editAvatar : null,
-                  actions: _callActions(),
+                  actions: _directHeaderActions(),
                   menu: _menu(),
                 ),
                 SizedBox(
@@ -1068,7 +1331,17 @@ class _ChatPageState extends State<ChatPage> {
         ? Colors.transparent
         : Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: background,
+      drawer: chat.direct && !_deskBeside
+          ? Drawer(
+              backgroundColor: Colors.transparent,
+              width: math.min(340, MediaQuery.sizeOf(context).width * .88),
+              child: GlassDrawerSurface(
+                child: SafeArea(child: _library()),
+              ),
+            )
+          : null,
       body: SafeArea(
         top: false,
         bottom: !embedded,
@@ -1108,89 +1381,98 @@ class _CollapsingDmHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Keep a usable avatar size when collapsed so actions stay aligned.
-    final size = 92.0 + (36.0 - 92.0) * collapse;
-    final subtitleOpacity = (1 - collapse * 1.35).clamp(0.0, 1.0);
-    final titleSize = 17.0 - 2.5 * collapse;
-    return SizedBox(
-      height: height,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(8, 4 + 2 * (1 - collapse), 8, 4),
-        child: GlassSurface(
-          alpha: AppSurfaces.cardAlphaOf(context) * (0.5 + 0.45 * collapse),
-          blur: AppSurfaces.blurSigmaOf(context),
-          borderRadius: AppShape.borderRadius(context, 20),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight = constraints.maxWidth < 420;
+        final size = tight
+            ? 36.0
+            : 92.0 + (36.0 - 92.0) * collapse;
+        final subtitleOpacity = tight
+            ? 0.0
+            : (1 - collapse * 1.35).clamp(0.0, 1.0);
+        final titleSize = tight ? 15.0 : 17.0 - 2.5 * collapse;
+        return SizedBox(
+          height: height,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
-                if (leading != null) leading!,
-                avatarBuilder(size),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: titleSize,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -.2,
-                        ),
+            padding: EdgeInsets.fromLTRB(8, 4 + 2 * (1 - collapse), 8, 4),
+            child: GlassSurface(
+              alpha: AppSurfaces.cardAlphaOf(context) * (0.5 + 0.45 * collapse),
+              blur: AppSurfaces.blurSigmaOf(context),
+              borderRadius: AppShape.borderRadius(context, 20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  children: [
+                    if (onRoom != null)
+                      IconButton(
+                        tooltip: 'Library',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onRoom,
+                        icon: const Icon(Icons.menu_rounded, size: 20),
                       ),
-                      if (subtitleOpacity > 0.05)
-                        Opacity(
-                          opacity: subtitleOpacity,
-                          child: Text(
-                            subtitle,
+                    if (leading != null) leading!,
+                    avatarBuilder(size),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12.5,
-                              height: 1.15,
-                              color: scheme.onSurfaceVariant,
+                              fontSize: titleSize,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.2,
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (onRoom != null)
-                  IconButton(
-                    tooltip: 'Room',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: onRoom,
-                    icon: const Icon(Icons.dashboard_customize_outlined,
-                        size: 20),
-                  ),
-                if (onCustomize != null)
-                  IconButton(
-                    tooltip: 'Customize avatar',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: onCustomize,
-                    icon: const Icon(Icons.face_retouching_natural_outlined,
-                        size: 20),
-                  ),
-                for (final action in actions)
-                  IconButtonTheme(
-                    data: const IconButtonThemeData(
-                      style: ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          if (subtitleOpacity > 0.05)
+                            Opacity(
+                              opacity: subtitleOpacity,
+                              child: Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.15,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    child: action,
-                  ),
-                if (menu != null) menu!,
-              ],
+                    if (onCustomize != null)
+                      IconButton(
+                        tooltip: 'Customize avatar',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onCustomize,
+                        icon: const Icon(
+                          Icons.face_retouching_natural_outlined,
+                          size: 20,
+                        ),
+                      ),
+                    for (final action in actions)
+                      IconButtonTheme(
+                        data: const IconButtonThemeData(
+                          style: ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        child: action,
+                      ),
+                    if (menu != null) menu!,
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -1364,6 +1646,7 @@ class ChatAvatar extends StatelessWidget {
     required this.chat,
     this.radius = 24,
     this.userId = '',
+    this.agent,
   });
 
   final ChatSummary chat;
@@ -1371,6 +1654,11 @@ class ChatAvatar extends StatelessWidget {
 
   /// Account viewing the list — keys personal humanoid customization.
   final String userId;
+
+  /// The agent's own record when the list has it. A thread peer only carries
+  /// the account id, so without this the list seeds a different face from the
+  /// one in the open chat.
+  final Bot? agent;
 
   @override
   Widget build(BuildContext context) {
@@ -1394,20 +1682,30 @@ class ChatAvatar extends StatelessWidget {
     }
     if (chat.direct) {
       if (peer?.isAgent ?? false) {
-        final agentId =
-            peer!.botId.isNotEmpty ? peer.botId : peer.id;
+        final person = peer!;
+        final known = agent;
+        final agentId = (known != null && known.id.isNotEmpty)
+            ? known.id
+            : (person.botId.isNotEmpty ? person.botId : person.id);
+        final picture = (known != null && known.avatar.isNotEmpty)
+            ? known.avatar
+            : person.avatar;
         // BotAvatar already draws the bound sweep ring.
         return BotAvatar(
           bot: Bot(
             id: agentId,
-            ownerId: '',
-            accountId: peer.id,
-            name: peer.displayName,
+            ownerId: known?.ownerId ?? '',
+            accountId: known?.accountId.isNotEmpty == true
+                ? known!.accountId
+                : person.id,
+            name: known?.name.isNotEmpty == true
+                ? known!.name
+                : person.displayName,
             kind: 'agent',
-            vmType: '',
-            status: '',
-            avatar: peer.avatar,
-            humanoid: peer.humanoid,
+            vmType: known?.vmType ?? '',
+            status: known?.status ?? '',
+            avatar: picture,
+            humanoid: known?.humanoid ?? person.humanoid,
           ),
           radius: radius,
           userId: BrainAvatarPrefs.resolveUserId(userId),
@@ -1480,6 +1778,7 @@ class _DeferredDmDeskPanel extends StatefulWidget {
     required this.title,
     this.topInset = 0,
     this.bottomInset = 0,
+    this.board = false,
   });
 
   final AppDependencies dependencies;
@@ -1489,6 +1788,7 @@ class _DeferredDmDeskPanel extends StatefulWidget {
   final String title;
   final double topInset;
   final double bottomInset;
+  final bool board;
 
   @override
   State<_DeferredDmDeskPanel> createState() => _DeferredDmDeskPanelState();
@@ -1527,6 +1827,7 @@ class _DeferredDmDeskPanelState extends State<_DeferredDmDeskPanel> {
       title: widget.title,
       topInset: widget.topInset,
       bottomInset: widget.bottomInset,
+      board: widget.board,
     );
   }
 }

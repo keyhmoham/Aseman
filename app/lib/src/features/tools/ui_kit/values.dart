@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../elpian/core/lenient.dart';
 import '../../../elpian/widgets/elpian_icon.dart';
 
 num? asNum(Object? v) {
@@ -73,6 +74,223 @@ List<Map<String, dynamic>> asRows(Object? v) => [
       for (final item in asList(v))
         if (item is Map) asMap(item) else {'value': item, 'label': asText(item)}
     ];
+
+/// A table cell. [key] is tried as written, then [label], then without
+/// caring about case. [index] is the column's place, for a row that arrived
+/// as a list (`"0"`, `"1"`, …).
+Object? looseField(Map<String, dynamic> row, String key,
+    {String? label, int? index}) {
+  if (key.isNotEmpty && row.containsKey(key)) return row[key];
+  if (label != null && label.isNotEmpty && label != key && row.containsKey(label)) {
+    return row[label];
+  }
+  final wants = <String>{
+    if (key.isNotEmpty) key.toLowerCase(),
+    if (label != null && label.isNotEmpty) label.toLowerCase(),
+  };
+  if (wants.isNotEmpty) {
+    for (final e in row.entries) {
+      if (wants.contains(e.key.toLowerCase())) return e.value;
+    }
+  }
+  if (index != null && row.containsKey('$index')) return row['$index'];
+  return null;
+}
+
+/// Rows of a table. A list of lists is lined up with [fields] (and kept
+/// under `"0"`, `"1"`, …). Anything else is [asRows].
+List<Map<String, dynamic>> tableRows(Object? raw, List<String> fields) {
+  if (raw is! List) return asRows(raw);
+  final out = <Map<String, dynamic>>[];
+  for (final item in raw) {
+    if (item is List) {
+      final row = <String, dynamic>{};
+      for (var i = 0; i < item.length; i++) {
+        row['$i'] = item[i];
+        if (i < fields.length && fields[i].isNotEmpty) {
+          row.putIfAbsent(fields[i], () => item[i]);
+        }
+      }
+      out.add(row);
+    } else if (item is Map) {
+      out.add(asMap(item));
+    } else {
+      out.add({
+        'value': item,
+        'label': asText(item),
+        if (fields.isNotEmpty && fields.first.isNotEmpty) fields.first: item,
+      });
+    }
+  }
+  return out;
+}
+
+/// When no column name is on the row, line the row's plain values up with
+/// the columns in order. A row that already matches is left as it is.
+void alignRowToColumns(Map<String, dynamic> row, List<String> fields,
+    List<String> labels) {
+  if (fields.isEmpty) return;
+  final unmatched = <int>[];
+  for (var i = 0; i < fields.length; i++) {
+    final label = i < labels.length ? labels[i] : null;
+    if (looseField(row, fields[i], label: label, index: i) == null) {
+      unmatched.add(i);
+    }
+  }
+  if (unmatched.length != fields.length) return;
+  final scalars = [
+    for (final e in row.entries)
+      if (e.value is! Map && e.value is! List) e.value,
+  ];
+  if (scalars.length < fields.length) return;
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].isEmpty) continue;
+    row.putIfAbsent(fields[i], () => scalars[i]);
+  }
+}
+
+const _pairLabels = [
+  'label',
+  'key',
+  'name',
+  'title',
+  'k',
+  'field',
+  'heading',
+  'metric',
+];
+const _pairValues = [
+  'value',
+  'text',
+  'content',
+  'v',
+  'amount',
+  'display',
+  'detail',
+  'description',
+  'reading',
+];
+const _pairSkip = {
+  'format',
+  'type',
+  'color',
+  'icon',
+  'style',
+  'width',
+  'height',
+  'variant',
+  'align',
+  'unit',
+};
+
+/// One row of a card: a label, the value to show, and an optional format.
+class RecordPair {
+  const RecordPair(this.label, this.value, {this.format, this.type});
+
+  final String label;
+  final Object value;
+  final String? format;
+  final String? type;
+}
+
+/// Label/value rows from the loose objects a card or a chart is given.
+/// A list of `{label, value}` stays that. A map, or a list of one-field
+/// maps (`{Humidity: "59%"}`), becomes one row per field. Empty rows are
+/// dropped so a card is not a blank slab.
+List<RecordPair> recordPairs(
+  Object? raw, {
+  Map<String, dynamic>? labels,
+  Map<String, dynamic>? formats,
+}) {
+  final out = <RecordPair>[];
+  void add(String label, Object? value, {String? format, String? type}) {
+    final shown = _shown(value);
+    if (shown == null) return;
+    if (asText(shown).trim().isEmpty) return;
+    out.add(RecordPair(label.trim(), shown, format: format, type: type));
+  }
+
+  if (raw is List) {
+    for (final item in raw) {
+      if (item is List && item.isNotEmpty) {
+        add(asText(item.first), item.length > 1 ? item[1] : null);
+      } else if (item is Map) {
+        final m = asMap(item);
+        if (_explicitPair(m)) {
+          add(_pairLabel(m), _pairValue(m),
+              format: looseStr(m['format']), type: looseStr(m['type']));
+        } else {
+          for (final e in m.entries) {
+            if (_pairSkip.contains(e.key)) continue;
+            add(_pairHeading(e.key), e.value);
+          }
+        }
+      } else {
+        add('', item);
+      }
+    }
+  } else if (raw is Map) {
+    final m = asMap(raw);
+    if (_explicitPair(m)) {
+      add(_pairLabel(m), _pairValue(m),
+          format: looseStr(m['format']), type: looseStr(m['type']));
+    } else {
+      for (final e in m.entries) {
+        if (_pairSkip.contains(e.key)) continue;
+        final named = labels != null && labels[e.key] != null
+            ? asText(labels[e.key])
+            : _pairHeading(e.key);
+        add(named, e.value, format: looseStr(formats?[e.key]));
+      }
+    }
+  }
+  return out;
+}
+
+bool _explicitPair(Map<String, dynamic> m) {
+  final hasLabel = _pairLabels.any((k) => m[k] != null && m[k] is! Map);
+  final hasValue = _pairValues.any((k) => m[k] != null);
+  return hasLabel && hasValue;
+}
+
+String _pairLabel(Map<String, dynamic> m) {
+  for (final k in _pairLabels) {
+    final v = m[k];
+    if (v != null && v is! Map && v is! List && asText(v).trim().isNotEmpty) {
+      return asText(v).trim();
+    }
+  }
+  return '';
+}
+
+Object? _pairValue(Map<String, dynamic> m) {
+  for (final k in _pairValues) {
+    if (m[k] != null) return m[k];
+  }
+  return null;
+}
+
+Object? _shown(Object? value) {
+  if (value is Map) {
+    final m = asMap(value);
+    for (final k in _pairValues) {
+      final v = m[k];
+      if (v != null && v is! Map && v is! List) return v;
+    }
+    return null;
+  }
+  if (value is List) return null;
+  return value;
+}
+
+String _pairHeading(String field) {
+  final s = field
+      .replaceAll(RegExp(r'[_\-.]'), ' ')
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+      .trim();
+  if (s.isEmpty) return field;
+  return s[0].toUpperCase() + s.substring(1);
+}
 
 /// The value at [path] of [row]: a field name, or a dotted path (`a.b.0`).
 Object? field(Object? row, String? path) {

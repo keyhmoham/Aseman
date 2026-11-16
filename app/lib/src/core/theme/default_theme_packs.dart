@@ -5,9 +5,10 @@ import 'design_language.dart';
 import 'shell_layout.dart';
 import 'theme_pack.dart';
 
-/// Built-in packs shipped with the app (Sky default + design-language samples).
+/// Built-in packs shipped with the app (Paper default + design-language samples).
 abstract final class DefaultThemePacks {
   static const skyId = 'builtin.sky';
+  static const paperId = 'builtin.paper';
   static const contrastId = 'builtin.high_contrast';
   static const compactId = 'builtin.compact';
   static const fluentId = 'builtin.fluent';
@@ -556,13 +557,230 @@ abstract final class DefaultThemePacks {
         ],
       );
 
+  /// Flat Material 3 Expressive: warm paper, ink accent, no sky glow or frost.
+  static DesignLanguage get paperLanguage {
+    final base = DesignLanguage.presetOf(DesignLanguage.materialExpressive);
+    ControlRecipe inked(
+      ControlRecipe recipe, {
+      double elevation = 0,
+    }) =>
+        recipe.copyWith(
+          fill: FillKind.solid,
+          elevation: elevation,
+          borderWidth: recipe.borderWidth > 0 ? recipe.borderWidth : 1,
+          borderAlpha: 1,
+        );
+    return base.copyWith(
+      card: inked(base.card),
+      sheet: inked(base.sheet),
+      dialog: inked(base.dialog, elevation: 1),
+      menu: inked(base.menu, elevation: 1),
+      panelHeader: inked(base.panelHeader, elevation: 1),
+      navPill: inked(base.navPill),
+      fab: base.fab.copyWith(fill: FillKind.solid, elevation: 1),
+      input: base.input.copyWith(
+        fill: FillKind.solid,
+        borderWidth: 1,
+        borderAlpha: 1,
+      ),
+      shadow: const ShadowRecipe(blur: 0, y: 0, alpha: 0),
+    );
+  }
+
+  static ThemePack get paper => ThemePack(
+        meta: const ThemePackMeta(
+          id: paperId,
+          name: 'Paper',
+          description:
+              'Flat Material 3 Expressive. Warm paper, ink accent, hairline surfaces.',
+          author: 'Aseman',
+          previewColors: [
+            Color(0xFFF6F1E8),
+            Color(0xFF4A433C),
+            Color(0xFFE6D9CC),
+          ],
+          builtin: true,
+        ),
+        language: paperLanguage,
+        tokens: const ThemeTokenSet(
+          light: ThemeTokens(
+            accent: Color(0xFF4A433C),
+            secondaryAccent: Color(0xFF4A433C),
+            scaffold: Color(0xFFF6F1E8),
+            surface: Color(0xFFFFFBF5),
+            surfaceHigh: Color(0xFFF3EDE3),
+            inputFill: Color(0xFFFFFBF5),
+            cardAlpha: 1,
+            overlayAlpha: 1,
+            blurSigma: 0,
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+            titleWeight: 500,
+            labelWeight: 500,
+            letterSpacingDisplay: -0.25,
+            letterSpacingTitle: 0,
+            fabMistAlpha: 0,
+          ),
+          dark: ThemeTokens(
+            accent: Color(0xFFE6D9CC),
+            secondaryAccent: Color(0xFFE6D9CC),
+            scaffold: Color(0xFF141210),
+            surface: Color(0xFF1C1916),
+            surfaceHigh: Color(0xFF26221E),
+            inputFill: Color(0xFF26221E),
+            cardAlpha: 1,
+            overlayAlpha: 1,
+            blurSigma: 0,
+            success: Color(0xFF81C784),
+            warning: Color(0xFFFFB74D),
+            danger: Color(0xFFF2B8B5),
+            titleWeight: 500,
+            labelWeight: 500,
+            letterSpacingDisplay: -0.25,
+            letterSpacingTitle: 0,
+            fabMistAlpha: 0,
+          ),
+        ),
+        graphics: const ThemeGraphics(
+          atmosphere: 'flat',
+          haloStyle: 'ring',
+          iconTreatment: 'rounded',
+          backdropStyle: 'solid',
+        ),
+        shell: const ShellLayoutSpec(),
+        // Ink stays first so [ThemePack.defaultPalette] is the paper default.
+        // The rest are Material 3 static-palette primaries (tone 40), the
+        // light accent role used by Material 3 Expressive, plus the baseline
+        // expressive primary.
+        palettes: const [
+          ThemePaletteOption(
+            id: 'ink',
+            label: 'Ink',
+            accent: Color(0xFF4A433C),
+            secondary: Color(0xFF4A433C),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'red',
+            label: 'Red',
+            accent: Color(0xFFB3251E),
+            secondary: Color(0xFFB3251E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'orange',
+            label: 'Orange',
+            accent: Color(0xFF9A4600),
+            secondary: Color(0xFF9A4600),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'yellow',
+            label: 'Yellow',
+            accent: Color(0xFF8F4E06),
+            secondary: Color(0xFF8F4E06),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'green',
+            label: 'Green',
+            accent: Color(0xFF006C35),
+            secondary: Color(0xFF006C35),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'cyan',
+            label: 'Cyan',
+            accent: Color(0xFF00687C),
+            secondary: Color(0xFF00687C),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'blue_variant',
+            label: 'Blue variant',
+            accent: Color(0xFF006788),
+            secondary: Color(0xFF006788),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'blue',
+            label: 'Blue',
+            accent: Color(0xFF1157CE),
+            secondary: Color(0xFF1157CE),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'purple',
+            label: 'Purple',
+            accent: Color(0xFF7438D2),
+            secondary: Color(0xFF7438D2),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'baseline',
+            label: 'Baseline',
+            accent: Color(0xFF6750A4),
+            secondary: Color(0xFF6750A4),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'pink',
+            label: 'Pink',
+            accent: Color(0xFFB60D6E),
+            secondary: Color(0xFFB60D6E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'grey',
+            label: 'Grey',
+            accent: Color(0xFF5E5E5E),
+            secondary: Color(0xFF5E5E5E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'grey_variant',
+            label: 'Grey variant',
+            accent: Color(0xFF5C5F5E),
+            secondary: Color(0xFF5C5F5E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+        ],
+      );
+
   static List<ThemePack> get all =>
-      [sky, highContrast, compact, fluent, cupertino, neoBrutal];
+      [paper, sky, highContrast, compact, fluent, cupertino, neoBrutal];
 
   static ThemePack byId(String id) {
     for (final pack in all) {
       if (pack.id == id) return pack;
     }
-    return sky;
+    return paper;
   }
 }

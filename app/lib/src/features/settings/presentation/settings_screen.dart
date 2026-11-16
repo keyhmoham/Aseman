@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/app_layout.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/settings/app_settings.dart';
-import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/default_theme_packs.dart';
 import '../../../core/theme/shell_layout.dart';
@@ -15,17 +17,34 @@ import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/app_inputs.dart';
 import '../../../shared/widgets/avatar_editor.dart';
 import '../../../shared/widgets/avatar_face.dart';
-import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../../../shared/widgets/theme_slot_host.dart';
 import '../../../shared/widgets/user_profile_sheet.dart';
 import '../../account/presentation/account_panel.dart';
+import '../../admin/presentation/admin_screen.dart';
 import '../../assistant/assistant.dart';
 import '../../market/presentation/bots_store_screen.dart';
 import '../../marketing/marketing_links.dart';
 import 'widgets/devices_panel.dart';
 import 'widgets/notify_prefs_panel.dart';
 import 'widgets/privacy_settings_panel.dart';
+
+enum _SettingsPane {
+  account,
+  profile,
+  appearance,
+  wallet,
+  assistant,
+  approvals,
+  connections,
+  agents,
+  notifications,
+  privacy,
+  devices,
+  storage,
+  about,
+  admin,
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.dependencies});
@@ -49,6 +68,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String quietHours = '23:00–07:00';
   String mediaQuality = 'Automatic';
   String _cacheSize = '…';
+  _SettingsPane _pane = _SettingsPane.appearance;
+
+  bool _show(_SettingsPane pane, bool split) => !split || _pane == pane;
 
   @override
   void initState() {
@@ -192,29 +214,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) await _clearCache();
   }
 
-  /// Opens one of the account panels.
-  void _openAccount(AccountArea area) {
-    final deps = widget.dependencies;
-    if (deps == null) return;
-    showAccountPanel(context, deps, area);
-  }
-
-  void _openAssistant(Widget Function(AppDependencies deps) panel) {
-    final deps = widget.dependencies;
-    if (deps == null) return;
-    openPanel(context, panel(deps));
-  }
-
-  void _openProfile() {
-    final deps = widget.dependencies;
-    if (deps == null) return;
-    showFloatingPanel(
-      context,
-      UserProfileSheet(dependencies: deps),
-      maxWidth: 760,
-    );
-  }
-
   static final _textSizes = <double, String>{
     .85: 'Small',
     1.0: 'Default',
@@ -225,22 +224,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
-    final wide = MediaQuery.sizeOf(context).width > 900;
+    final width = MediaQuery.sizeOf(context).width;
+    final windowClass = AppWindowClass.fromWidth(width);
     final textSize = _textSizes.keys.reduce(
       (a, b) => (a - textScale).abs() <= (b - textScale).abs() ? a : b,
     );
-    final side = wide ? 80.0 : AppSpacing.md;
+    // Below the large class, keep one centered column. Large and wider use
+    // a section list beside the active section.
+    final split = AppWindowScope.supportingPane(context);
+    final side = split
+        ? AppLayout.gutterWidth
+        : math.max(windowClass.margin, (width - 840) / 2);
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    final isAdmin = widget.dependencies?.sessionController.isAdmin ?? false;
+    final page = Scaffold(
       backgroundColor: scheme.surface,
       body: CustomScrollView(
         slivers: [
+          if (!split)
           SliverToBoxAdapter(
             child: SafeArea(
               bottom: false,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                    side, AppSpacing.md, side, AppSpacing.sm),
+                  side,
+                  AppSpacing.md,
+                  side,
+                  AppSpacing.sm,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -256,8 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: SkySectionHeader(
                         icon: Icons.settings_rounded,
                         title: 'Settings',
-                        subtitle:
-                            'Appearance, account and how Aseman behaves',
+                        subtitle: 'Appearance, account and how Aseman behaves',
                       ),
                     ),
                   ],
@@ -267,61 +277,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
-                side, AppSpacing.xxs, side, AppSpacing.xl),
+              side,
+              AppSpacing.xxs,
+              side,
+              AppSpacing.xl,
+            ),
             sliver: SliverList.list(
               children: [
-                  _AccountCard(
-                    dependencies: widget.dependencies,
-                    onProfile: _openProfile,
-                    onManage: () => _openAccount(AccountArea.account),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  ThemeSlotHost(
-                    slot: FeatureSlots.settingsAppearance,
-                    child: _Section(
+                if (_show(_SettingsPane.account, split)) ...[
+                  _AccountCard(dependencies: widget.dependencies),
+                  if (widget.dependencies != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _Section(
+                      title: 'Sign-in',
+                      icon: Icons.security_outlined,
+                      children: [
+                        AccountPanel(
+                          dependencies: widget.dependencies!,
+                          area: AccountArea.account,
+                          embedded: true,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+                if (_show(_SettingsPane.appearance, split))
+                ThemeSlotHost(
+                  slot: FeatureSlots.settingsAppearance,
+                  child: _Section(
                     title: 'Appearance',
                     icon: Icons.palette_outlined,
                     children: [
                       const _Label('Theme pack'),
-                      Builder(builder: (context) {
-                        final packs = ThemePackScope.maybeOf(context);
-                        final active = packs?.pack.id ?? DefaultThemePacks.skyId;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Wrap(
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.sm,
-                              children: [
-                                for (final pack in DefaultThemePacks.all)
-                                  ChoiceChip(
-                                    label: Text(pack.meta.name),
-                                    selected: active == pack.id,
-                                    onSelected: packs == null
-                                        ? null
-                                        : (_) {
-                                            packs.applyBuiltin(pack.id);
-                                            settings.syncPaletteToPack(pack);
-                                          },
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            if (widget.dependencies != null)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: () => showBotsStore(
-                                    context,
-                                    widget.dependencies!,
-                                  ),
-                                  icon: const Icon(Icons.storefront_outlined),
-                                  label: const Text('Browse themes in Store'),
-                                ),
+                      Builder(
+                        builder: (context) {
+                          final packs = ThemePackScope.maybeOf(context);
+                          final active =
+                              packs?.pack.id ?? DefaultThemePacks.paperId;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Wrap(
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
+                                children: [
+                                  for (final pack in DefaultThemePacks.all)
+                                    ChoiceChip(
+                                      label: Text(pack.meta.name),
+                                      selected: active == pack.id,
+                                      onSelected: packs == null
+                                          ? null
+                                          : (_) {
+                                              packs.applyBuiltin(pack.id);
+                                              settings.syncPaletteToPack(pack);
+                                            },
+                                    ),
+                                ],
                               ),
-                          ],
-                        );
-                      }),
+                              const SizedBox(height: AppSpacing.sm),
+                              if (widget.dependencies != null)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    onPressed: () => showBotsStore(
+                                      context,
+                                      widget.dependencies!,
+                                    ),
+                                    icon: const Icon(Icons.storefront_outlined),
+                                    label: const Text('Browse themes in Store'),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       const _Label('Light / dark'),
                       SizedBox(
@@ -350,36 +379,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Builder(builder: (context) {
-                        final packs = ThemePackScope.maybeOf(context);
-                        final pack =
-                            packs?.pack ?? DefaultThemePacks.sky;
-                        final options = pack.selectablePalettes;
-                        final selected = pack.resolvePalette(
-                          paletteId: settings.paletteId,
-                          accent: settings.accent,
-                        );
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _Label('${pack.meta.name} palette'),
-                            const SizedBox(height: AppSpacing.sm),
-                            Wrap(
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.sm,
-                              children: [
-                                for (final option in options)
-                                  _AccentChoice(
-                                    color: option.accent,
-                                    label: option.label,
-                                    selected: selected.id == option.id,
-                                    onTap: () => settings.setPalette(option),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        );
-                      }),
+                      Builder(
+                        builder: (context) {
+                          final packs = ThemePackScope.maybeOf(context);
+                          final pack = packs?.pack ?? DefaultThemePacks.paper;
+                          final options = pack.selectablePalettes;
+                          final selected = pack.resolvePalette(
+                            paletteId: settings.paletteId,
+                            accent: settings.accent,
+                          );
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _Label('${pack.meta.name} palette'),
+                              const SizedBox(height: AppSpacing.sm),
+                              Wrap(
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
+                                children: [
+                                  for (final option in options)
+                                    _AccentChoice(
+                                      color: option.accent,
+                                      label: option.label,
+                                      selected: selected.id == option.id,
+                                      onTap: () => settings.setPalette(option),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [
@@ -411,85 +441,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: AppSpacing.sm + 2),
                       _SwitchTile(
-                      icon: Icons.animation_rounded,
-                      title: 'Reduce motion',
-                      subtitle: 'Use simpler interface transitions',
-                      value: reducedMotion,
-                      onChanged: (v) =>
-                          _toggle((x) => reducedMotion = x, v, 'reducedMotion'),
-                    ),
-                    _SwitchTile(
-                      icon: Icons.onetwothree_rounded,
-                      title: 'Compact numbers',
-                      subtitle: 'Show 1.2K instead of 1,200',
-                      value: compactNumbers,
-                      onChanged: (v) => _toggle(
-                        (x) => compactNumbers = x,
-                        v,
-                        'compactNumbers',
-                      ),
-                    ),
-                  ],
-                ),
-                  ),
-                ThemeSlotHost(
-                  slot: FeatureSlots.settingsAccount,
-                  child: _Section(
-                  title: 'Account & identity',
-                  icon: Icons.manage_accounts_outlined,
-                  children: [
-                    _SettingsTile(
-                      icon: Icons.person_outline,
-                      title: 'Profile information',
-                      subtitle: 'Name, username, bio and profile media',
-                      onTap: _openProfile,
-                    ),
-                    _SettingsTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'Wallet',
-                      subtitle: 'Balance, top-ups, purchases and project usage',
-                      onTap: () => _openAccount(AccountArea.wallet),
-                    ),
-                    const _SettingsTile(
-                      icon: Icons.apps_outlined,
-                      title: 'Connected apps',
-                      subtitle: 'Services, apps and wallets',
-                    ),
-                  ],
-                ),
-                ),
-                if (widget.dependencies != null)
-                  _Section(
-                    title: 'Your assistant',
-                    icon: Icons.auto_awesome_outlined,
-                    children: [
-                      _SettingsTile(
-                        icon: Icons.checklist_rounded,
-                        title: 'Setup checklist',
-                        subtitle:
-                            'Accounts, notifications and what your assistant still needs',
-                        onTap: () => _openAssistant(
-                          (deps) => SetupPanel(dependencies: deps),
+                        icon: Icons.animation_rounded,
+                        title: 'Reduce motion',
+                        subtitle: 'Use simpler interface transitions',
+                        value: reducedMotion,
+                        onChanged: (v) => _toggle(
+                          (x) => reducedMotion = x,
+                          v,
+                          'reducedMotion',
                         ),
                       ),
-                      _SettingsTile(
-                        icon: Icons.verified_user_outlined,
-                        title: 'What agents may always do',
-                        subtitle: 'The actions you always allowed, to revoke',
-                        onTap: () => _openAssistant(
-                          (deps) => ApprovalsPanel(dependencies: deps),
-                        ),
-                      ),
-                      _SettingsTile(
-                        icon: Icons.hub_outlined,
-                        title: 'Connections',
-                        subtitle: 'Slack, Teams, SMS, and what runs on its own',
-                        onTap: () => _openAssistant(
-                          (deps) => ConnectionsPanel(dependencies: deps),
+                      _SwitchTile(
+                        icon: Icons.onetwothree_rounded,
+                        title: 'Compact numbers',
+                        subtitle: 'Show 1.2K instead of 1,200',
+                        value: compactNumbers,
+                        onChanged: (v) => _toggle(
+                          (x) => compactNumbers = x,
+                          v,
+                          'compactNumbers',
                         ),
                       ),
                     ],
                   ),
+                ),
+                if (widget.dependencies != null &&
+                    _show(_SettingsPane.profile, split))
+                  ThemeSlotHost(
+                    slot: FeatureSlots.settingsAccount,
+                    child: _Section(
+                    title: 'Profile',
+                    icon: Icons.person_outline,
+                    children: [
+                      UserProfileSheet(
+                        dependencies: widget.dependencies!,
+                        embedded: true,
+                      ),
+                    ],
+                  ),
+                  ),
+                if (widget.dependencies != null &&
+                    _show(_SettingsPane.wallet, split))
+                  _Section(
+                    title: 'Wallet',
+                    icon: Icons.account_balance_wallet_outlined,
+                    children: [
+                      AccountPanel(
+                        dependencies: widget.dependencies!,
+                        area: AccountArea.wallet,
+                        embedded: true,
+                      ),
+                    ],
+                  ),
+                if (widget.dependencies != null &&
+                    _show(_SettingsPane.assistant, split))
+                  _Section(
+                    title: 'Setup',
+                    icon: Icons.checklist_rounded,
+                    children: [
+                      SetupPanel(
+                        dependencies: widget.dependencies!,
+                        embedded: true,
+                      ),
+                    ],
+                  ),
+                if (widget.dependencies != null &&
+                    _show(_SettingsPane.approvals, split))
+                  _Section(
+                    title: 'Approvals',
+                    icon: Icons.verified_user_outlined,
+                    children: [
+                      ApprovalsPanel(
+                        dependencies: widget.dependencies!,
+                        embedded: true,
+                      ),
+                    ],
+                  ),
+                if (widget.dependencies != null &&
+                    _show(_SettingsPane.connections, split))
+                  _Section(
+                    title: 'Connections',
+                    icon: Icons.hub_outlined,
+                    children: [
+                      ConnectionsPanel(
+                        dependencies: widget.dependencies!,
+                        embedded: true,
+                      ),
+                      const _SettingsTile(
+                        icon: Icons.apps_outlined,
+                        title: 'Connected apps',
+                        subtitle: 'Services, apps and wallets',
+                      ),
+                    ],
+                  ),
+                if (_show(_SettingsPane.agents, split))
                 _Section(
                   title: 'Agents & actions',
                   icon: Icons.smart_toy_outlined,
@@ -551,193 +596,358 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+                if (_show(_SettingsPane.notifications, split))
                 ThemeSlotHost(
                   slot: FeatureSlots.settingsNotifications,
                   child: _Section(
-                  title: 'Notifications',
-                  icon: Icons.notifications_none_rounded,
-                  children: [
-                    if (widget.dependencies != null)
-                      _SettingsTile(
-                        icon: Icons.tune_rounded,
-                        title: 'Notification preferences',
-                        subtitle: 'Rooms, chats, calls and invites',
-                        onTap: () =>
-                            showNotifyPrefs(context, widget.dependencies!),
-                      ),
-                    _SwitchTile(
-                      icon: Icons.notifications_active_outlined,
-                      title: 'Agent and workspace alerts',
-                      value: priceAlerts,
-                      onChanged: (v) =>
-                          _toggle((x) => priceAlerts = x, v, 'priceAlerts'),
-                    ),
-                    _SwitchTile(
-                      icon: Icons.forum_outlined,
-                      title: 'Social and room activity',
-                      value: socialNotifications,
-                      onChanged: (v) => _toggle(
-                        (x) => socialNotifications = x,
-                        v,
-                        'socialNotifications',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    AppChoiceField<String>(
-                      label: 'Quiet hours',
-                      hint: 'No notifications during these hours.',
-                      value: quietHours,
-                      choices: const [
-                        AppChoice(
-                          'Off',
-                          'Off',
-                          icon: Icons.notifications_active_outlined,
+                    title: 'Notifications',
+                    icon: Icons.notifications_none_rounded,
+                    children: [
+                      if (widget.dependencies != null)
+                        NotifyPrefsPanel(
+                          dependencies: widget.dependencies!,
+                          embedded: true,
                         ),
-                        AppChoice('22:00–08:00', '22:00 – 08:00'),
-                        AppChoice('23:00–07:00', '23:00 – 07:00'),
-                        AppChoice('00:00–06:00', '00:00 – 06:00'),
-                      ],
-                      onChanged: (v) =>
-                          _choose((x) => quietHours = x, v, 'quietHours'),
-                    ),
-                    const SizedBox(height: 8),
-                    _SettingsTile(
-                      icon: Icons.notifications_active_outlined,
-                      title: 'Push notifications on this device',
-                      subtitle: 'Turn device notifications on or off',
-                      onTap: () => _openAccount(AccountArea.account),
-                    ),
-                  ],
+                      _SwitchTile(
+                        icon: Icons.notifications_active_outlined,
+                        title: 'Agent and workspace alerts',
+                        value: priceAlerts,
+                        onChanged: (v) =>
+                            _toggle((x) => priceAlerts = x, v, 'priceAlerts'),
+                      ),
+                      _SwitchTile(
+                        icon: Icons.forum_outlined,
+                        title: 'Social and room activity',
+                        value: socialNotifications,
+                        onChanged: (v) => _toggle(
+                          (x) => socialNotifications = x,
+                          v,
+                          'socialNotifications',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AppChoiceField<String>(
+                        label: 'Quiet hours',
+                        hint: 'No notifications during these hours.',
+                        value: quietHours,
+                        choices: const [
+                          AppChoice(
+                            'Off',
+                            'Off',
+                            icon: Icons.notifications_active_outlined,
+                          ),
+                          AppChoice('22:00–08:00', '22:00 – 08:00'),
+                          AppChoice('23:00–07:00', '23:00 – 07:00'),
+                          AppChoice('00:00–06:00', '00:00 – 06:00'),
+                        ],
+                        onChanged: (v) =>
+                            _choose((x) => quietHours = x, v, 'quietHours'),
+                      ),
+                    ],
+                  ),
                 ),
-                ),
+                if (_show(_SettingsPane.privacy, split) ||
+                    _show(_SettingsPane.devices, split) ||
+                    _show(_SettingsPane.storage, split) ||
+                    _show(_SettingsPane.about, split))
                 ThemeSlotHost(
                   slot: FeatureSlots.settingsAdvanced,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                _Section(
-                  title: 'Privacy & security',
-                  icon: Icons.lock_outline_rounded,
-                  children: [
-                    if (widget.dependencies != null)
-                      _SettingsTile(
-                        icon: Icons.privacy_tip_outlined,
-                        title: 'Who may contact you',
-                        subtitle:
-                            'Messages, voice calls, video calls and invites',
-                        onTap: () => showPrivacySettings(
-                            context, widget.dependencies!),
+                      if (_show(_SettingsPane.privacy, split))
+                      _Section(
+                        title: 'Privacy',
+                        icon: Icons.lock_outline_rounded,
+                        children: [
+                          if (widget.dependencies != null)
+                            PrivacySettingsPanel(
+                              dependencies: widget.dependencies!,
+                              embedded: true,
+                            ),
+                          _SwitchTile(
+                            icon: Icons.fingerprint_rounded,
+                            title: 'Biometric unlock',
+                            value: biometrics,
+                            onChanged: (v) =>
+                                _toggle((x) => biometrics = x, v, 'biometrics'),
+                          ),
+                          _SwitchTile(
+                            icon: Icons.insights_rounded,
+                            title: 'Share anonymous analytics',
+                            value: analytics,
+                            onChanged: (v) =>
+                                _toggle((x) => analytics = x, v, 'analytics'),
+                          ),
+                          const _SettingsTile(
+                            icon: Icons.key_outlined,
+                            title: 'Passkeys and two-factor authentication',
+                          ),
+                          const _SettingsTile(
+                            icon: Icons.download_outlined,
+                            title: 'Export your data',
+                          ),
+                        ],
                       ),
-                    _SwitchTile(
-                      icon: Icons.fingerprint_rounded,
-                      title: 'Biometric unlock',
-                      value: biometrics,
-                      onChanged: (v) =>
-                          _toggle((x) => biometrics = x, v, 'biometrics'),
-                    ),
-                    _SwitchTile(
-                      icon: Icons.insights_rounded,
-                      title: 'Share anonymous analytics',
-                      value: analytics,
-                      onChanged: (v) =>
-                          _toggle((x) => analytics = x, v, 'analytics'),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.password_rounded,
-                      title: 'Password and sign-in',
-                      subtitle: 'Change your password, username and email',
-                      onTap: () => _openAccount(AccountArea.account),
-                    ),
-                    const _SettingsTile(
-                      icon: Icons.key_outlined,
-                      title: 'Passkeys and two-factor authentication',
-                    ),
-                    if (widget.dependencies != null)
-                      _SettingsTile(
+                      if (widget.dependencies != null &&
+                          _show(_SettingsPane.devices, split))
+                      _Section(
+                        title: 'Devices',
                         icon: Icons.devices_outlined,
-                        title: 'Active sessions',
-                        subtitle: 'Review devices signed into your account',
-                        onTap: () => showDevicesPanel(
-                          context,
-                          widget.dependencies!,
-                        ),
+                        children: [
+                          DevicesPanel(
+                            dependencies: widget.dependencies!,
+                            embedded: true,
+                          ),
+                        ],
                       ),
-                    const _SettingsTile(
-                      icon: Icons.download_outlined,
-                      title: 'Export your data',
-                    ),
-                  ],
+                      if (_show(_SettingsPane.storage, split))
+                      _Section(
+                        title: 'Storage & data',
+                        icon: Icons.storage_outlined,
+                        children: [
+                          AppChoiceField<String>(
+                            label: 'Media upload quality',
+                            value: mediaQuality,
+                            choices: const [
+                              AppChoice(
+                                'Automatic',
+                                'Automatic',
+                                icon: Icons.auto_mode_rounded,
+                              ),
+                              AppChoice('Original', 'Original'),
+                              AppChoice('Data saver', 'Data saver'),
+                            ],
+                            onChanged: (v) => _choose(
+                              (x) => mediaQuality = x,
+                              v,
+                              'mediaQuality',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _SettingsTile(
+                            icon: Icons.cleaning_services_outlined,
+                            title: 'Clear local cache',
+                            subtitle: 'Uses $_cacheSize on this device',
+                            onTap: _confirmClearCache,
+                          ),
+                        ],
+                      ),
+                      if (_show(_SettingsPane.about, split))
+                      const _Section(
+                        title: 'About',
+                        icon: Icons.info_outline_rounded,
+                        children: [
+                          const _Label('Pricing'),
+                          const Text(
+                            pricingBlurb,
+                            style: TextStyle(height: 1.45),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          const _Label('How it works'),
+                          const Text(
+                            howItWorksBlurb,
+                            style: TextStyle(height: 1.45),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                _Section(
-                  title: 'Storage & data',
-                  icon: Icons.storage_outlined,
-                  children: [
-                    AppChoiceField<String>(
-                      label: 'Media upload quality',
-                      value: mediaQuality,
-                      choices: const [
-                        AppChoice(
-                          'Automatic',
-                          'Automatic',
-                          icon: Icons.auto_mode_rounded,
-                        ),
-                        AppChoice('Original', 'Original'),
-                        AppChoice('Data saver', 'Data saver'),
-                      ],
-                      onChanged: (v) =>
-                          _choose((x) => mediaQuality = x, v, 'mediaQuality'),
-                    ),
-                    const SizedBox(height: 8),
-                    _SettingsTile(
-                      icon: Icons.cleaning_services_outlined,
-                      title: 'Clear local cache',
-                      subtitle: 'Uses $_cacheSize on this device',
-                      onTap: _confirmClearCache,
-                    ),
-                  ],
-                ),
+                if (isAdmin && _show(_SettingsPane.admin, split))
                   _Section(
-                    title: 'About',
-                    icon: Icons.info_outline_rounded,
+                    title: 'Admin',
+                    icon: Icons.space_dashboard_outlined,
                     children: [
-                      _SettingsTile(
-                        icon: Icons.payments_outlined,
-                        title: 'Pricing',
-                        subtitle: 'Credits and how billing works',
-                        onTap: () => showMarketingPage(context,
-                            title: 'Pricing', body: pricingBlurb),
+                      const Text(
+                        'People, rooms, money and the node.',
+                        style: TextStyle(height: 1.45),
                       ),
-                      _SettingsTile(
-                        icon: Icons.route_outlined,
-                        title: 'How it works',
-                        subtitle: 'Projects, agents and Aseman',
-                        onTap: () => showMarketingPage(context,
-                            title: 'How it works', body: howItWorksBlurb),
+                      const SizedBox(height: AppSpacing.md),
+                      FilledButton.icon(
+                        onPressed: widget.dependencies == null
+                            ? null
+                            : () {
+                                final deps = widget.dependencies!;
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        AdminScreen(dependencies: deps),
+                                  ),
+                                );
+                              },
+                        icon: const Icon(Icons.space_dashboard_outlined),
+                        label: const Text('Open admin console'),
                       ),
                     ],
                   ),
-                    ],
-                  ),
-                ),
-                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!split) return page;
+    return Scaffold(
+      backgroundColor: scheme.surface,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: AppLayout.listPaneWidth,
+            child: Material(
+              color: scheme.surfaceContainerLow,
+              child: _SettingsNav(
+                selected: _pane,
+                showSignedIn: widget.dependencies != null,
+                showAdmin: isAdmin,
+                onSelect: (pane) => setState(() => _pane = pane),
               ),
             ),
-          ],
-        ),
+          ),
+          const PaneDivider(),
+          Expanded(child: page),
+        ],
+      ),
     );
   }
+}
 
+class _SettingsNav extends StatelessWidget {
+  const _SettingsNav({
+    required this.selected,
+    required this.showSignedIn,
+    required this.showAdmin,
+    required this.onSelect,
+  });
+
+  final _SettingsPane selected;
+  final bool showSignedIn;
+  final bool showAdmin;
+  final ValueChanged<_SettingsPane> onSelect;
+
+  static const _items =
+      <({_SettingsPane pane, String label, IconData icon, bool signedIn})>[
+    (
+      pane: _SettingsPane.account,
+      label: 'Account',
+      icon: Icons.account_circle_outlined,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.profile,
+      label: 'Profile',
+      icon: Icons.person_outline,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.appearance,
+      label: 'Appearance',
+      icon: Icons.palette_outlined,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.wallet,
+      label: 'Wallet',
+      icon: Icons.account_balance_wallet_outlined,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.assistant,
+      label: 'Setup',
+      icon: Icons.checklist_rounded,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.approvals,
+      label: 'Approvals',
+      icon: Icons.verified_user_outlined,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.connections,
+      label: 'Connections',
+      icon: Icons.hub_outlined,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.agents,
+      label: 'Agents',
+      icon: Icons.smart_toy_outlined,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.notifications,
+      label: 'Notifications',
+      icon: Icons.notifications_none_rounded,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.privacy,
+      label: 'Privacy',
+      icon: Icons.lock_outline_rounded,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.devices,
+      label: 'Devices',
+      icon: Icons.devices_outlined,
+      signedIn: true,
+    ),
+    (
+      pane: _SettingsPane.storage,
+      label: 'Storage',
+      icon: Icons.storage_outlined,
+      signedIn: false,
+    ),
+    (
+      pane: _SettingsPane.about,
+      label: 'About',
+      icon: Icons.info_outline_rounded,
+      signedIn: false,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+          child: Text(
+            'Settings',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        for (final item in _items)
+          if (!item.signedIn || showSignedIn)
+            ListTile(
+              selected: selected == item.pane,
+              selectedTileColor: scheme.secondaryContainer,
+              shape: const StadiumBorder(),
+              leading: Icon(item.icon),
+              title: Text(item.label),
+              onTap: () => onSelect(item.pane),
+            ),
+        if (showAdmin)
+          ListTile(
+            selected: selected == _SettingsPane.admin,
+            selectedTileColor: scheme.secondaryContainer,
+            shape: const StadiumBorder(),
+            leading: const Icon(Icons.space_dashboard_outlined),
+            title: const Text('Admin'),
+            onTap: () => onSelect(_SettingsPane.admin),
+          ),
+      ],
+    );
+  }
 }
 
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({
-    this.dependencies,
-    required this.onProfile,
-    required this.onManage,
-  });
+  const _AccountCard({this.dependencies});
   final AppDependencies? dependencies;
-  final VoidCallback onProfile;
-  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -749,27 +959,29 @@ class _AccountCard extends StatelessWidget {
         ? 'ME'
         : handle.substring(0, 1).toUpperCase();
     final Widget avatar = dependencies == null
-        ? Builder(builder: (context) {
-            const size = 60.0;
-            final corners = context.avatarBorderRadius(size);
-            return HaloRing(
-              accent: scheme.primary,
-              borderRadius: corners,
-              child: AvatarFace(
-                size: size,
+        ? Builder(
+            builder: (context) {
+              const size = 60.0;
+              final corners = context.avatarBorderRadius(size);
+              return HaloRing(
+                accent: scheme.primary,
                 borderRadius: corners,
-                backgroundColor: scheme.primary,
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onPrimary,
+                child: AvatarFace(
+                  size: size,
+                  borderRadius: corners,
+                  backgroundColor: scheme.primary,
+                  child: Text(
+                    initials,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onPrimary,
+                    ),
                   ),
                 ),
-              ),
-            );
-          })
+              );
+            },
+          )
         : AvatarEditor(
             service: dependencies!.service,
             avatar: dependencies!.sessionController.avatar,
@@ -802,46 +1014,14 @@ class _AccountCard extends StatelessWidget {
         ),
       ],
     );
-    final actions = Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      alignment: WrapAlignment.end,
-      children: [
-        OutlinedButton(
-          onPressed: dependencies == null ? null : onProfile,
-          child: const Text('Profile'),
-        ),
-        FilledButton(
-          onPressed: dependencies == null ? null : onManage,
-          child: const Text('Account'),
-        ),
-      ],
-    );
     return SoftCard(
       padding: const EdgeInsets.all(20),
-      // A narrow card (a phone) puts the buttons under the name: beside it
-      // they cannot wrap and would push past the card's edge.
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 420;
-          final header = Row(
-            children: [
-              avatar,
-              const SizedBox(width: AppSpacing.md),
-              Expanded(child: identity),
-              if (!narrow) ...[const SizedBox(width: AppSpacing.xs), actions],
-            ],
-          );
-          if (!narrow) return header;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              header,
-              const SizedBox(height: AppSpacing.md),
-              Align(alignment: AlignmentDirectional.centerEnd, child: actions),
-            ],
-          );
-        },
+      child: Row(
+        children: [
+          avatar,
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: identity),
+        ],
       ),
     );
   }
@@ -865,7 +1045,11 @@ class _Section extends StatelessWidget {
         radius: AppShape.card,
         showOrb: false,
         padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg - 2, AppSpacing.md, AppSpacing.lg - 2, AppSpacing.md),
+          AppSpacing.lg - 2,
+          AppSpacing.md,
+          AppSpacing.lg - 2,
+          AppSpacing.md,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -879,10 +1063,10 @@ class _Section extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.4,
-                          color: scheme.onSurface,
-                        ),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.4,
+                      color: scheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -901,14 +1085,14 @@ class _Label extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
-        child: Text(
-          text,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm - 2),
+    child: Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+    ),
+  );
 }
 
 class _SwitchTile extends StatelessWidget {
@@ -926,12 +1110,12 @@ class _SwitchTile extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   @override
   Widget build(BuildContext context) => QuietSwitchTile(
-        icon: icon,
-        label: title,
-        subtitle: subtitle,
-        value: value,
-        onChanged: onChanged,
-      );
+    icon: icon,
+    label: title,
+    subtitle: subtitle,
+    value: value,
+    onChanged: onChanged,
+  );
 }
 
 /// A row that opens a related screen. Without [onTap] it is not available
@@ -956,10 +1140,7 @@ class _SettingsTile extends StatelessWidget {
       subtitle: subtitle,
       onTap: onTap,
       trailing: onTap == null
-          ? SoftMetaChip(
-              label: 'Soon',
-              accent: scheme.onSurfaceVariant,
-            )
+          ? SoftMetaChip(label: 'Soon', accent: scheme.onSurfaceVariant)
           : null,
     );
   }

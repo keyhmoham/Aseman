@@ -23,8 +23,15 @@ Future<void> showDevicesPanel(
     );
 
 class DevicesPanel extends StatefulWidget {
-  const DevicesPanel({super.key, required this.dependencies});
+  const DevicesPanel({
+    super.key,
+    required this.dependencies,
+    this.embedded = false,
+  });
   final AppDependencies dependencies;
+
+  /// Draw the sessions in the settings page instead of a floating panel.
+  final bool embedded;
 
   @override
   State<DevicesPanel> createState() => _DevicesPanelState();
@@ -127,6 +134,78 @@ class _DevicesPanelState extends State<DevicesPanel> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final others = _sessions.where((s) => !s.current).length;
+    final sessions = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(_error!, style: TextStyle(color: scheme.error)),
+          ),
+        if (!widget.embedded) ...[
+          SectionLabel('Signed in (${_sessions.length})'),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        if (_loading)
+          widget.embedded
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : const SkeletonList(itemCount: 3)
+        else if (_sessions.isEmpty)
+          SoftCard(
+            child: Text(
+              'Sign in on a phone or browser and it will show up here.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          )
+        else
+          SoftCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < _sessions.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _DeviceRow(
+                    session: _sessions[i],
+                    busy: _busy,
+                    onSignOut: _sessions[i].current
+                        ? null
+                        : () => _confirmRevoke(_sessions[i]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (others > 0) ...[
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              onPressed: _busy ? null : _confirmRevokeOthers,
+              child: const Text('Sign out other devices'),
+            ),
+          ),
+        ],
+      ],
+    );
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              tooltip: 'Refresh',
+              onPressed: _busy ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ),
+          sessions,
+        ],
+      );
+    }
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Devices',
@@ -138,55 +217,7 @@ class _DevicesPanelState extends State<DevicesPanel> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: scheme.error),
-                ),
-              ),
-            SectionLabel('Signed in (${_sessions.length})'),
-            const SizedBox(height: AppSpacing.sm),
-            if (_loading)
-              const SkeletonList(itemCount: 3)
-            else if (_sessions.isEmpty)
-              SoftCard(
-                child: Text(
-                  'Sign in on a phone or browser and it will show up here.',
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
-              )
-            else
-              SoftCard(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    for (var i = 0; i < _sessions.length; i++) ...[
-                      if (i > 0) const Divider(height: 1),
-                      _DeviceRow(
-                        session: _sessions[i],
-                        busy: _busy,
-                        onSignOut: _sessions[i].current
-                            ? null
-                            : () => _confirmRevoke(_sessions[i]),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            if (others > 0) ...[
-              const SizedBox(height: AppSpacing.md),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(
-                  onPressed: _busy ? null : _confirmRevokeOthers,
-                  child: const Text('Sign out other devices'),
-                ),
-              ),
-            ],
-          ],
+          children: [sessions],
         ),
       ),
     );

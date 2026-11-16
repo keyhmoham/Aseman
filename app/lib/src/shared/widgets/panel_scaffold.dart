@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_spacing.dart';
+import '../../core/layout/breakpoints.dart';
 
 /// Shared body chrome for modal panels (My bots, Market, Requests, …).
 ///
@@ -27,7 +28,7 @@ class PanelScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompact =
-        compact ?? MediaQuery.sizeOf(context).width < 560;
+        compact ?? MediaQuery.sizeOf(context).width < Breakpoints.compact;
     return Padding(
       padding: AppSpacing.panelPadding(isCompact),
       child: Column(

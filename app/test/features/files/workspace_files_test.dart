@@ -86,6 +86,7 @@ class _DeskClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     if (action == 'desktop_get') return ApiResponse(200, {'desktop': desk});
     if (action == 'desktop_update') {
@@ -627,6 +628,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await openSpaceRoom(tester);
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('src'));
@@ -664,6 +667,8 @@ void main() {
       await tester.pumpAndSettle();
       await openSpaceRoom(tester);
 
+      await tester.tap(find.byTooltip('Library'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Apps'));
       await tester.pumpAndSettle();
       expect(find.text('Sandbox Explorer'), findsNothing);

@@ -79,5 +79,5 @@ func (a *Adapter) PersonalChat(ctx context.Context, chat vmm.PersonalChat) (stri
 		return "", errs.New(errs.CodeUnavailable, out.Error)
 	}
 	a.learnLater(s, out.Transcript)
-	return strings.TrimSpace(out.Reply), nil
+	return vmm.JoinSurfaces(strings.TrimSpace(out.Reply), s.takeSurfaces()), nil
 }

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../../../../core/layout/breakpoints.dart';
 
 import 'package:flutter/material.dart';
 
@@ -231,7 +232,7 @@ class _RoutinesPanelState extends State<RoutinesPanel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 560;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final gutter = compact ? 16.0 : 26.0;
     final next = _dueSoon;
     final shown = _shown;

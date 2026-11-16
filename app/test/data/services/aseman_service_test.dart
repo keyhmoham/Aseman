@@ -16,6 +16,7 @@ class _StubClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     calls++;
     switch (action) {
@@ -139,6 +140,7 @@ class _AuthStubClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     sessions[action] = session;
     bodies[action] = body;

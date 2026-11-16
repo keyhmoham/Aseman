@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -292,6 +293,15 @@ void main() {
         await tester.pumpAndSettle();
       }
 
+      Future<void> openMessages() async {
+        final nav = AsemanApp.navigatorKey.currentContext!;
+        final deps = tester
+            .widget<AsemanApp>(find.byType(AsemanApp))
+            .dependencies;
+        unawaited(showMessenger(nav, deps));
+        await tester.pumpAndSettle();
+      }
+
       final phone = size.key == 'phone';
       await app('feed');
       await app('profile_menu', () => openProfile(tester, phone: phone));
@@ -326,7 +336,7 @@ void main() {
         await openAtlas();
         await tester.pumpAndSettle();
         if (phone) {
-          // Profile/Messages are Home-only on phones; open messenger via feed.
+          // The profile menu has no Messages shortcut; phones open chats from Home.
           await tester.tap(find.widgetWithText(FilledButton, 'Home'));
           await tester.pumpAndSettle();
           await tester.tap(
@@ -336,9 +346,7 @@ void main() {
             ),
           );
         } else {
-          await tester.tap(profileAvatar());
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Messages').last);
+          await openMessages();
         }
       }, roomService());
       await app('messenger_spaces', () async {
@@ -356,11 +364,8 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text('Spaces').last);
         } else {
-          await tester.tap(profileAvatar());
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Messages').last);
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Spaces').last);
+          await openMessages();
+          await tester.tap(find.text('Rooms').last);
         }
       }, roomService());
       await app('messenger_chat', () async {
@@ -377,10 +382,7 @@ void main() {
           );
           await tester.pumpAndSettle();
         } else {
-          await tester.tap(profileAvatar());
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Messages').last);
-          await tester.pumpAndSettle();
+          await openMessages();
         }
         await tester.tap(
           find.descendant(

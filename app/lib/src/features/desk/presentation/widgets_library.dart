@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/layout/breakpoints.dart';
 import '../../../core/theme/theme_chrome.dart';
 import '../../../data/models/space.dart';
 import '../../../shared/widgets/overlay_panels.dart';
@@ -31,8 +32,9 @@ class WidgetsLibraryPin {
   String get label => pin.label.isEmpty ? 'Window' : pin.label;
 }
 
-/// Opens the widgets / windows library: a bottom sheet on phones, a large
-/// centered modal on desktop. Tabs are one per workspace; each tab is a grid
+/// Opens the widgets / windows library: a bottom sheet on phones, a
+/// full-height sheet stuck to the trailing edge on desktop. Tabs are one
+/// per workspace; each tab is a grid
 /// of that space's pinned desk widgets and windows.
 Future<void> showWidgetsLibrary(
   BuildContext context,
@@ -168,7 +170,7 @@ class _WidgetsLibraryPanelState extends State<_WidgetsLibraryPanel>
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 820;
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.expanded;
     return Material(
       color: Colors.transparent,
       child: Column(
@@ -231,7 +233,7 @@ class _WidgetsLibraryPanelState extends State<_WidgetsLibraryPanel>
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: SegmentedTabBar(
             controller: controller,
-            compact: MediaQuery.sizeOf(context).width < 820,
+            compact: MediaQuery.sizeOf(context).width < Breakpoints.expanded,
             labels: [for (final s in spaces) s.name],
             icons: [
               for (final _ in spaces) Icons.workspaces_outline,

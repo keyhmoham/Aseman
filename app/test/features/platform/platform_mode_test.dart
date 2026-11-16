@@ -26,6 +26,7 @@ class _AuthClient extends AsemanApiClient {
     String action, {
     Map<String, dynamic> body = const {},
     Duration? requestTimeout,
+    bool anonymous = false,
   }) async {
     sent['$namespace.$action'] = body;
     if (namespace == 'developer' && action == 'platform_frontend') {

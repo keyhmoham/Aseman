@@ -29,6 +29,7 @@ class DmDeskPanel extends StatelessWidget {
     required this.title,
     this.topInset = 0,
     this.bottomInset = 0,
+    this.board = false,
   });
 
   final AppDependencies dependencies;
@@ -38,6 +39,9 @@ class DmDeskPanel extends StatelessWidget {
   final String title;
   final double topInset;
   final double bottomInset;
+
+  /// Widget grid, as the workspace room desk. Opening one floats its card.
+  final bool board;
 
   Widget _windowContent(BuildContext context, DeskWindow w) =>
       _DmWindowContent(
@@ -115,21 +119,25 @@ class DmDeskPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     // Surface stays full-bleed; bottomInset clears the floating home tab bar.
     final desk = LayoutBuilder(
-      builder: (context, box) => box.maxWidth < compactDeskWidth
-          ? CompactDesk(
-              controller: controller,
-              topInset: topInset,
-              windowContent: _windowContent,
-              pinPreview: _pinPreview,
-              emptyState: _empty(context),
-            )
-          : FloatingDesk(
-              controller: controller,
-              topInset: topInset,
-              windowContent: _windowContent,
-              pinPreview: _pinPreview,
-              emptyState: _empty(context),
-            ),
+      builder: (context, box) {
+        final widgets = board || box.maxWidth < compactDeskWidth;
+        return widgets
+            ? CompactDesk(
+                controller: controller,
+                topInset: topInset,
+                floatOnOpen: board,
+                windowContent: _windowContent,
+                pinPreview: _pinPreview,
+                emptyState: _empty(context),
+              )
+            : FloatingDesk(
+                controller: controller,
+                topInset: topInset,
+                windowContent: _windowContent,
+                pinPreview: _pinPreview,
+                emptyState: _empty(context),
+              );
+      },
     );
     return ElpianMediaScope(
       resolver: ToolMedia.forSpace(dependencies.service, spaceId).call,

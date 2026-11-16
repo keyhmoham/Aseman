@@ -96,16 +96,18 @@ class SkyBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final wash = ThemeChrome.paintsAtmosphere(context);
     return Stack(
       fit: StackFit.expand,
       children: [
         if (absorb)
           ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(painter: SkyAtmospherePainter.of(scheme)),
+        if (wash)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: SkyAtmospherePainter.of(scheme)),
+            ),
           ),
-        ),
         child,
       ],
     );
@@ -647,7 +649,7 @@ class SoftCard extends StatelessWidget {
     final content = Stack(
       fit: StackFit.passthrough,
       children: [
-        if (showOrb)
+        if (showOrb && ThemeChrome.paintsAtmosphere(context))
           Positioned(
             right: -18,
             top: -22,
@@ -1161,12 +1163,16 @@ class SoftMetaChip extends StatelessWidget {
             Icon(icon, size: 12, color: color),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
         ],

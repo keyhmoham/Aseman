@@ -32,6 +32,144 @@ void main() {
     expect(again.palettes.first.id, 'blue');
   });
 
+  test('paper pack is flat material expressive without sky glow', () {
+    final pack = DefaultThemePacks.paper;
+    expect(pack.validate(), isNull);
+    expect(pack.id, DefaultThemePacks.paperId);
+    expect(
+      DefaultThemePacks.all.map((p) => p.id),
+      contains(DefaultThemePacks.paperId),
+    );
+    expect(DefaultThemePacks.byId(pack.id).meta.name, 'Paper');
+    expect(pack.language.id, DesignLanguage.materialExpressive);
+    expect(pack.language.button.shape, ShapeKind.stadium);
+    expect(pack.language.chip.shape, ShapeKind.stadium);
+    expect(pack.language.navPill.shape, ShapeKind.stadium);
+    expect(pack.language.sheet.fill, FillKind.solid);
+    expect(pack.language.dialog.fill, FillKind.solid);
+    expect(pack.language.navPill.fill, FillKind.solid);
+    expect(pack.language.card.elevation, 0);
+    expect(pack.language.fab.elevation, lessThanOrEqualTo(1));
+    expect(pack.language.shadow.alpha, 0);
+    expect(pack.graphics.atmosphere, 'flat');
+    expect(pack.tokens.light.blurSigma, 0);
+    expect(pack.tokens.dark.blurSigma, 0);
+    expect(pack.tokens.light.labelWeight, 500);
+    expect(pack.tokens.light.scaffold, const Color(0xFFF6F1E8));
+    expect(pack.defaultPalette.id, 'ink');
+    expect(
+      pack.palettes.map((p) => p.id),
+      containsAll(<String>[
+        'ink',
+        'red',
+        'orange',
+        'yellow',
+        'green',
+        'cyan',
+        'blue_variant',
+        'blue',
+        'purple',
+        'baseline',
+        'pink',
+        'grey',
+        'grey_variant',
+      ]),
+    );
+    expect(pack.palettes.firstWhere((p) => p.id == 'baseline').accent,
+        const Color(0xFF6750A4));
+    expect(pack.palettes.firstWhere((p) => p.id == 'blue').accent,
+        const Color(0xFF1157CE));
+    expect(AppTheme.light.extension<AsemanTokens>()!.packId, pack.id);
+    expect(DefaultThemePacks.byId('missing').id, pack.id);
+
+    final blueDark = AppTheme.fromPack(
+      pack,
+      Brightness.dark,
+      paletteId: 'blue',
+    );
+    expect(
+      ThemeData.estimateBrightnessForColor(blueDark.colorScheme.primary),
+      Brightness.light,
+    );
+    expect(blueDark.colorScheme.primary, isNot(pack.palettes.first.accent));
+
+    final blue = AppTheme.fromPack(pack, Brightness.light, paletteId: 'blue');
+    final roles = blue.colorScheme;
+    expect(roles.secondary, isNot(roles.primary));
+    expect(roles.primaryContainer, isNot(roles.primary));
+    expect(roles.secondaryContainer, isNot(roles.primaryContainer));
+    expect(roles.tertiary, isNot(roles.primary));
+    expect(roles.surfaceContainer, isNot(roles.surface));
+    expect(roles.surfaceTint, roles.primary);
+    expect(roles.surface, isNot(light.colorScheme.surface));
+    expect(roles.tertiary.b, greaterThan(roles.tertiary.r));
+    expect(blue.chipTheme.selectedColor, roles.secondaryContainer);
+    expect(blue.chipTheme.secondarySelectedColor, roles.secondaryContainer);
+    expect(blue.cardTheme.color, roles.surfaceContainerHigh);
+    expect(
+      blue.inputDecorationTheme.fillColor,
+      roles.surfaceContainerHighest,
+    );
+    expect(blue.extension<AsemanTokens>()!.cyan, roles.secondary);
+
+    final again = ThemePack.decode(pack.encode());
+    expect(again.language.sheet.fill, FillKind.solid);
+    expect(again.graphics.atmosphere, 'flat');
+    expect(again.tokens.light.blurSigma, 0);
+
+    final light = AppTheme.fromPack(pack, Brightness.light);
+    final dark = AppTheme.fromPack(pack, Brightness.dark);
+    final lightTokens = light.extension<AsemanTokens>()!;
+    expect(lightTokens.packId, DefaultThemePacks.paperId);
+    expect(lightTokens.atmosphere, 'flat');
+    expect(lightTokens.blurSigma, 0);
+    expect(light.scaffoldBackgroundColor, light.colorScheme.surface);
+    expect(light.colorScheme.surface, isNot(pack.tokens.light.scaffold));
+    expect(
+      light.navigationRailTheme.selectedLabelTextStyle?.fontWeight,
+      FontWeight.w500,
+    );
+    expect(
+      light.navigationBarTheme.labelTextStyle
+          ?.resolve({WidgetState.selected})
+          ?.fontWeight,
+      FontWeight.w500,
+    );
+    expect(dark.colorScheme.primary, isNot(light.colorScheme.primary));
+    expect(
+      ThemeData.estimateBrightnessForColor(dark.colorScheme.primary),
+      Brightness.light,
+    );
+
+    final sky = AppTheme.fromPack(DefaultThemePacks.sky, Brightness.light);
+    expect(sky.extension<AsemanTokens>()!.atmosphere, 'mist');
+    expect(sky.extension<AsemanTokens>()!.blurSigma, greaterThan(0));
+  });
+
+  testWidgets('paper backdrop skips the sky atmosphere wash', (tester) async {
+    Future<bool> wash(ThemeData theme) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(theme.extension<AsemanTokens>()!.packId),
+          theme: theme,
+          home: const SkyBackdrop(child: Text('page')),
+        ),
+      );
+      return tester.widgetList<CustomPaint>(find.byType(CustomPaint)).any(
+            (paint) => paint.painter is SkyAtmospherePainter,
+          );
+    }
+
+    expect(
+      await wash(AppTheme.fromPack(DefaultThemePacks.paper, Brightness.light)),
+      isFalse,
+    );
+    expect(
+      await wash(AppTheme.fromPack(DefaultThemePacks.sky, Brightness.light)),
+      isTrue,
+    );
+  });
+
   test('each builtin pack proposes dedicated palette options', () {
     for (final pack in DefaultThemePacks.all) {
       expect(pack.selectablePalettes, isNotEmpty, reason: pack.id);

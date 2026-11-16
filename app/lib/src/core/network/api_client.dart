@@ -42,11 +42,9 @@ class AsemanApiClient {
     required this.baseUrl,
     this.session,
     this.timeout = const Duration(seconds: 60),
-  }) : _http = http.Client() {
-    this.baseUrl = "http://localhost:8080";
-  }
+  }) : _http = http.Client();
 
-  String baseUrl;
+  final String baseUrl;
   Session? session;
   final Duration timeout;
   final http.Client _http;

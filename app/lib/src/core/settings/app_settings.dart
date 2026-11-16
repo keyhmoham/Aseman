@@ -13,13 +13,13 @@ import '../theme/theme_pack.dart';
 /// `localStorage` on the web, so the choice survives a restart everywhere.
 class AppSettingsController extends ChangeNotifier {
   static const storageKey = 'aseman.theme';
-  /// Paper pack ink — matches [DefaultThemePacks.paper] default palette.
-  static const defaultAccent = Color(0xFF4A433C);
+  /// Paper pack grey — matches [DefaultThemePacks.paper] default palette.
+  static const defaultAccent = Color(0xFF5E5E5E);
 
   ThemeMode themeMode = ThemeMode.system;
   Color accent = defaultAccent;
   /// Empty until the user picks a pack palette (or restore finds one).
-  /// Fresh installs resolve to Paper's ink via [defaultAccent] matching.
+  /// Fresh installs resolve to Paper's grey via [defaultAccent] matching.
   String paletteId = '';
 
   bool _dirty = false;

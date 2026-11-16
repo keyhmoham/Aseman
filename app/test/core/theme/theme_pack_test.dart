@@ -57,10 +57,12 @@ void main() {
     expect(pack.tokens.dark.blurSigma, 0);
     expect(pack.tokens.light.labelWeight, 500);
     expect(pack.tokens.light.scaffold, const Color(0xFFF6F1E8));
-    expect(pack.defaultPalette.id, 'ink');
+    expect(pack.defaultPalette.id, 'grey');
+    expect(pack.defaultPalette.accent, const Color(0xFF5E5E5E));
     expect(
       pack.palettes.map((p) => p.id),
       containsAll(<String>[
+        'grey',
         'ink',
         'red',
         'orange',
@@ -72,8 +74,15 @@ void main() {
         'purple',
         'baseline',
         'pink',
-        'grey',
         'grey_variant',
+        'slate',
+        'indigo',
+        'lagoon',
+        'sage',
+        'clay',
+        'copper',
+        'rose',
+        'plum',
       ]),
     );
     expect(pack.palettes.firstWhere((p) => p.id == 'baseline').accent,

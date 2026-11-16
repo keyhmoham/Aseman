@@ -18,7 +18,7 @@ void main() {
       first.accent.toARGB32(),
       DefaultThemePacks.paper.defaultPalette.accent.toARGB32(),
     );
-    expect(DefaultThemePacks.paper.defaultPalette.id, 'ink');
+    expect(DefaultThemePacks.paper.defaultPalette.id, 'grey');
 
     first.setThemeMode(ThemeMode.dark);
     first.setPalette(

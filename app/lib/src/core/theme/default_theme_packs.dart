@@ -557,7 +557,7 @@ abstract final class DefaultThemePacks {
         ],
       );
 
-  /// Flat Material 3 Expressive: warm paper, ink accent, no sky glow or frost.
+  /// Flat Material 3 Expressive: warm paper, grey accent, no sky glow or frost.
   static DesignLanguage get paperLanguage {
     final base = DesignLanguage.presetOf(DesignLanguage.materialExpressive);
     ControlRecipe inked(
@@ -592,20 +592,20 @@ abstract final class DefaultThemePacks {
           id: paperId,
           name: 'Paper',
           description:
-              'Flat Material 3 Expressive. Warm paper, ink accent, hairline surfaces.',
+              'Flat Material 3 Expressive. Warm paper, grey accent, hairline surfaces.',
           author: 'Aseman',
           previewColors: [
             Color(0xFFF6F1E8),
-            Color(0xFF4A433C),
-            Color(0xFFE6D9CC),
+            Color(0xFF5E5E5E),
+            Color(0xFFE4E4E4),
           ],
           builtin: true,
         ),
         language: paperLanguage,
         tokens: const ThemeTokenSet(
           light: ThemeTokens(
-            accent: Color(0xFF4A433C),
-            secondaryAccent: Color(0xFF4A433C),
+            accent: Color(0xFF5E5E5E),
+            secondaryAccent: Color(0xFF5E5E5E),
             scaffold: Color(0xFFF6F1E8),
             surface: Color(0xFFFFFBF5),
             surfaceHigh: Color(0xFFF3EDE3),
@@ -623,8 +623,8 @@ abstract final class DefaultThemePacks {
             fabMistAlpha: 0,
           ),
           dark: ThemeTokens(
-            accent: Color(0xFFE6D9CC),
-            secondaryAccent: Color(0xFFE6D9CC),
+            accent: Color(0xFFE4E4E4),
+            secondaryAccent: Color(0xFFE4E4E4),
             scaffold: Color(0xFF141210),
             surface: Color(0xFF1C1916),
             surfaceHigh: Color(0xFF26221E),
@@ -649,11 +649,19 @@ abstract final class DefaultThemePacks {
           backdropStyle: 'solid',
         ),
         shell: const ShellLayoutSpec(),
-        // Ink stays first so [ThemePack.defaultPalette] is the paper default.
-        // The rest are Material 3 static-palette primaries (tone 40), the
-        // light accent role used by Material 3 Expressive, plus the baseline
-        // expressive primary.
+        // Grey stays first so [ThemePack.defaultPalette] is the paper default.
+        // Ink and the Material 3 tone-40 primaries stay, then quieter colors
+        // chosen to sit on warm paper.
         palettes: const [
+          ThemePaletteOption(
+            id: 'grey',
+            label: 'Grey',
+            accent: Color(0xFF5E5E5E),
+            secondary: Color(0xFF5E5E5E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
           ThemePaletteOption(
             id: 'ink',
             label: 'Ink',
@@ -754,19 +762,82 @@ abstract final class DefaultThemePacks {
             danger: Color(0xFFB3261E),
           ),
           ThemePaletteOption(
-            id: 'grey',
-            label: 'Grey',
-            accent: Color(0xFF5E5E5E),
-            secondary: Color(0xFF5E5E5E),
+            id: 'grey_variant',
+            label: 'Grey variant',
+            accent: Color(0xFF5C5F5E),
+            secondary: Color(0xFF5C5F5E),
             success: Color(0xFF2E7D32),
             warning: Color(0xFFB45309),
             danger: Color(0xFFB3261E),
           ),
           ThemePaletteOption(
-            id: 'grey_variant',
-            label: 'Grey variant',
-            accent: Color(0xFF5C5F5E),
-            secondary: Color(0xFF5C5F5E),
+            id: 'slate',
+            label: 'Slate',
+            accent: Color(0xFF4A5D6E),
+            secondary: Color(0xFF4A5D6E),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'indigo',
+            label: 'Indigo',
+            accent: Color(0xFF3C4A86),
+            secondary: Color(0xFF3C4A86),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'lagoon',
+            label: 'Lagoon',
+            accent: Color(0xFF1E655F),
+            secondary: Color(0xFF1E655F),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'sage',
+            label: 'Sage',
+            accent: Color(0xFF5B6A45),
+            secondary: Color(0xFF5B6A45),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'clay',
+            label: 'Clay',
+            accent: Color(0xFF8C4A38),
+            secondary: Color(0xFF8C4A38),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'copper',
+            label: 'Copper',
+            accent: Color(0xFF8A5638),
+            secondary: Color(0xFF8A5638),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'rose',
+            label: 'Rose',
+            accent: Color(0xFF96485A),
+            secondary: Color(0xFF96485A),
+            success: Color(0xFF2E7D32),
+            warning: Color(0xFFB45309),
+            danger: Color(0xFFB3261E),
+          ),
+          ThemePaletteOption(
+            id: 'plum',
+            label: 'Plum',
+            accent: Color(0xFF6D4B68),
+            secondary: Color(0xFF6D4B68),
             success: Color(0xFF2E7D32),
             warning: Color(0xFFB45309),
             danger: Color(0xFFB3261E),

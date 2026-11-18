@@ -1023,7 +1023,6 @@ class _InviteDialogState extends State<_InviteDialog> {
       if (!mounted) return;
       setState(() {
         _results = users
-            .where((u) => u.kind == 'user')
             .map((u) => {'id': u.id, 'handle': u.handle, 'avatar': u.avatar})
             .toList();
         _searching = false;

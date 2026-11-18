@@ -75,10 +75,7 @@ class _AsemanAppState extends State<AsemanApp> {
   Future<void> _restoreTheme() async {
     try {
       // Theme mode + pack gate first paint; halo rings can fill in after.
-      await Future.wait([
-        settings.restore(),
-        themePacks.restore(),
-      ]);
+      await Future.wait([settings.restore(), themePacks.restore()]);
       // Drop orphan palette ids after a pack swap or store install.
       settings.syncPaletteToPack(themePacks.pack);
       unawaited(HaloRingCache.restore());
@@ -98,52 +95,54 @@ class _AsemanAppState extends State<AsemanApp> {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: Listenable.merge([settings, themePacks]),
-        builder: (context, _) => AppSettingsScope(
-          controller: settings,
-          child: ThemePackScope(
-            controller: themePacks,
-            child: MaterialApp(
-              navigatorKey: AsemanApp.navigatorKey,
-              debugShowCheckedModeBanner: false,
-              title: PlatformMode.active ? PlatformMode.slug : 'Aseman',
-              theme: AppTheme.lightWith(
-                settings.accent,
-                pack: themePacks.pack,
-                paletteId: settings.paletteId,
-              ),
-              darkTheme: AppTheme.darkWith(
-                settings.accent,
-                pack: themePacks.pack,
-                paletteId: settings.paletteId,
-              ),
-              themeMode: settings.themeMode,
-              // Overlay above the navigator so the gadgets edge handle and
-              // GadgetsScope cover home and every pushed workspace.
-              builder: (context, child) => ThemeRuntimeScope(
+    animation: Listenable.merge([settings, themePacks]),
+    builder: (context, _) => AppSettingsScope(
+      controller: settings,
+      child: ThemePackScope(
+        controller: themePacks,
+        child: MaterialApp(
+          navigatorKey: AsemanApp.navigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: PlatformMode.active ? PlatformMode.slug : 'Aseman',
+          theme: AppTheme.lightWith(
+            settings.accent,
+            pack: themePacks.pack,
+            paletteId: settings.paletteId,
+          ),
+          darkTheme: AppTheme.darkWith(
+            settings.accent,
+            pack: themePacks.pack,
+            paletteId: settings.paletteId,
+          ),
+          themeMode: settings.themeMode,
+          // Overlay above the navigator so the gadgets edge handle and
+          // GadgetsScope cover home and every pushed workspace.
+          builder: (context, child) => _DesktopSnackBarWidth(
+            child: ThemeRuntimeScope(
+              dependencies: widget.dependencies,
+              child: AuthGate(
                 dependencies: widget.dependencies,
-                child: AuthGate(
+                child: CallOverlay(
                   dependencies: widget.dependencies,
-                  child: CallOverlay(
+                  child: GadgetsOverlay(
                     dependencies: widget.dependencies,
-                    child: GadgetsOverlay(
-                      dependencies: widget.dependencies,
-                      navigatorKey: AsemanApp.navigatorKey,
-                      child: child ?? const SizedBox.shrink(),
-                    ),
+                    navigatorKey: AsemanApp.navigatorKey,
+                    child: child ?? const SizedBox.shrink(),
                   ),
                 ),
               ),
-              // A platform's client opens on the platform's frontend.
-              // Deferred so main Aseman builds do not ship PlatformHome's
-              // Elpian host in the initial JS chunk.
-              home: PlatformMode.active
-                  ? _DeferredPlatformHome(dependencies: widget.dependencies)
-                  : AppShell(dependencies: widget.dependencies),
             ),
           ),
+          // A platform's client opens on the platform's frontend.
+          // Deferred so main Aseman builds do not ship PlatformHome's
+          // Elpian host in the initial JS chunk.
+          home: PlatformMode.active
+              ? _DeferredPlatformHome(dependencies: widget.dependencies)
+              : AppShell(dependencies: widget.dependencies),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _DeferredPlatformHome extends StatefulWidget {
@@ -183,5 +182,33 @@ class _DeferredPlatformHomeState extends State<_DeferredPlatformHome> {
       );
     }
     return platform.PlatformHome(dependencies: widget.dependencies);
+  }
+}
+
+/// Keeps snackbar toasts a comfortable, fixed width on wide (desktop / web)
+/// windows instead of stretching across the whole screen. On narrow screens
+/// the default full-width floating layout is kept.
+class _DesktopSnackBarWidth extends StatelessWidget {
+  const _DesktopSnackBarWidth({required this.child});
+
+  final Widget child;
+
+  static const double _maxWidth = 420;
+  static const double _wideBreakpoint = 600;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    if (screenWidth < _wideBreakpoint) return child;
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        snackBarTheme: theme.snackBarTheme.copyWith(
+          behavior: SnackBarBehavior.floating,
+          width: _maxWidth,
+        ),
+      ),
+      child: child,
+    );
   }
 }

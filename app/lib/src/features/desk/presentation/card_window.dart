@@ -6,6 +6,7 @@ import '../../../core/theme/theme_chrome.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../domain/desk_models.dart';
 import 'tool_avatar.dart';
+import 'web/web_page_handle.dart';
 
 /// A tool's frontend as a floating card window: a title bar to drag it by
 /// (with the result it shows, pin, minimize, maximize and close), the
@@ -80,29 +81,26 @@ class CardWindow extends StatefulWidget {
 class _CardWindowState extends State<CardWindow>
     with SingleTickerProviderStateMixin {
   late final AnimationController _life = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 360),
-    reverseDuration: const Duration(milliseconds: 180),
-  )..forward();
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+      reverseDuration: const Duration(milliseconds: 180))
+    ..forward();
   bool _dragging = false;
-  bool _resizing = false;
+  bool _holding = false;
 
-  /// A press on the resize grip. Raising a window reorders it in the desk's
-  /// stack, which moves its platform views (the page's <iframe>, the grip's
-  /// interceptor) in the DOM and cancels the press under the finger. So the
-  /// raise waits until the finger is lifted.
-  bool _gripDown = false;
+  /// While this window is dragged or resized, web pages let pointers fall
+  /// through to the app (see [webFramesPointerHold]).
+  void _hold(bool on) {
+    if (_holding == on) return;
+    _holding = on;
+    webFramesPointerHold.value += on ? 1 : -1;
+  }
 
   @override
   void dispose() {
+    _hold(false);
     _life.dispose();
     super.dispose();
-  }
-
-  void _raiseAfterGrip() {
-    if (!_gripDown) return;
-    _gripDown = false;
-    widget.onRaise?.call();
   }
 
   Future<void> _close() async {
@@ -115,10 +113,7 @@ class _CardWindowState extends State<CardWindow>
     final scheme = Theme.of(context).colorScheme;
     final w = widget.window;
     final appear = CurvedAnimation(
-      parent: _life,
-      curve: Curves.easeOutBack,
-      reverseCurve: Curves.easeIn,
-    );
+        parent: _life, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
     final subtitle = [
       if (w.argsSummary.isNotEmpty) w.argsSummary,
       if (w.openedBy.isNotEmpty &&
@@ -137,202 +132,164 @@ class _CardWindowState extends State<CardWindow>
     final card = DecoratedBox(
       decoration: shell,
       child: GlassSurface(
-        alpha: widget.front
-            ? AppSurfaces.overlayAlphaOf(context)
-            : AppSurfaces.cardAlphaOf(context),
-        borderRadius: radius,
-        border: true,
-        color: widget.front ? scheme.surfaceContainer : null,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The title bar: drag by the label; chrome buttons stay tappable.
-            Container(
-              height: 56,
-              padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-              color:
-                  (widget.front
-                          ? scheme.surfaceContainer
-                          : scheme.surfaceContainerLow)
-                      .withValues(alpha: .35),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: MouseRegion(
-                      cursor: widget.movable
-                          ? SystemMouseCursors.grab
-                          : MouseCursor.defer,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onDoubleTap: widget.onMaximize,
-                        onPanStart: widget.movable
-                            ? (_) {
-                                setState(() => _dragging = true);
-                                widget.onDragStart?.call();
-                              }
-                            : null,
-                        onPanUpdate: widget.movable
-                            ? (d) => widget.onDrag?.call(d.delta)
-                            : null,
-                        onPanEnd: widget.movable
-                            ? (_) {
-                                setState(() => _dragging = false);
-                                widget.onDragEnd?.call();
-                              }
-                            : null,
-                        child: Row(
+      alpha: widget.front ? AppSurfaces.overlayAlphaOf(context) : AppSurfaces.cardAlphaOf(context),
+      borderRadius: radius,
+      border: true,
+      color: widget.front ? scheme.surfaceContainer : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The title bar: drag by the label; chrome buttons stay tappable.
+          Container(
+            height: 56,
+            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            color: (widget.front
+                    ? scheme.surfaceContainer
+                    : scheme.surfaceContainerLow)
+                .withValues(alpha: .35),
+            child: Row(children: [
+              Expanded(
+                child: MouseRegion(
+                  cursor: widget.movable
+                      ? SystemMouseCursors.grab
+                      : MouseCursor.defer,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: widget.onMaximize,
+                    onPanStart: widget.movable
+                        ? (_) {
+                            _hold(true);
+                            setState(() => _dragging = true);
+                            widget.onDragStart?.call();
+                          }
+                        : null,
+                    onPanUpdate: widget.movable
+                        ? (d) => widget.onDrag?.call(d.delta)
+                        : null,
+                    onPanEnd: widget.movable
+                        ? (_) {
+                            _hold(false);
+                            setState(() => _dragging = false);
+                            widget.onDragEnd?.call();
+                          }
+                        : null,
+                    child: Row(children: [
+                      ToolAvatar(tool: w.tool, name: w.name, size: 34),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            ToolAvatar(tool: w.tool, name: w.name, size: 34),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    w.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  if (subtitle.isNotEmpty)
-                                    Text(
-                                      subtitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                ],
-                              ),
-                            ),
+                            Text(w.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            if (subtitle.isNotEmpty)
+                              Text(subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                          color: scheme.onSurfaceVariant)),
                           ],
                         ),
                       ),
-                    ),
+                    ]),
                   ),
-                  if (widget.showPin)
-                    WindowChromeButton(
-                      overlayTooltip: widget.chromeOverlayTooltip,
-                      tooltip: widget.pinned
-                          ? 'Unpin'
-                          : 'Pin to the pinned desk',
-                      icon: widget.pinned
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                      selected: widget.pinned,
-                      onPressed: widget.onPin,
-                    ),
-                  if (widget.onSwapCompact != null)
-                    WindowChromeButton(
-                      overlayTooltip: widget.chromeOverlayTooltip,
-                      tooltip: 'Compact widget',
-                      icon: Icons.widgets_outlined,
-                      onPressed: widget.onSwapCompact,
-                    ),
-                  WindowChromeButton(
-                    overlayTooltip: widget.chromeOverlayTooltip,
-                    tooltip: 'Minimize',
-                    icon: Icons.minimize_rounded,
-                    onPressed: widget.onMinimize,
-                  ),
-                  WindowChromeButton(
-                    overlayTooltip: widget.chromeOverlayTooltip,
-                    tooltip: widget.maximized ? 'Restore' : 'Maximize',
-                    icon: widget.maximized
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.open_in_full_rounded,
-                    onPressed: widget.onMaximize,
-                  ),
-                  WindowChromeButton(
-                    overlayTooltip: widget.chromeOverlayTooltip,
-                    tooltip: widget.closeTooltip,
-                    icon: Icons.close_rounded,
-                    danger: true,
-                    onPressed: widget.onClose == null ? null : _close,
-                  ),
-                ],
+                ),
               ),
-            ),
-            Divider(
+              if (widget.showPin)
+                WindowChromeButton(
+                  overlayTooltip: widget.chromeOverlayTooltip,
+                  tooltip: widget.pinned ? 'Unpin' : 'Pin to the pinned desk',
+                  icon:
+                      widget.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  selected: widget.pinned,
+                  onPressed: widget.onPin,
+                ),
+              if (widget.onSwapCompact != null)
+                WindowChromeButton(
+                  overlayTooltip: widget.chromeOverlayTooltip,
+                  tooltip: 'Compact widget',
+                  icon: Icons.widgets_outlined,
+                  onPressed: widget.onSwapCompact,
+                ),
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
+                tooltip: 'Minimize',
+                icon: Icons.minimize_rounded,
+                onPressed: widget.onMinimize,
+              ),
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
+                tooltip: widget.maximized ? 'Restore' : 'Maximize',
+                icon: widget.maximized
+                    ? Icons.close_fullscreen_rounded
+                    : Icons.open_in_full_rounded,
+                onPressed: widget.onMaximize,
+              ),
+              WindowChromeButton(
+                overlayTooltip: widget.chromeOverlayTooltip,
+                tooltip: widget.closeTooltip,
+                icon: Icons.close_rounded,
+                danger: true,
+                onPressed: widget.onClose == null ? null : _close,
+              ),
+            ]),
+          ),
+          Divider(
               height: 1,
               thickness: 1,
-              color: scheme.outlineVariant.withValues(alpha: .5),
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(child: widget.child),
-                  // While the window is dragged or resized, a transparent shield
-                  // covers the content. A web page is an <iframe>: it swallows
-                  // pointer moves that cross it, and the gesture stalls.
-                  if (_dragging || _resizing)
-                    Positioned.fill(
-                      child: PointerInterceptor(child: const SizedBox.expand()),
-                    ),
-                  if (widget.movable)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      // The grip sits over the page's <iframe>, which would take
-                      // its pointer events. The interceptor keeps them in Flutter.
-                      child: PointerInterceptor(
-                        child: Listener(
-                          onPointerDown: (_) => _gripDown = true,
-                          onPointerUp: (_) => _raiseAfterGrip(),
-                          onPointerCancel: (_) => _raiseAfterGrip(),
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.resizeDownRight,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onPanStart: (_) {
-                                setState(() => _resizing = true);
-                                widget.onDragStart?.call();
-                              },
-                              onPanUpdate: (d) =>
-                                  widget.onResize?.call(d.delta),
-                              onPanEnd: (_) {
-                                setState(() => _resizing = false);
-                                widget.onResizeEnd?.call();
-                              },
-                              onPanCancel: () {
-                                if (_resizing)
-                                  setState(() => _resizing = false);
-                              },
-                              child: SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: CustomPaint(
-                                  painter: _GripPainter(
-                                    scheme.onSurfaceVariant.withValues(
-                                      alpha: .5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+              color: scheme.outlineVariant.withValues(alpha: .5)),
+          Expanded(
+            child: Stack(children: [
+              Positioned.fill(child: widget.child),
+              if (widget.movable)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  // The grip sits over the page's <iframe>, which would take
+                  // its pointer events. The interceptor keeps them in Flutter.
+                  child: PointerInterceptor(
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.resizeDownRight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: (_) {
+                          _hold(true);
+                          widget.onDragStart?.call();
+                        },
+                        onPanUpdate: (d) => widget.onResize?.call(d.delta),
+                        onPanEnd: (_) {
+                          _hold(false);
+                          widget.onResizeEnd?.call();
+                        },
+                        onPanCancel: () => _hold(false),
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CustomPaint(
+                              painter: _GripPainter(scheme.onSurfaceVariant
+                                  .withValues(alpha: .5))),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                  ),
+                ),
+            ]),
+          ),
+        ],
+      ),
       ),
     );
     return Listener(
-      onPointerDown: (_) {
-        if (!_gripDown) widget.onRaise?.call();
-      },
+      onPointerDown: (_) => widget.onRaise?.call(),
       child: FadeTransition(
         opacity: _life,
         child: ScaleTransition(
@@ -446,11 +403,8 @@ class _GripPainter extends CustomPainter {
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
     for (final d in [6.0, 11.0, 16.0]) {
-      canvas.drawLine(
-        Offset(size.width - 6, size.height - 6 - d),
-        Offset(size.width - 6 - d, size.height - 6),
-        p,
-      );
+      canvas.drawLine(Offset(size.width - 6, size.height - 6 - d),
+          Offset(size.width - 6 - d, size.height - 6), p);
     }
   }
 

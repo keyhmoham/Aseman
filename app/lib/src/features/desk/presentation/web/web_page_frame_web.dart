@@ -56,6 +56,29 @@ class _WebPageIframeState extends State<_WebPageIframe>
   JSObject? _iframe;
   Map<String, dynamic> _theme = const {};
 
+  @override
+  void initState() {
+    super.initState();
+    webFramesPointerHold.addListener(_applyPointerEvents);
+  }
+
+  @override
+  void dispose() {
+    webFramesPointerHold.removeListener(_applyPointerEvents);
+    super.dispose();
+  }
+
+  /// Pointers reach the page unless it is only looked at, or a window is
+  /// being dragged or resized.
+  void _applyPointerEvents() {
+    final style = _iframe?.getProperty<JSObject?>('style'.toJS);
+    style?.setProperty(
+      'pointer-events'.toJS,
+      (!widget.interactive || webFramesPointerHold.value > 0 ? 'none' : '')
+          .toJS,
+    );
+  }
+
   void _created(Object element) {
     final iframe = element as JSObject;
     _iframe = iframe;
@@ -83,9 +106,7 @@ class _WebPageIframeState extends State<_WebPageIframe>
       ..setProperty('border'.toJS, 'none'.toJS)
       ..setProperty('display'.toJS, 'block'.toJS)
       ..setProperty('background'.toJS, 'transparent'.toJS);
-    if (!widget.interactive) {
-      style.setProperty('pointer-events'.toJS, 'none'.toJS);
-    }
+    _applyPointerEvents();
     iframe.setProperty(
       'onload'.toJS,
       ((JSAny? _) {

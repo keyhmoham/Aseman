@@ -2369,10 +2369,15 @@ class AsemanService implements BackendService {
   }
 
   /// Search people (never agents or apps) by handle/email.
+  ///
+  /// `users.search` matches every account, so the people-only contract is
+  /// enforced here: the request asks for `kind: user` and the result is
+  /// filtered again in case the backend ignores it.
   Future<List<AccountSummary>> searchUsers(String query,
       {int limit = 20, int offset = 0}) async {
     final resp = await client.call('users', 'search', body: {
       'query': query,
+      'kind': 'user',
       'limit': limit,
       if (offset > 0) 'offset': offset,
     });
@@ -2380,6 +2385,7 @@ class AsemanService implements BackendService {
     return list
         .whereType<Map<String, dynamic>>()
         .map(AccountSummary.fromJson)
+        .where((u) => u.kind == 'user')
         .toList();
   }
 

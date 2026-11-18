@@ -745,7 +745,14 @@ abstract final class ThemeChrome {
     if (paper &&
         (fillKind == FillKind.solid || fillKind == FillKind.tonal)) {
       if (selected) return scheme.secondaryContainer;
-      if (wash) return scheme.primaryContainer;
+      // Whisper of accent over a neutral surface — the full container color
+      // is far too loud for in-page cards (both light and dark).
+      if (wash) {
+        return Color.alphaBlend(
+          scheme.primaryContainer.withValues(alpha: .22),
+          scheme.surfaceContainerLow,
+        );
+      }
       return scheme.surfaceContainerHigh;
     }
     if (selected) {

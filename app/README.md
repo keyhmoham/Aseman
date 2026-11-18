@@ -1,12 +1,14 @@
 # Aseman Flutter client
 
 The Flutter client for the **Aseman** federated super app. Every screen is
-connected to the Aseman Go gateway (`services/`): a federated, decentralized
-VM platform where users publish posts, build workspaces (each account gets a
-home workspace), deploy and chat with **agents**, and add **apps** — a
-backend (an MCP server, an Elpian VM, QuickJS or docker program, or one
-installed into the space's sandbox) and the frontend it is used through. On
-the wire an app is a bot of kind `tool`, served by the `tools` namespace.
+connected to a Decillion node's gateway (by default
+`https://preview.decillionai.com`, or a self-hosted one; see `../aseman.sh`
+and `../render.yaml`): a federated, decentralized VM platform where users
+publish posts, build workspaces (each account gets a home workspace), deploy
+and chat with **agents**, and add **apps** — a backend (an MCP server, an
+Elpian VM, QuickJS or docker program, or one installed into the space's
+sandbox) and the frontend it is used through. On the wire an app is a bot of
+kind `tool`, served by the `tools` namespace.
 
 ## Run
 

@@ -37,10 +37,9 @@ import 'post_editor.dart';
 import 'search_feed_view_model.dart';
 
 /// Landing page. On a wide screen the feed sits to the left of Aseman
-/// (chat + desk), which fills the right side; extra-large windows add the
-/// chats list at the far left. On a phone a floating pill switches Chats,
-/// Explore and You — Aseman lives in the chats list. You is the former
-/// top-right profile sheet.
+/// (chat + desk), which fills the right side. On a phone a floating pill
+/// switches Chats, Explore and You — Aseman lives in the chats list. You is
+/// the former top-right profile sheet.
 enum HomeMobileTab { chats, explore, you }
 
 class SearchFeedScreen extends StatefulWidget {
@@ -167,7 +166,9 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   Future<void> _enterWorkspace(String name) async {
     final open = widget.onOpenWorkspace;
     if (open == null || motion.isAnimating) return;
-    await motion.reverse();
+    // Compact: the workspace is pushed over the feed like a direct chat, so
+    // the feed stays as it is underneath instead of animating away.
+    if (!_compact) await motion.reverse();
     if (mounted) open(name);
   }
 
@@ -180,7 +181,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   ) async {
     final open = widget.onOpenSpaceRoom;
     if (open == null || motion.isAnimating) return;
-    await motion.reverse();
+    // Compact: pushed over the feed like a direct chat (no animate-away).
+    if (!_compact) await motion.reverse();
     if (mounted) open(spaceId, name, roomName, roomId);
   }
 
@@ -190,24 +192,16 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
 
   /// Desktop home panes for a content width of [width].
   ///
-  /// Large windows: the conversation and the feed. Extra-large windows add
-  /// the chats list as a third pane. Nothing else earns a column.
-  ({double chats, double feed, bool showChats, bool showFeed}) _homePanes(
-    double width,
-  ) {
+  /// Large windows: the conversation and the feed. Nothing else earns a
+  /// column — the chats list has its own dedicated nav destination.
+  ({double feed, bool showFeed}) _homePanes(double width) {
     final showFeed = AppWindowScope.supportingPane(context);
-    final showChats = AppWindowScope.threePanes(context);
     final panes = AppLayout.paneWidths(
       innerWidth: width,
-      leading: showChats,
+      leading: false,
       trailing: showFeed,
     );
-    return (
-      chats: panes.leading,
-      feed: panes.trailing,
-      showChats: showChats,
-      showFeed: showFeed,
-    );
+    return (feed: panes.trailing, showFeed: showFeed);
   }
 
   void _onScroll() {
@@ -452,61 +446,48 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                       ],
                     );
                   }
-                  // The bar owns the top. Panes fill what's left: chats only
-                  // from extra-large, the feed to the left of Aseman from
-                  // large, and Aseman as the flexible pane on the right.
+                  // The bar sits only over the feed pane; Aseman (chat + desk)
+                  // runs the full height beside it. When the feed pane is
+                  // hidden, the bar moves over Aseman so it is never lost.
                   final metrics = _homePanes(box.maxWidth);
-                  return Column(
+                  final bar = _workspaceBar(context, false, anchored: true);
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _workspaceBar(context, false, anchored: true),
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (metrics.showChats) ...[
-                              WorkspacePanelMotion(
-                                animation: motion,
-                                hiddenOffset: WorkspacePanelMotions.left,
-                                child: AppPane(
-                                  width: metrics.chats,
-                                  child: MessengerPanel(
-                                    dependencies: widget.dependencies,
-                                    embedded: true,
-                                    dense: true,
-                                    onOpenSpaceRoom:
-                                        widget.onOpenSpaceRoom == null
-                                        ? null
-                                        : _enterWorkspaceRoom,
-                                    onOpenWorkspace:
-                                        widget.onOpenWorkspace == null
-                                        ? null
-                                        : _enterWorkspace,
-                                  ),
-                                ),
-                              ),
-                              const PaneDivider(),
-                            ],
-                            if (metrics.showFeed) ...[
-                              WorkspacePanelMotion(
-                                animation: motion,
-                                hiddenOffset: WorkspacePanelMotions.left,
-                                child: AppPane(
-                                  width: metrics.feed,
+                      if (metrics.showFeed) ...[
+                        WorkspacePanelMotion(
+                          animation: motion,
+                          hiddenOffset: WorkspacePanelMotions.left,
+                          child: AppPane(
+                            width: metrics.feed,
+                            child: Column(
+                              children: [
+                                bar,
+                                Expanded(
                                   child: _feedPane(phone: false, topInset: 0),
                                 ),
-                              ),
-                              const PaneDivider(),
-                            ],
-                            Expanded(
-                              child: WorkspacePanelMotion(
-                                animation: motion,
-                                scaleFrom: WorkspacePanelMotions.centerScale,
-                                child: AppPane(
-                                  child: _asemanPane(bottomInset: 0),
-                                ),
-                              ),
+                              ],
                             ),
-                          ],
+                          ),
+                        ),
+                        const PaneDivider(),
+                      ],
+                      Expanded(
+                        child: WorkspacePanelMotion(
+                          animation: motion,
+                          scaleFrom: WorkspacePanelMotions.centerScale,
+                          child: AppPane(
+                            child: metrics.showFeed
+                                ? _asemanPane(bottomInset: 0)
+                                : Column(
+                                    children: [
+                                      bar,
+                                      Expanded(
+                                        child: _asemanPane(bottomInset: 0),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
                       ),
                     ],
@@ -517,16 +498,16 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
           ),
           // Phones keep the floating pill. Desktop draws its bar in the page column.
           if (compact)
-          SafeArea(
-            bottom: false,
-            child: ThemeSlotHost(
-              slot: ThemeChromeSlots.floatingAppBar,
+            SafeArea(
+              bottom: false,
               child: ThemeSlotHost(
-                slot: FeatureSlots.workspaceHeader,
-                child: _workspaceBar(context, compact),
+                slot: ThemeChromeSlots.floatingAppBar,
+                child: ThemeSlotHost(
+                  slot: FeatureSlots.workspaceHeader,
+                  child: _workspaceBar(context, compact),
+                ),
               ),
             ),
-          ),
           if (compact)
             Positioned(
               left: 0,
@@ -1003,60 +984,67 @@ class _HomeTabButton extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (spec.avatar)
-              Builder(
-                builder: (context) {
-                  final size = avatarR * 2;
-                  final corners = context.avatarBorderRadius(size);
-                  final face = AvatarFace(
-                    size: size,
-                    borderRadius: corners,
-                    backgroundColor: color.withValues(alpha: .18),
-                    foregroundImage: avatar,
-                    onImageError: avatar == null ? null : (_, __) {},
-                    child: Text(
-                      initials,
-                      style: TextStyle(
-                        fontSize: avatarR * .9,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                        color: color,
+        // A pack can set a nav height shorter than icon + label (and the
+        // avatar's halo adds more); scale the stack down to fit the pill
+        // instead of overflowing it.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (spec.avatar)
+                Builder(
+                  builder: (context) {
+                    final size = avatarR * 2;
+                    final corners = context.avatarBorderRadius(size);
+                    final face = AvatarFace(
+                      size: size,
+                      borderRadius: corners,
+                      backgroundColor: color.withValues(alpha: .18),
+                      foregroundImage: avatar,
+                      onImageError: avatar == null ? null : (_, __) {},
+                      child: Text(
+                        initials,
+                        style: TextStyle(
+                          fontSize: avatarR * .9,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                          color: color,
+                        ),
                       ),
-                    ),
-                  );
-                  return HaloRing(
-                    pad: 1.6,
-                    identity: HaloRingCache.person(accountId),
-                    accent: color,
-                    borderRadius: corners,
-                    child: face,
-                  );
-                },
-              )
-            else
-              Icon(
-                selected ? spec.selectedIcon! : spec.icon!,
-                size: iconSize,
-                color: color,
+                    );
+                    return HaloRing(
+                      pad: 1.6,
+                      identity: HaloRingCache.person(accountId),
+                      accent: color,
+                      borderRadius: corners,
+                      child: face,
+                    );
+                  },
+                )
+              else
+                Icon(
+                  selected ? spec.selectedIcon! : spec.icon!,
+                  size: iconSize,
+                  color: color,
+                ),
+              const SizedBox(height: 2),
+              Text(
+                spec.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.1,
+                  fontWeight: selected
+                      ? ThemeChrome.selectedNavWeight(context)
+                      : FontWeight.w500,
+                  color: color,
+                ),
               ),
-            const SizedBox(height: 2),
-            Text(
-              spec.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.1,
-                fontWeight: selected
-                    ? ThemeChrome.selectedNavWeight(context)
-                    : FontWeight.w500,
-                color: color,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1212,4 +1200,3 @@ class _EmptyFeed extends StatelessWidget {
     );
   }
 }
-

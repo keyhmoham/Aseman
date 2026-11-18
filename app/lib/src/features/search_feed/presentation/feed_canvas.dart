@@ -739,10 +739,13 @@ class _FeedCanvasState extends State<FeedCanvas> {
     );
   }
 
+  /// A sheet on phones, a floating panel on desktop.
   Future<void> _widgetActions(FeedPlacement placed) {
-    return showAppSheet<void>(
-      context,
-      _WidgetActions(
+    return showAppPicker<void>(
+      context: context,
+      maxWidth: 360,
+      isScrollControlled: true,
+      builder: (_) => _WidgetActions(
         placement: placed,
         mobile: widget.mobile,
         onWindow: () => c.toggleWidgetMode(placed.id, canvas: _area),
@@ -750,7 +753,6 @@ class _FeedCanvasState extends State<FeedCanvas> {
         onMinimize: () => c.minimize(placed.id),
         onRemove: () => c.remove(placed.id),
       ),
-      isScrollControlled: true,
     );
   }
 
@@ -977,15 +979,17 @@ class _FeedCanvasState extends State<FeedCanvas> {
     );
   }
 
+  /// A sheet on phones, a floating panel on desktop.
   Future<void> _taskbarMenu(FeedPlacement placed) {
-    return showAppSheet<void>(
-      context,
-      _TaskbarActions(
+    return showAppPicker<void>(
+      context: context,
+      maxWidth: 320,
+      isScrollControlled: true,
+      builder: (_) => _TaskbarActions(
         placement: placed,
         onToggle: () => c.taskbarTap(placed.id),
         onRemove: () => c.remove(placed.id),
       ),
-      isScrollControlled: true,
     );
   }
 }

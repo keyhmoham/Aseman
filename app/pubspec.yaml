@@ -45,6 +45,7 @@ dependencies:
   record: ^7.1.2
   # Native voice/video calls (mobile/desktop). Stubbed on web via conditional import.
   flutter_webrtc: ^1.6.0
+  pointer_interceptor: ^0.10.1+3
 
 dev_dependencies:
   flutter_test:

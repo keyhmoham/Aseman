@@ -1,17 +1,18 @@
 #!/usr/bin/env sh
-# One-command launcher for the full Aseman stack.
+# One-command launcher for the Aseman Flutter client.
 #
-#   ./aseman.sh up [--no-web] [--hot-reload|--no-hot-reload] [--decillion] [config.yml]
-#       build + start the stack (detached).
-#       Hot reload is on by default: the Flutter app is served in debug mode
-#       and reloads when its source changes. --no-hot-reload serves the
-#       release web image instead. --no-web skips the Flutter client.
-#       --decillion builds and starts the Flutter web app alone (release
-#       build; no Aseman node, database or other containers) on a Decillion
-#       node as its API: https://preview.decillionai.com, or DECILLION_API_URL.
-#   ./aseman.sh down                         stop the stack (data volumes are kept)
-#   ./aseman.sh logs [service]               follow logs
-#   ./aseman.sh ps                           show service status
+#   ./aseman.sh up [--local] [--hot-reload|--no-hot-reload]
+#       build + start the client (detached).
+#       Hot reload is on by default: the app is served in debug mode
+#       (flutter run) and reloads when its source under app/ changes.
+#       --no-hot-reload serves the release web build instead.
+#       The app's API is a Decillion node: by default
+#       https://preview.decillionai.com (or DECILLION_API_URL). --local
+#       talks instead to a self-hosted Decillion stack on the host's own
+#       localhost:8080.
+#   ./aseman.sh down                stop the client
+#   ./aseman.sh logs                follow its logs
+#   ./aseman.sh ps                  show its status
 set -eu
 cd "$(dirname "$0")"
 
@@ -31,83 +32,59 @@ web_container_image() {
   fi
 }
 
+# `docker compose up -d` returns as soon as the container starts, not once
+# nginx is actually serving the app — the debug image still has `flutter pub
+# get` and a web compile ahead of it (a few minutes cold, faster once
+# flutter-pub-cache is warm). Block here so "up" only reports success once
+# the client truly answers, instead of leaving people checking a blank page.
+wait_for_web() {
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl not found; skipping the readiness check (it may still be compiling)." >&2
+    return 0
+  fi
+  port="${WEB_PORT:-3000}"
+  tries=0
+  max_tries=180 # 180 * 2s = 6 minutes
+  printf 'Waiting for the client to come up on http://localhost:%s ...' "$port"
+  while [ "$tries" -lt "$max_tries" ]; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://localhost:$port/" 2>/dev/null) || code=""
+    if [ "$code" = "200" ]; then
+      echo " up."
+      return 0
+    fi
+    tries=$((tries + 1))
+    printf '.'
+    sleep 2
+  done
+  echo " timed out."
+  echo "It did not come up within $((max_tries * 2))s. Recent logs:" >&2
+  docker compose logs --tail 40 web >&2
+  return 1
+}
+
 case "$cmd" in
   up)
-    no_web=false
     hot_reload=true
-    decillion=false
-    cfg=""
+    local_decillion=false
     while [ $# -gt 0 ]; do
       case "$1" in
-        --no-web|--api-only) no_web=true ;;
         --hot-reload) hot_reload=true ;;
         --no-hot-reload) hot_reload=false ;;
-        --decillion) decillion=true ;;
+        --local) local_decillion=true ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
-        *)
-          if [ -n "$cfg" ]; then
-            echo "unexpected argument: $1" >&2
-            exit 2
-          fi
-          cfg="$1"
-          ;;
+        *) echo "unexpected argument: $1" >&2; exit 2 ;;
       esac
       shift
     done
 
-    if [ "$decillion" = true ]; then
-      if [ "$no_web" = true ] || [ -n "$cfg" ]; then
-        echo "--decillion starts only the web app: it takes no --no-web or config file" >&2
-        exit 2
-      fi
+    if [ "$local_decillion" = true ]; then
+      DECILLION_API_URL="http://localhost:8080"
+    else
       DECILLION_API_URL="${DECILLION_API_URL:-https://preview.decillionai.com}"
-      DECILLION_API_URL="${DECILLION_API_URL%/}"
-      case "$DECILLION_API_URL" in
-        http://*|https://*) ;;
-        *) echo "DECILLION_API_URL must be an http(s) URL: $DECILLION_API_URL" >&2; exit 2 ;;
-      esac
-      DECILLION_API_HOST="${DECILLION_API_URL#*://}"
-      DECILLION_API_HOST="${DECILLION_API_HOST%%/*}"
-      DECILLION_API_HOST="${DECILLION_API_HOST%%:*}"
-      # Public DNS: Render has no Docker resolver at 127.0.0.11, and this
-      # default keeps `./aseman.sh up --decillion` on the same template.
-      DECILLION_API_RESOLVER="${DECILLION_API_RESOLVER:-1.1.1.1 8.8.8.8}"
-      export DECILLION_API_URL DECILLION_API_HOST DECILLION_API_RESOLVER
-      # One app on the web port: this stack's own client steps aside.
-      # --force-recreate: compose otherwise keeps a running web-decillion even
-      # after --build when its config hash is unchanged (and a container that
-      # lost its network endpoint would never get a host port again).
-      docker compose stop web >/dev/null 2>&1 || true
-      docker compose --profile decillion up -d --build --force-recreate web-decillion
-      echo
-      echo "Flutter client:   http://localhost:${WEB_PORT:-3000} (release build)"
-      echo "Decillion API:    $DECILLION_API_URL (through the client's own origin)"
-      echo "Sign in with an account of that node. ./aseman.sh down stops it."
-      exit 0
     fi
-    # The stack's own client takes the web port back from a --decillion one.
-    docker compose --profile decillion stop web-decillion >/dev/null 2>&1 || true
+    export DECILLION_API_URL
 
-    if [ -n "$cfg" ]; then
-      [ -f "$cfg" ] || { echo "config file not found: $cfg" >&2; exit 1; }
-      ASEMAN_CONFIG_FILE="$(cd "$(dirname "$cfg")" && pwd)/$(basename "$cfg")"
-      export ASEMAN_CONFIG_FILE
-    elif [ -f services/configs/config.yml ]; then
-      ASEMAN_CONFIG_FILE="$(pwd)/services/configs/config.yml"
-      export ASEMAN_CONFIG_FILE
-    fi
-    mkdir -p "${NOMAD_DATA_DIR:-/tmp/aseman-nomad}"
-    # So the debug container can hand generated plugin files back to this user.
-    ASEMAN_UID=$(id -u)
-    ASEMAN_GID=$(id -g)
-    export ASEMAN_UID ASEMAN_GID
-
-    if [ "$no_web" = true ]; then
-      docker compose stop web >/dev/null 2>&1 || true
-      docker compose up -d --build postgres nomad sandbox-computer harness aseman
-      echo
-      echo "Aseman stack started without the web container."
-    elif [ "$hot_reload" = true ]; then
+    if [ "$hot_reload" = true ]; then
       # shellcheck disable=SC2086
       docker compose $hot_reload_files up -d --build
       case "$(web_container_image 2>/dev/null || true)" in
@@ -115,24 +92,28 @@ case "$cmd" in
         "") ;;
         *) docker compose $hot_reload_files up -d --no-deps --force-recreate web ;;
       esac
-      echo
-      echo "Flutter client:   http://localhost:${WEB_PORT:-3000} (debug mode, hot reload)"
-      echo "Edits under app/ reload the running app. The first launch compiles it; ./aseman.sh logs web shows progress."
+      mode="debug mode, hot reload"
     else
       docker compose up -d --build
       case "$(web_container_image 2>/dev/null || true)" in
         *flutter-web:debug*) docker compose up -d --no-deps --force-recreate web ;;
       esac
-      echo
-      echo "Flutter client:   http://localhost:${WEB_PORT:-3000} (release build)"
+      mode="release build"
     fi
-    echo "Aseman API:      http://localhost:${ASEMAN_PORT:-8080}"
-    echo "Admin login:      handle = node.name from the config, password = \${ASEMAN_ADMIN_PASSWORD:-changeme}"
-    echo "Then open Admin console -> LLM to add LLM providers, models and prices."
+    echo
+    if ! wait_for_web; then
+      echo "Container is still starting; ./aseman.sh logs follows it, ./aseman.sh ps shows its status." >&2
+      exit 1
+    fi
+    echo
+    echo "Flutter client:   http://localhost:${WEB_PORT:-3000} ($mode)"
+    if [ "$hot_reload" = true ]; then
+      echo "Edits under app/ reload the running app."
+    fi
+    echo "Decillion API:    $DECILLION_API_URL (through the client's own origin)"
     ;;
-  # --profile decillion: the --decillion web app (web-decillion) too.
-  down) docker compose --profile decillion down "$@" ;;
-  logs) docker compose --profile decillion logs -f "$@" ;;
-  ps)   docker compose --profile decillion ps "$@" ;;
-  *)    echo "usage: $0 {up [--no-web] [--hot-reload|--no-hot-reload] [--decillion] [config.yml]|down|logs [service]|ps}" >&2; exit 2 ;;
+  down) docker compose down "$@" ;;
+  logs) docker compose logs -f "$@" ;;
+  ps)   docker compose ps "$@" ;;
+  *)    echo "usage: $0 {up [--local] [--hot-reload|--no-hot-reload]|down|logs|ps}" >&2; exit 2 ;;
 esac

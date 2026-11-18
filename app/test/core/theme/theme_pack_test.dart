@@ -85,10 +85,14 @@ void main() {
         'plum',
       ]),
     );
-    expect(pack.palettes.firstWhere((p) => p.id == 'baseline').accent,
-        const Color(0xFF6750A4));
-    expect(pack.palettes.firstWhere((p) => p.id == 'blue').accent,
-        const Color(0xFF1157CE));
+    expect(
+      pack.palettes.firstWhere((p) => p.id == 'baseline').accent,
+      const Color(0xFF6750A4),
+    );
+    expect(
+      pack.palettes.firstWhere((p) => p.id == 'blue').accent,
+      const Color(0xFF1157CE),
+    );
     expect(AppTheme.light.extension<AsemanTokens>()!.packId, pack.id);
     expect(DefaultThemePacks.byId('missing').id, pack.id);
 
@@ -115,10 +119,7 @@ void main() {
     expect(blue.chipTheme.selectedColor, roles.secondaryContainer);
     expect(blue.chipTheme.secondarySelectedColor, roles.secondaryContainer);
     expect(blue.cardTheme.color, roles.surfaceContainerHigh);
-    expect(
-      blue.inputDecorationTheme.fillColor,
-      roles.surfaceContainerHighest,
-    );
+    expect(blue.inputDecorationTheme.fillColor, roles.surfaceContainerHighest);
     expect(blue.extension<AsemanTokens>()!.cyan, roles.secondary);
 
     final again = ThemePack.decode(pack.encode());
@@ -140,9 +141,9 @@ void main() {
       FontWeight.w500,
     );
     expect(
-      light.navigationBarTheme.labelTextStyle
-          ?.resolve({WidgetState.selected})
-          ?.fontWeight,
+      light.navigationBarTheme.labelTextStyle?.resolve({
+        WidgetState.selected,
+      })?.fontWeight,
       FontWeight.w500,
     );
     expect(dark.colorScheme.primary, isNot(light.colorScheme.primary));
@@ -200,9 +201,9 @@ void main() {
           home: const SkyBackdrop(child: Text('page')),
         ),
       );
-      return tester.widgetList<CustomPaint>(find.byType(CustomPaint)).any(
-            (paint) => paint.painter is SkyAtmospherePainter,
-          );
+      return tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .any((paint) => paint.painter is SkyAtmospherePainter);
     }
 
     expect(
@@ -225,11 +226,7 @@ void main() {
   test('palette overlay unifies accent secondary and status colors', () {
     final pack = DefaultThemePacks.sky;
     final rose = pack.resolvePalette(paletteId: 'rose');
-    final theme = AppTheme.fromPack(
-      pack,
-      Brightness.light,
-      paletteId: rose.id,
-    );
+    final theme = AppTheme.fromPack(pack, Brightness.light, paletteId: rose.id);
     final tokens = theme.extension<AsemanTokens>()!;
     expect(theme.colorScheme.primary, rose.accent);
     // Unified packs fold decorative secondary/cyan into the brand accent.
@@ -238,8 +235,9 @@ void main() {
     expect(tokens.success, rose.success);
   });
 
-  testWidgets('SoftCard stays neutral even when an accent is passed',
-      (tester) async {
+  testWidgets('SoftCard stays neutral even when an accent is passed', (
+    tester,
+  ) async {
     final theme = AppTheme.fromPack(
       DefaultThemePacks.sky,
       Brightness.light,
@@ -266,10 +264,12 @@ void main() {
     expect(fill, theme.colorScheme.surface);
     expect(theme.colorScheme.surfaceTint, Colors.transparent);
     final material = tester.widget<Material>(
-      find.descendant(
-        of: find.byType(SoftCard),
-        matching: find.byType(Material),
-      ).first,
+      find
+          .descendant(
+            of: find.byType(SoftCard),
+            matching: find.byType(Material),
+          )
+          .first,
     );
     expect(material.color, theme.colorScheme.surface);
   });
@@ -297,13 +297,12 @@ void main() {
     expect(tokens.language.id, DesignLanguage.neoBrutal);
     final shape = theme.filledButtonTheme.style?.shape?.resolve({});
     expect(shape, isA<RoundedRectangleBorder>());
-    expect(
-      (shape as RoundedRectangleBorder).borderRadius,
-      BorderRadius.zero,
-    );
+    expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.zero);
   });
 
-  testWidgets('SoftCard uses pack card shape not Material RRect', (tester) async {
+  testWidgets('SoftCard uses pack card shape not Material RRect', (
+    tester,
+  ) async {
     final theme = AppTheme.fromPack(
       DefaultThemePacks.neoBrutal,
       Brightness.light,
@@ -315,28 +314,24 @@ void main() {
         home: Builder(
           builder: (context) {
             shape = ThemeChrome.cardShape(context);
-            return SoftCard(
-              onTap: () {},
-              child: const Text('card'),
-            );
+            return SoftCard(onTap: () {}, child: const Text('card'));
           },
         ),
       ),
     );
     expect(shape, isA<RoundedRectangleBorder>());
-    expect(
-      (shape as RoundedRectangleBorder).borderRadius,
-      BorderRadius.zero,
-    );
+    expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.zero);
     expect(
       (shape as RoundedRectangleBorder).side.width,
       greaterThanOrEqualTo(2),
     );
     final material = tester.widget<Material>(
-      find.descendant(
-        of: find.byType(SoftCard),
-        matching: find.byType(Material),
-      ).first,
+      find
+          .descendant(
+            of: find.byType(SoftCard),
+            matching: find.byType(Material),
+          )
+          .first,
     );
     expect(material.shape, isA<RoundedRectangleBorder>());
     expect(
@@ -369,10 +364,7 @@ void main() {
       BorderRadius.zero,
     );
     expect(neo.sliderTheme.trackShape, isA<RectangularSliderTrackShape>());
-    expect(
-      DefaultThemePacks.neoBrutal.language.toggle.shape,
-      ShapeKind.sharp,
-    );
+    expect(DefaultThemePacks.neoBrutal.language.toggle.shape, ShapeKind.sharp);
 
     final fluent = AppTheme.fromPack(
       DefaultThemePacks.fluent,
@@ -394,7 +386,11 @@ void main() {
         ],
       ),
       effects: const ControlEffects(glow: 12, sheen: 0.2, opacity: 0.95),
-      motion: const ControlMotion(pressScale: 0.96, hoverLift: 2, durationMs: 140),
+      motion: const ControlMotion(
+        pressScale: 0.96,
+        hoverLift: 2,
+        durationMs: 140,
+      ),
       typography: const ControlTypography(weight: 700, size: 13),
       states: const ControlStates(
         pressed: ControlStateStyle(scale: 0.94, glow: 4),
@@ -410,10 +406,7 @@ void main() {
   });
 
   test('ThemeChrome.look resolves pack graphical behaviour', () {
-    final theme = AppTheme.fromPack(
-      DefaultThemePacks.fluent,
-      Brightness.light,
-    );
+    final theme = AppTheme.fromPack(DefaultThemePacks.fluent, Brightness.light);
     late ControlLook look;
     // Resolve without a tree via tokens on the theme extension path:
     final tokens = theme.extension<AsemanTokens>()!;
@@ -446,9 +439,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
-        home: Scaffold(
-          body: PackSwitch(value: true, onChanged: (_) {}),
-        ),
+        home: Scaffold(body: PackSwitch(value: true, onChanged: (_) {})),
       ),
     );
     expect(find.byType(Switch), findsNothing);
@@ -458,8 +449,7 @@ void main() {
   });
 
   test('fluent pack uses compact control height', () {
-    final theme =
-        AppTheme.fromPack(DefaultThemePacks.fluent, Brightness.light);
+    final theme = AppTheme.fromPack(DefaultThemePacks.fluent, Brightness.light);
     final tokens = theme.extension<AsemanTokens>()!;
     expect(tokens.language.controlHeight, 32);
     expect(tokens.control('button').radius, 4);
@@ -535,15 +525,17 @@ void main() {
       (theme.chipTheme.shape as RoundedRectangleBorder).borderRadius,
       BorderRadius.zero,
     );
-    expect(theme.navigationBarTheme.indicatorShape, isA<RoundedRectangleBorder>());
+    expect(
+      theme.navigationBarTheme.indicatorShape,
+      isA<RoundedRectangleBorder>(),
+    );
     expect(theme.badgeTheme.backgroundColor, tokens.danger);
   });
 
-  testWidgets('input shell and chat bubbles follow pack recipes', (tester) async {
-    final theme = AppTheme.fromPack(
-      DefaultThemePacks.fluent,
-      Brightness.light,
-    );
+  testWidgets('input shell and chat bubbles follow pack recipes', (
+    tester,
+  ) async {
+    final theme = AppTheme.fromPack(DefaultThemePacks.fluent, Brightness.light);
     final tokens = theme.extension<AsemanTokens>()!;
     late BorderRadius inputRadius;
     late BorderRadius bubbleRadius;
@@ -553,18 +545,19 @@ void main() {
         home: Builder(
           builder: (context) {
             inputRadius = ThemeChrome.inputShell(context).radius;
-            bubbleRadius = ThemeChrome.chatBubble(
-              context,
-              mine: true,
-            ).borderRadius as BorderRadius;
+            bubbleRadius =
+                ThemeChrome.chatBubble(context, mine: true).borderRadius
+                    as BorderRadius;
             return const SizedBox.shrink();
           },
         ),
       ),
     );
     expect(inputRadius, tokens.control('input').borderRadius);
-    expect(bubbleRadius.topRight,
-        Radius.circular(math.max(4.0, tokens.control('chat_bubble').radius * .3)));
+    expect(
+      bubbleRadius.topRight,
+      Radius.circular(math.max(4.0, tokens.control('chat_bubble').radius * .3)),
+    );
   });
 
   test('pack token radii reshape buttons, bubbles, and panel headers', () {
@@ -587,8 +580,9 @@ void main() {
     expect(neo.control('button').radius, 0);
   });
 
-  testWidgets('SoftCard corners follow pack even with literal radii',
-      (tester) async {
+  testWidgets('SoftCard corners follow pack even with literal radii', (
+    tester,
+  ) async {
     final theme = AppTheme.fromPack(
       DefaultThemePacks.highContrast,
       Brightness.light,
@@ -629,8 +623,9 @@ void main() {
     expect(neoCorners, BorderRadius.zero);
   });
 
-  testWidgets('AppShape.resolve remaps sentinels, offsets, and Sky literals',
-      (tester) async {
+  testWidgets('AppShape.resolve remaps sentinels, offsets, and Sky literals', (
+    tester,
+  ) async {
     final theme = AppTheme.fromPack(
       DefaultThemePacks.highContrast,
       Brightness.light,
@@ -660,12 +655,10 @@ void main() {
     expect(custom, 9);
   });
 
-  testWidgets('avatar faces follow pack control radius with the halo',
-      (tester) async {
-    final theme = AppTheme.fromPack(
-      DefaultThemePacks.fluent,
-      Brightness.light,
-    );
+  testWidgets('avatar faces follow pack control radius with the halo', (
+    tester,
+  ) async {
+    final theme = AppTheme.fromPack(DefaultThemePacks.fluent, Brightness.light);
     late BorderRadius corners;
     await tester.pumpWidget(
       MaterialApp(
@@ -673,7 +666,11 @@ void main() {
         home: Builder(
           builder: (context) {
             corners = context.avatarBorderRadius(40);
-            return AppAvatar('AB', color: theme.colorScheme.primary, radius: 20);
+            return AppAvatar(
+              'AB',
+              color: theme.colorScheme.primary,
+              radius: 20,
+            );
           },
         ),
       ),
@@ -764,14 +761,19 @@ void main() {
     expect(pack.validate(), isNull);
     final again = ThemePack.decode(pack.encode());
     expect(again.parts.unified, isFalse);
-    expect(again.parts.overrides[ThemePartId.nav]?.accent,
-        const Color(0xFF4F46E5));
-    expect(again.parts.overrides[ThemePartId.desk]?.secondary,
-        const Color(0xFF14B8A6));
+    expect(
+      again.parts.overrides[ThemePartId.nav]?.accent,
+      const Color(0xFF4F46E5),
+    );
+    expect(
+      again.parts.overrides[ThemePartId.desk]?.secondary,
+      const Color(0xFF14B8A6),
+    );
   });
 
-  testWidgets('unified accent collapses secondary cyan and identity',
-      (tester) async {
+  testWidgets('unified accent collapses secondary cyan and identity', (
+    tester,
+  ) async {
     final theme = AppTheme.fromPack(
       DefaultThemePacks.sky,
       Brightness.light,
@@ -824,7 +826,8 @@ void main() {
             title: 'Pulse',
             placement: ThemeIslandPlacement.homeTab,
             elpian: ThemeElpianSource(
-              code: 'askHost("render", JSON.stringify({type:"Text",props:{text:"hi"}}));',
+              code:
+                  'askHost("render", JSON.stringify({type:"Text",props:{text:"hi"}}));',
             ),
           ),
         },
@@ -913,12 +916,14 @@ void main() {
     final pack = DefaultThemePacks.sky.copyWith(
       parts: const ThemePartColors(
         unified: false,
-        overrides: {
-          ThemePartId.nav: ThemePartColor(accent: navAccent),
-        },
+        overrides: {ThemePartId.nav: ThemePartColor(accent: navAccent)},
       ),
     );
-    final theme = AppTheme.fromPack(pack, Brightness.light, paletteId: 'violet');
+    final theme = AppTheme.fromPack(
+      pack,
+      Brightness.light,
+      paletteId: 'violet',
+    );
     late Color nav;
     late Color feed;
     await tester.pumpWidget(

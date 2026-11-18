@@ -6,6 +6,7 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/context_extensions.dart';
 import '../../data/services/aseman_service.dart';
+import '../../shared/widgets/overlay_panels.dart';
 import '../desk/presentation/desk_controller.dart';
 import '../desk/presentation/web_page_view.dart';
 import 'space_computer.dart';
@@ -30,33 +31,52 @@ Future<void> openComputer(
   await showComputerSheet(context, service: service, spaceId: spaceId);
 }
 
-/// The computer in a bottom sheet. Its body is a remote screen, so the
+/// The computer in a bottom sheet on phones, or a docked panel on wide
+/// screens that have no desk to host it. Its body is a remote screen, so the
 /// sheet is not dragged by it: the handle and the close button dismiss it.
 Future<void> showComputerSheet(
   BuildContext context, {
   required AsemanService service,
   required String spaceId,
-}) => showModalBottomSheet<void>(
-  context: context,
-  // Remote screen — opaque bezel, not the frosted app-sheet chrome.
-  backgroundColor: const Color(0xFF1B1F25),
-  isScrollControlled: true,
-  useSafeArea: true,
-  enableDrag: false,
-  showDragHandle: true,
-  clipBehavior: Clip.antiAlias,
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-  ),
-  builder: (sheet) => FractionallySizedBox(
-    heightFactor: .94,
-    child: ComputerSession(
-      service: service,
-      spaceId: spaceId,
-      onClose: () => Navigator.of(sheet).pop(),
+}) {
+  if (MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
+    return showFloatingPanel(
+      context,
+      Builder(
+        builder: (panel) => ColoredBox(
+          color: const Color(0xFF1B1F25),
+          child: ComputerSession(
+            service: service,
+            spaceId: spaceId,
+            onClose: () => Navigator.of(panel).pop(),
+          ),
+        ),
+      ),
+      maxWidth: 960,
+    );
+  }
+  return showModalBottomSheet<void>(
+    context: context,
+    // Remote screen — opaque bezel, not the frosted app-sheet chrome.
+    backgroundColor: const Color(0xFF1B1F25),
+    isScrollControlled: true,
+    useSafeArea: true,
+    enableDrag: false,
+    showDragHandle: true,
+    clipBehavior: Clip.antiAlias,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-  ),
-);
+    builder: (sheet) => FractionallySizedBox(
+      heightFactor: .94,
+      child: ComputerSession(
+        service: service,
+        spaceId: spaceId,
+        onClose: () => Navigator.of(sheet).pop(),
+      ),
+    ),
+  );
+}
 
 /// The colors of a screen: the same in light and dark themes, as a real one.
 abstract final class _Screen {
@@ -69,9 +89,8 @@ abstract final class _Screen {
 
 Color computerStateColor(ComputerState s, [BuildContext? context]) =>
     switch (s) {
-      ComputerState.awake => context != null
-          ? AppColors.successOf(context)
-          : AppColors.success,
+      ComputerState.awake =>
+        context != null ? AppColors.successOf(context) : AppColors.success,
       ComputerState.failed =>
         context != null ? AppColors.dangerOf(context) : AppColors.danger,
       ComputerState.asleep =>

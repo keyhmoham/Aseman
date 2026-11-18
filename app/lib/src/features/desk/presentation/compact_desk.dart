@@ -403,9 +403,12 @@ class CompactDeskState extends State<CompactDesk> {
 
   Future<void> _menu(DeskWindow w) async {
     final (shape, size) = _look(w);
-    await showAppSheet<void>(
-      context,
-      _WidgetMenu(
+    // A sheet on phones; the desktop room desk gets a floating panel.
+    await showAppPicker<void>(
+      context: context,
+      maxWidth: 380,
+      isScrollControlled: true,
+      builder: (_) => _WidgetMenu(
         window: w,
         shape: shape,
         size: size,
@@ -415,7 +418,6 @@ class CompactDeskState extends State<CompactDesk> {
         onPin: () => c.togglePin(w),
         onClose: () => c.close(w.id),
       ),
-      isScrollControlled: true,
     );
   }
 

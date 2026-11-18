@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../../app_dependencies.dart';
 import '../../../../core/network/device_meta.dart';
 import '../../../../core/network/session_store.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_form.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
 import '../../../../shared/widgets/panel_scaffold.dart';
+import '../../../../shared/widgets/settings_kit.dart';
 import '../../../../shared/widgets/skeleton.dart';
 import '../../../../shared/widgets/sky_ui.dart';
 
@@ -15,12 +17,11 @@ import '../../../../shared/widgets/sky_ui.dart';
 Future<void> showDevicesPanel(
   BuildContext context,
   AppDependencies dependencies,
-) =>
-    showFloatingPanel(
-      context,
-      DevicesPanel(dependencies: dependencies),
-      maxWidth: 560,
-    );
+) => showFloatingPanel(
+  context,
+  DevicesPanel(dependencies: dependencies),
+  maxWidth: 560,
+);
 
 class DevicesPanel extends StatefulWidget {
   const DevicesPanel({
@@ -77,18 +78,15 @@ class _DevicesPanelState extends State<DevicesPanel> {
     }
   }
 
-  Future<void> _revoke({
-    String? session,
-    bool others = false,
-  }) async {
+  Future<void> _revoke({String? session, bool others = false}) async {
     setState(() => _busy = true);
     try {
       await widget.dependencies.service.sessionRevoke(
         session: session,
         others: others,
       );
-      final revokedSelf = session != null &&
-          _sessions.any((s) => s.id == session && s.current);
+      final revokedSelf =
+          session != null && _sessions.any((s) => s.id == session && s.current);
       if (revokedSelf) {
         await widget.dependencies.sessionController.logout();
         if (mounted) Navigator.of(context).maybePop();
@@ -97,9 +95,9 @@ class _DevicesPanelState extends State<DevicesPanel> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Couldn’t update devices: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Couldn’t update devices: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -130,8 +128,58 @@ class _DevicesPanelState extends State<DevicesPanel> {
     if (ok) await _revoke(others: true);
   }
 
+  Widget _embeddedBody() {
+    final others = _sessions.where((s) => !s.current).length;
+    return SettingsRefreshHook(
+      onRefresh: _load,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) SettingsError(_error!, onRetry: _load),
+          SettingsGroup(
+            caption: _loading ? 'Signed in' : 'Signed in (${_sessions.length})',
+            footer: 'Each device has its own key. Signing one out does not '
+                'affect the others.',
+            children: _loading
+                ? const [SettingsLoading()]
+                : _sessions.isEmpty
+                ? const [
+                    SettingsEmpty(
+                      icon: Icons.devices_outlined,
+                      title: 'No active sessions',
+                      message:
+                          'Sign in on a phone or browser and it will show up here.',
+                    ),
+                  ]
+                : [
+                    for (final s in _sessions)
+                      _SessionTile(
+                        session: s,
+                        busy: _busy,
+                        onSignOut: s.current ? null : () => _confirmRevoke(s),
+                      ),
+                  ],
+          ),
+          if (others > 0)
+            SettingsGroup(
+              children: [
+                QuietTile(
+                  icon: Icons.devices_other_outlined,
+                  label: 'Sign out other devices',
+                  subtitle: 'Keep only this device signed in',
+                  danger: true,
+                  onTap: _busy ? null : _confirmRevokeOthers,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return _embeddedBody();
     final scheme = Theme.of(context).colorScheme;
     final others = _sessions.where((s) => !s.current).length;
     final sessions = Column(
@@ -190,22 +238,6 @@ class _DevicesPanelState extends State<DevicesPanel> {
         ],
       ],
     );
-    if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              tooltip: 'Refresh',
-              onPressed: _busy ? null : _load,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          sessions,
-        ],
-      );
-    }
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Devices',
@@ -224,12 +256,37 @@ class _DevicesPanelState extends State<DevicesPanel> {
   }
 }
 
+/// One signed-in device in settings: icon well, name, last seen, and either
+/// a "This device" pill or a Sign out action.
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({required this.session, required this.busy, this.onSignOut});
+
+  final DeviceSession session;
+  final bool busy;
+  final VoidCallback? onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final danger = AppColors.dangerOf(context);
+    return QuietTile(
+      icon: session.current
+          ? Icons.phone_android_rounded
+          : Icons.devices_outlined,
+      label: session.title,
+      subtitle: session.subtitle,
+      trailing: session.current
+          ? SettingsPill('This device', color: scheme.primary)
+          : TextButton(
+              onPressed: busy ? null : onSignOut,
+              child: Text('Sign out', style: TextStyle(color: danger)),
+            ),
+    );
+  }
+}
+
 class _DeviceRow extends StatelessWidget {
-  const _DeviceRow({
-    required this.session,
-    required this.busy,
-    this.onSignOut,
-  });
+  const _DeviceRow({required this.session, required this.busy, this.onSignOut});
 
   final DeviceSession session;
   final bool busy;
@@ -266,10 +323,7 @@ class _DeviceRow extends StatelessWidget {
             )
           : TextButton(
               onPressed: busy ? null : onSignOut,
-              child: Text(
-                'Sign out',
-                style: TextStyle(color: scheme.error),
-              ),
+              child: Text('Sign out', style: TextStyle(color: scheme.error)),
             ),
     );
   }

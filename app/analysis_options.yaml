@@ -11,8 +11,6 @@ analyzer:
     - linux/**
     # The native Elpian VM plugin (Rust; its guest-side Dart is VM input).
     - packages/**
-    # A platform's lightweight client: its own package, analyzed on its own.
-    - platform_client/**
   errors:
     deprecated_member_use: ignore
 linter:

@@ -60,10 +60,12 @@ class Workspace {
   final DateTime? lastAt;
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
-    final profile =
-        json['profile'] is Map ? (json['profile'] as Map).cast<String, dynamic>() : const {};
-    final activity =
-        json['activity'] is Map ? (json['activity'] as Map).cast<String, dynamic>() : const {};
+    final profile = json['profile'] is Map
+        ? (json['profile'] as Map).cast<String, dynamic>()
+        : const {};
+    final activity = json['activity'] is Map
+        ? (json['activity'] as Map).cast<String, dynamic>()
+        : const {};
     final last = activity['last_message'] is Map
         ? (activity['last_message'] as Map).cast<String, dynamic>()
         : const <String, dynamic>{};
@@ -81,8 +83,7 @@ class Workspace {
       public: json['public'] as bool? ?? false,
       home: json['home'] as bool? ?? false,
       role: json['role'] as String? ?? '',
-      avatar:
-          '${json['avatar'] ?? profile['avatar'] ?? ''}',
+      avatar: '${json['avatar'] ?? profile['avatar'] ?? ''}',
       spaceKind: '${json['space_kind'] ?? ''}',
       working: activity['working'] == true,
       seenAt: DateTime.tryParse('${json['seen_at'] ?? ''}')?.toLocal(),
@@ -96,23 +97,23 @@ class Workspace {
 
   /// The same workspace with another avatar.
   Workspace withAvatar(String avatar) => Workspace(
-        id: id,
-        ownerId: ownerId,
-        name: name,
-        description: description,
-        public: public,
-        home: home,
-        role: role,
-        avatar: avatar,
-        spaceKind: spaceKind,
-        working: working,
-        seenAt: seenAt,
-        lastRoomId: lastRoomId,
-        lastBody: lastBody,
-        lastSenderId: lastSenderId,
-        lastSenderName: lastSenderName,
-        lastAt: lastAt,
-      );
+    id: id,
+    ownerId: ownerId,
+    name: name,
+    description: description,
+    public: public,
+    home: home,
+    role: role,
+    avatar: avatar,
+    spaceKind: spaceKind,
+    working: working,
+    seenAt: seenAt,
+    lastRoomId: lastRoomId,
+    lastBody: lastBody,
+    lastSenderId: lastSenderId,
+    lastSenderName: lastSenderName,
+    lastAt: lastAt,
+  );
 
   String get initials {
     final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
@@ -146,14 +147,14 @@ class WorkspaceRoom {
   final String color;
 
   factory WorkspaceRoom.fromJson(Map<String, dynamic> json) => WorkspaceRoom(
-        id: json['id'] as String? ?? '',
-        spaceId: json['space_id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        topic: json['topic'] as String? ?? '',
-        purpose: json['purpose'] as String? ?? '',
-        icon: json['icon'] as String? ?? '',
-        color: json['color'] as String? ?? '',
-      );
+    id: json['id'] as String? ?? '',
+    spaceId: json['space_id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    topic: json['topic'] as String? ?? '',
+    purpose: json['purpose'] as String? ?? '',
+    icon: json['icon'] as String? ?? '',
+    color: json['color'] as String? ?? '',
+  );
 }
 
 /// A conversation thread of a room (`spaces.thread_list`): its own message
@@ -185,8 +186,10 @@ class RoomThread {
   /// When something last happened in it.
   DateTime? get activeAt => lastAt ?? updatedAt;
 
-  factory RoomThread.fromJson(Map<String, dynamic> json,
-      {bool isMain = false}) {
+  factory RoomThread.fromJson(
+    Map<String, dynamic> json, {
+    bool isMain = false,
+  }) {
     final last = json['last'] is Map
         ? (json['last'] as Map).cast<String, dynamic>()
         : const <String, dynamic>{};
@@ -195,8 +198,7 @@ class RoomThread {
       title: json['title'] as String? ?? (isMain ? 'Main' : 'Thread'),
       roomId: json['room_id'] as String? ?? '',
       isMain: isMain,
-      updatedAt:
-          DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
+      updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}')?.toLocal(),
       lastBody: last['body'] as String? ?? '',
       lastAt: DateTime.tryParse('${last['created_at'] ?? ''}')?.toLocal(),
     );
@@ -224,6 +226,7 @@ class RoomMessage {
     this.attachments = const [],
     this.senderName = '',
     this.senderIsAgent = false,
+    this.agentId = '',
     this.senderAvatar = '',
     this.replyTo = '',
     this.editedAt,
@@ -254,6 +257,10 @@ class RoomMessage {
   /// them when listing the room (empty when it did not).
   final String senderName;
   final bool senderIsAgent;
+
+  /// Set when an agent (the personal assistant) wrote this message even
+  /// though it is stored under the user's own account (saved-messages chat).
+  final String agentId;
 
   /// The sender's picture (a stored file's id), "" when it has none.
   final String senderAvatar;
@@ -288,20 +295,27 @@ class RoomMessage {
       editedAt == other.editedAt &&
       directId == other.directId &&
       _sameList(mentions, other.mentions, (a, b) => a == b) &&
-      _sameList(reactions, other.reactions,
-          (a, b) => a.userId == b.userId && a.emoji == b.emoji) &&
       _sameList(
-          attachments,
-          other.attachments,
-          (a, b) =>
-              a.id == b.id &&
-              a.name == b.name &&
-              a.mime == b.mime &&
-              a.size == b.size &&
-              a.contentUrl == b.contentUrl);
+        reactions,
+        other.reactions,
+        (a, b) => a.userId == b.userId && a.emoji == b.emoji,
+      ) &&
+      _sameList(
+        attachments,
+        other.attachments,
+        (a, b) =>
+            a.id == b.id &&
+            a.name == b.name &&
+            a.mime == b.mime &&
+            a.size == b.size &&
+            a.contentUrl == b.contentUrl,
+      );
 
   static bool _sameList<T>(
-      List<T> left, List<T> right, bool Function(T, T) equal) {
+    List<T> left,
+    List<T> right,
+    bool Function(T, T) equal,
+  ) {
     if (left.length != right.length) return false;
     for (var i = 0; i < left.length; i++) {
       if (!equal(left[i], right[i])) return false;
@@ -310,32 +324,35 @@ class RoomMessage {
   }
 
   factory RoomMessage.fromJson(Map<String, dynamic> json) => RoomMessage(
-        id: json['id'] as String? ?? '',
-        spaceId: json['space_id'] as String? ?? '',
-        roomId: json['room_id'] as String? ?? '',
-        // Expo DirectMessage uses from_id; room messages use sender_id / sender.
-        senderId: json['sender_id'] as String? ??
-            json['from_id'] as String? ??
-            '',
-        body: json['deleted'] == true ? '' : (json['body'] as String? ?? ''),
-        kind: json['kind'] as String? ?? 'message',
-        createdAt: DateTime.tryParse(
-                json['created_at'] as String? ??
-                    json['sent_at'] as String? ??
-                    '') ??
-            DateTime.now(),
-        mentions: _strings(json['mentions']),
-        attachments: _attachments(json['attachments']),
-        senderName: _senderName(json['sender']),
-        senderIsAgent: json['sender'] is Map && json['sender']['kind'] == 'bot',
-        senderAvatar:
-            json['sender'] is Map ? '${json['sender']['avatar'] ?? ''}' : '',
-        replyTo: json['reply_to'] as String? ?? '',
-        editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
-        reactions: _reactions(json['reactions']),
-        directId: json['direct_id'] as String? ??
-            (json['users_direct_id'] as String? ?? ''),
-      );
+    id: json['id'] as String? ?? '',
+    spaceId: json['space_id'] as String? ?? '',
+    roomId: json['room_id'] as String? ?? '',
+    // Expo DirectMessage uses from_id; room messages use sender_id / sender.
+    senderId: json['sender_id'] as String? ?? json['from_id'] as String? ?? '',
+    body: json['deleted'] == true ? '' : (json['body'] as String? ?? ''),
+    kind: json['kind'] as String? ?? 'message',
+    createdAt:
+        DateTime.tryParse(
+          json['created_at'] as String? ?? json['sent_at'] as String? ?? '',
+        ) ??
+        DateTime.now(),
+    mentions: _strings(json['mentions']),
+    attachments: _attachments(json['attachments']),
+    senderName: _senderName(json['sender']),
+    senderIsAgent:
+        (json['sender'] is Map && json['sender']['kind'] == 'bot') ||
+        '${json['agent_id'] ?? ''}'.isNotEmpty,
+    agentId: '${json['agent_id'] ?? ''}',
+    senderAvatar: json['sender'] is Map
+        ? '${json['sender']['avatar'] ?? ''}'
+        : '',
+    replyTo: json['reply_to'] as String? ?? '',
+    editedAt: DateTime.tryParse(json['edited_at'] as String? ?? ''),
+    reactions: _reactions(json['reactions']),
+    directId:
+        json['direct_id'] as String? ??
+        (json['users_direct_id'] as String? ?? ''),
+  );
 
   static List<MessageReaction> _reactions(dynamic raw) {
     if (raw is! List) return const [];
@@ -410,16 +427,16 @@ class Packet {
   bool get isRequested => status == 'requested';
 
   factory Packet.fromJson(Map<String, dynamic> json) => Packet(
-        id: json['id'] as String? ?? '',
-        fromId: json['from_id'] as String? ?? '',
-        toId: json['to_id'] as String? ?? '',
-        kind: json['kind'] as String? ?? 'message',
-        status: json['status'] as String? ?? 'sent',
-        body: json['body'] as String? ?? '',
-        payload: json['payload'] as String? ?? '',
-        correlationId: json['correlation_id'] as String? ?? '',
-        repliedAt: DateTime.tryParse(json['replied_at'] as String? ?? ''),
-      );
+    id: json['id'] as String? ?? '',
+    fromId: json['from_id'] as String? ?? '',
+    toId: json['to_id'] as String? ?? '',
+    kind: json['kind'] as String? ?? 'message',
+    status: json['status'] as String? ?? 'sent',
+    body: json['body'] as String? ?? '',
+    payload: json['payload'] as String? ?? '',
+    correlationId: json['correlation_id'] as String? ?? '',
+    repliedAt: DateTime.tryParse(json['replied_at'] as String? ?? ''),
+  );
 }
 
 /// The other side of a direct chat: a person or an agent.
@@ -452,18 +469,18 @@ class ChatPeer {
   String get displayName => name.isNotEmpty
       ? name
       : handle.isNotEmpty
-          ? '@$handle'
-          : 'Conversation';
+      ? '@$handle'
+      : 'Conversation';
 
   factory ChatPeer.fromJson(Map<String, dynamic> json) => ChatPeer(
-        id: '${json['id'] ?? ''}',
-        handle: '${json['handle'] ?? ''}',
-        name: '${json['display_name'] ?? ''}',
-        kind: '${json['kind'] ?? 'user'}',
-        botId: '${json['bot_id'] ?? ''}',
-        avatar: '${json['avatar'] ?? ''}',
-        humanoid: AgentHumanoid.tryParse(json['humanoid']),
-      );
+    id: '${json['id'] ?? ''}',
+    handle: '${json['handle'] ?? ''}',
+    name: '${json['display_name'] ?? ''}',
+    kind: '${json['kind'] ?? 'user'}',
+    botId: '${json['bot_id'] ?? ''}',
+    avatar: '${json['avatar'] ?? ''}',
+    humanoid: AgentHumanoid.tryParse(json['humanoid']),
+  );
 }
 
 /// One conversation of the messenger (`users.dm_threads` for directs, or a
@@ -538,48 +555,48 @@ class ChatSummary {
   /// managers may; in a direct chat nobody moderates the other side.
   bool get canModerate => !direct && canManage;
   String get key => '$spaceId/$roomId';
+
   /// Personal Aseman = home: flagged [saved]/[home], or a Direct whose space
   /// is still named Aseman / legacy "Saved Messages".
   bool get isAseman =>
       saved ||
       home ||
-      (direct &&
-          (spaceName == 'Aseman' || spaceName == 'Saved Messages'));
+      (direct && (spaceName == 'Aseman' || spaceName == 'Saved Messages'));
 
   String get title => isAseman
       ? 'Aseman'
       : direct
-          ? (peer?.displayName ?? 'Direct chat')
-          : roomName;
+      ? (peer?.displayName ?? 'Direct chat')
+      : roomName;
 
-  ChatSummary copyWith(
-          {DateTime? pinnedAt,
-          bool clearPin = false,
-          bool? blocked,
-          bool? canSend}) =>
-      ChatSummary(
-        spaceId: spaceId,
-        roomId: roomId,
-        direct: direct,
-        spaceName: spaceName,
-        spaceAvatar: spaceAvatar,
-        roomName: roomName,
-        peer: peer,
-        lastBody: lastBody,
-        lastSenderId: lastSenderId,
-        lastSenderName: lastSenderName,
-        lastAttachments: lastAttachments,
-        updatedAt: updatedAt,
-        unread: unread,
-        working: working,
-        role: role,
-        pinnedAt: clearPin ? null : pinnedAt ?? this.pinnedAt,
-        saved: saved,
-        home: home,
-        blocked: blocked ?? this.blocked,
-        canSend: canSend ?? this.canSend,
-        typing: typing,
-      );
+  ChatSummary copyWith({
+    DateTime? pinnedAt,
+    bool clearPin = false,
+    bool? blocked,
+    bool? canSend,
+  }) => ChatSummary(
+    spaceId: spaceId,
+    roomId: roomId,
+    direct: direct,
+    spaceName: spaceName,
+    spaceAvatar: spaceAvatar,
+    roomName: roomName,
+    peer: peer,
+    lastBody: lastBody,
+    lastSenderId: lastSenderId,
+    lastSenderName: lastSenderName,
+    lastAttachments: lastAttachments,
+    updatedAt: updatedAt,
+    unread: unread,
+    working: working,
+    role: role,
+    pinnedAt: clearPin ? null : pinnedAt ?? this.pinnedAt,
+    saved: saved,
+    home: home,
+    blocked: blocked ?? this.blocked,
+    canSend: canSend ?? this.canSend,
+    typing: typing,
+  );
 
   factory ChatSummary.fromJson(Map<String, dynamic> json) {
     final last = json['last'] is Map
@@ -593,7 +610,8 @@ class ChatSummary {
         : null;
     // Decillion Expo `users.dm_threads` rows are DirectThread: peer + last
     // (from_id/to_id, no space_id/room_id). Treat those as directs.
-    final isDirectThread = peer != null &&
+    final isDirectThread =
+        peer != null &&
         '${json['space_id'] ?? ''}'.isEmpty &&
         '${json['room_id'] ?? ''}'.isEmpty &&
         json['kind'] != 'room';
@@ -608,8 +626,8 @@ class ChatSummary {
       _ => 0,
     };
     final lastAt = DateTime.tryParse(
-            '${last['created_at'] ?? last['sent_at'] ?? json['updated_at'] ?? ''}')
-        ?.toLocal();
+      '${last['created_at'] ?? last['sent_at'] ?? json['updated_at'] ?? ''}',
+    )?.toLocal();
     return ChatSummary(
       // Expo DMs have no space/room: key the chat by peer id.
       spaceId: '${json['space_id'] ?? ''}',
@@ -630,7 +648,8 @@ class ChatSummary {
       working: json['working'] == true,
       role: '${json['role'] ?? ''}',
       pinnedAt: DateTime.tryParse('${json['pinned_at'] ?? ''}')?.toLocal(),
-      saved: json['saved'] == true ||
+      saved:
+          json['saved'] == true ||
           (direct &&
               ('${json['space_name'] ?? ''}' == 'Aseman' ||
                   '${json['space_name'] ?? ''}' == 'Saved Messages')),
@@ -644,7 +663,11 @@ class ChatSummary {
 
 /// One superseded wording of a room message (`spaces.message_edits`).
 class MessageEditVersion {
-  const MessageEditVersion({required this.body, required this.at, this.id = ''});
+  const MessageEditVersion({
+    required this.body,
+    required this.at,
+    this.id = '',
+  });
 
   final String id;
   final String body;
@@ -653,14 +676,17 @@ class MessageEditVersion {
   /// body was last set (edited_at / created_at).
   final DateTime at;
 
-  factory MessageEditVersion.fromJson(Map<String, dynamic> json) =>
-      MessageEditVersion(
-        id: '${json['id'] ?? ''}',
-        body: json['body'] as String? ?? '',
-        at: DateTime.tryParse(
-                '${json['replaced_at'] ?? json['edited_at'] ?? json['created_at'] ?? ''}') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-      );
+  factory MessageEditVersion.fromJson(
+    Map<String, dynamic> json,
+  ) => MessageEditVersion(
+    id: '${json['id'] ?? ''}',
+    body: json['body'] as String? ?? '',
+    at:
+        DateTime.tryParse(
+          '${json['replaced_at'] ?? json['edited_at'] ?? json['created_at'] ?? ''}',
+        ) ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+  );
 }
 
 /// Current body plus earlier wording of an edited room message.
@@ -688,7 +714,7 @@ class MessageEditHistory {
       previous: [
         for (final row in json['previous'] as List? ?? const [])
           if (row is Map)
-            MessageEditVersion.fromJson(Map<String, dynamic>.from(row))
+            MessageEditVersion.fromJson(Map<String, dynamic>.from(row)),
       ],
     );
   }
@@ -734,41 +760,41 @@ class RoomChatPage {
     bool? canSend,
     bool? saved,
     bool? hasMore,
-  }) =>
-      RoomChatPage(
-        messages: messages ?? this.messages,
-        working: working ?? this.working,
-        workingDetail: workingDetail ?? this.workingDetail,
-        typing: typing ?? this.typing,
-        peerSeenAt: peerSeenAt ?? this.peerSeenAt,
-        blocked: blocked ?? this.blocked,
-        canSend: canSend ?? this.canSend,
-        saved: saved ?? this.saved,
-        hasMore: hasMore ?? this.hasMore,
-      );
+  }) => RoomChatPage(
+    messages: messages ?? this.messages,
+    working: working ?? this.working,
+    workingDetail: workingDetail ?? this.workingDetail,
+    typing: typing ?? this.typing,
+    peerSeenAt: peerSeenAt ?? this.peerSeenAt,
+    blocked: blocked ?? this.blocked,
+    canSend: canSend ?? this.canSend,
+    saved: saved ?? this.saved,
+    hasMore: hasMore ?? this.hasMore,
+  );
 
   factory RoomChatPage.fromJson(Map<String, dynamic> json) => RoomChatPage(
-        messages: _messages(json['messages']),
-        working: json['working'] as String? ??
-            ((json['agents_working'] is List &&
-                    (json['agents_working'] as List).isNotEmpty)
-                ? 'working'
-                : ''),
-        workingDetail: json['working_detail'] as String? ?? '',
-        typing: [
-          for (final t in json['typing'] as List? ?? const [])
-            if (t is Map)
-              ChatPeer.fromJson(t.cast<String, dynamic>()).displayName,
-          // Expo DirectConversation: peer_typing bool, not a typing list.
-          if (json['peer_typing'] == true) '…',
-        ],
-        peerSeenAt: DateTime.tryParse(
-            '${json['peer_seen_at'] ?? json['peer_read_at'] ?? ''}'),
-        blocked: json['blocked'] == true,
-        canSend: json['can_send'] != false,
-        saved: json['saved'] == true,
-        hasMore: json['has_more'] == true,
-      );
+    messages: _messages(json['messages']),
+    working:
+        json['working'] as String? ??
+        ((json['agents_working'] is List &&
+                (json['agents_working'] as List).isNotEmpty)
+            ? 'working'
+            : ''),
+    workingDetail: json['working_detail'] as String? ?? '',
+    typing: [
+      for (final t in json['typing'] as List? ?? const [])
+        if (t is Map) ChatPeer.fromJson(t.cast<String, dynamic>()).displayName,
+      // Expo DirectConversation: peer_typing bool, not a typing list.
+      if (json['peer_typing'] == true) '…',
+    ],
+    peerSeenAt: DateTime.tryParse(
+      '${json['peer_seen_at'] ?? json['peer_read_at'] ?? ''}',
+    ),
+    blocked: json['blocked'] == true,
+    canSend: json['can_send'] != false,
+    saved: json['saved'] == true,
+    hasMore: json['has_more'] == true,
+  );
 
   /// Skip a bad row instead of blanking the whole DM (one throw → grey
   /// [ErrorWidget] over the message list in release).
@@ -802,7 +828,9 @@ List<RoomMessage> sortRoomMessages(List<RoomMessage> messages) {
 /// older messages already loaded and replacing the overlapping window so
 /// edits and deletes in that window apply.
 List<RoomMessage> mergeNewestRoomMessages(
-    List<RoomMessage> existing, List<RoomMessage> page) {
+  List<RoomMessage> existing,
+  List<RoomMessage> page,
+) {
   if (page.isEmpty) return existing;
   if (existing.isEmpty) return sortRoomMessages(page);
   var oldestInPage = page.first.createdAt;
@@ -813,19 +841,21 @@ List<RoomMessage> mergeNewestRoomMessages(
   // Everything from that instant onward is the page (rotations and deletes).
   final older = [
     for (final m in existing)
-      if (m.createdAt.isBefore(oldestInPage)) m
+      if (m.createdAt.isBefore(oldestInPage)) m,
   ];
   return sortRoomMessages([...older, ...page]);
 }
 
 /// Prepends an older [page] (messages before what the client already holds).
 List<RoomMessage> mergeOlderRoomMessages(
-    List<RoomMessage> existing, List<RoomMessage> page) {
+  List<RoomMessage> existing,
+  List<RoomMessage> page,
+) {
   if (page.isEmpty) return existing;
   final ids = {for (final m in existing) m.id};
   return sortRoomMessages([
     ...existing,
     for (final m in page)
-      if (!ids.contains(m.id)) m
+      if (!ids.contains(m.id)) m,
   ]);
 }

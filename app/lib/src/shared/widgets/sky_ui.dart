@@ -797,7 +797,7 @@ class FeatureStageCard extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   borderRadius: AppShape.borderRadius(context, 12),
-                  color: accentColor.withValues(alpha: .12),
+                  color: accentColor.withValues(alpha: .08),
                 ),
                 child: Icon(icon, color: accentColor, size: 22),
               ),
@@ -846,7 +846,8 @@ class FeatureStageCard extends StatelessWidget {
                   SoftMetaChip(
                     label: badge.label,
                     icon: badge.icon,
-                    accent: accentColor,
+                    // Neutral chips: the card already carries the accent.
+                    accent: scheme.onSurfaceVariant,
                   ),
               ],
             ),
@@ -1050,7 +1051,7 @@ class QuietTile extends StatelessWidget {
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Text(
                         subtitle!,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,

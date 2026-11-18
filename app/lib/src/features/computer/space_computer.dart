@@ -206,10 +206,7 @@ class SpaceComputer extends ChangeNotifier {
         final response = await service.invokeAction(
           'spaces',
           'computer',
-          body: {
-            'space': spaceId,
-            'operation': 'status',
-          },
+          body: {'space': spaceId, 'operation': 'status'},
           timeout: const Duration(seconds: 60),
         );
         if (generation != _generation) return;

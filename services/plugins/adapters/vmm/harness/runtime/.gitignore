@@ -1,3 +1,0 @@
-node_modules/
-# The launcher (services/.gitignore ignores Go build output in bin/).
-!bin/

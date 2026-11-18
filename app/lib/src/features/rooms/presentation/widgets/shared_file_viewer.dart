@@ -1,8 +1,8 @@
 import 'dart:typed_data';
-import '../../../../core/theme/app_shape.dart';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_shape.dart';
 import '../../../../data/models/uploaded_file.dart';
 import '../../../../data/services/aseman_service.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
@@ -35,26 +35,30 @@ Future<void> openSharedFile(
   if (desk != null &&
       RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(id) &&
       MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
-    await desk.openSharedFile(id,
-        title: file.name,
-        // A video is wide; a page of a document is tall, as workspace
-        // files open.
-        size: file.isVideo ? null : const Size(680, 620));
+    await desk.openSharedFile(
+      id,
+      title: file.name,
+      // A video is wide; a page of a document is tall, as workspace
+      // files open.
+      size: file.isVideo ? null : const Size(680, 620),
+    );
     return;
   }
-  await showAppSheet<void>(
-    context,
-    Builder(
-      builder: (sheet) => SharedFileViewer(
-        file: file,
-        url: url,
-        headers: headers,
-        download: download,
-        onClose: () => Navigator.of(sheet).pop(),
-      ),
+  final viewer = Builder(
+    builder: (sheet) => SharedFileViewer(
+      file: file,
+      url: url,
+      headers: headers,
+      download: download,
+      onClose: () => Navigator.of(sheet).pop(),
     ),
-    heightFactor: .94,
   );
+  // Wide screen without a desk: a docked panel, never a bottom sheet.
+  if (MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
+    await showFloatingPanel(context, viewer, maxWidth: 760);
+    return;
+  }
+  await showAppSheet<void>(context, viewer, heightFactor: .94);
 }
 
 /// A file shared in a chat or a post, shown as what it is: a video or audio
@@ -85,10 +89,15 @@ class SharedFileViewer extends StatelessWidget {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final saved = await saveBytes(file.name, await get(file));
-      messenger?.showSnackBar(SnackBar(
-          content: Text(saved.isEmpty
-              ? 'Downloaded ${file.name}'
-              : 'Downloaded ${file.name} → $saved')));
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            saved.isEmpty
+                ? 'Downloaded ${file.name}'
+                : 'Downloaded ${file.name} → $saved',
+          ),
+        ),
+      );
     } catch (e) {
       messenger?.showSnackBar(SnackBar(content: Text('Download failed: $e')));
     }
@@ -99,7 +108,10 @@ class SharedFileViewer extends StatelessWidget {
     final get = download;
     // Documents, books, PDFs, sheets, slides, code: the workspace's own
     // viewer, reading the shared file's bytes.
-    if (!file.isVideo && !file.isImage && !file.isPlayableAudio && get != null) {
+    if (!file.isVideo &&
+        !file.isImage &&
+        !file.isPlayableAudio &&
+        get != null) {
       return Material(
         color: Theme.of(context).colorScheme.surface,
         child: WorkspaceFileViewer(
@@ -123,72 +135,85 @@ class SharedFileViewer extends StatelessWidget {
     final type = FileType.of(file.name);
     final name = file.name.isEmpty
         ? file.isVideo
-            ? 'Video'
-            : 'File'
+              ? 'Video'
+              : 'File'
         : file.name;
     return Material(
       color: scheme.surface,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (showHeader)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
-            child: Row(children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: type.color.withValues(alpha: .16),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                    file.isVideo
-                        ? Icons.movie_rounded
-                        : file.isPlayableAudio
-                            ? Icons.graphic_eq_rounded
-                            : type.icon,
-                    size: 19,
-                    color: type.color),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showHeader)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: type.color.withValues(alpha: .16),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      file.isVideo
+                          ? Icons.movie_rounded
+                          : file.isPlayableAudio
+                          ? Icons.graphic_eq_rounded
+                          : type.icon,
+                      size: 19,
+                      color: type.color,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (file.size > 0)
+                          Text(
+                            file.humanSize,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (download != null)
+                    IconButton(
+                      tooltip: 'Download',
+                      onPressed: () => _save(context),
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                    ),
+                  if (onClose != null)
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w800)),
-                    if (file.size > 0)
-                      Text(file.humanSize,
-                          style: TextStyle(
-                              fontSize: 10, color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              if (download != null)
-                IconButton(
-                  tooltip: 'Download',
-                  onPressed: () => _save(context),
-                  icon: const Icon(Icons.download_rounded, size: 20),
-                ),
-              if (onClose != null)
-                IconButton(
-                  tooltip: 'Close',
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close_rounded),
-                ),
-            ]),
-          ),
-        Expanded(child: _body(context, scheme, name)),
-      ]),
+            ),
+          Expanded(child: _body(context, scheme, name)),
+        ],
+      ),
     );
   }
 
   Widget _body(BuildContext context, ColorScheme scheme, String name) {
     if (file.isVideo) {
-      return NetworkVideoPlayer(
-          key: ValueKey(url), url: url, headers: headers);
+      return NetworkVideoPlayer(key: ValueKey(url), url: url, headers: headers);
     }
     if (file.isImage) {
       return ColoredBox(
@@ -196,13 +221,16 @@ class SharedFileViewer extends StatelessWidget {
         child: InteractiveViewer(
           maxScale: 6,
           child: Center(
-            child: Image.network(url,
-                headers: headers,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(
-                    Icons.broken_image_outlined,
-                    color: Colors.white54,
-                    size: 56)),
+            child: Image.network(
+              url,
+              headers: headers,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.broken_image_outlined,
+                color: Colors.white54,
+                size: 56,
+              ),
+            ),
           ),
         ),
       );
@@ -216,44 +244,57 @@ class SharedFileViewer extends StatelessWidget {
             color: scheme.surfaceContainerHigh,
             borderRadius: AppShape.borderRadius(context, 24),
           ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(file.isVoice ? Icons.mic_rounded : Icons.music_note_rounded,
-                color: scheme.primary, size: 40),
-            const SizedBox(height: 10),
-            Text(name,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                file.isVoice ? Icons.mic_rounded : Icons.music_note_rounded,
+                color: scheme.primary,
+                size: 40,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                name,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 16),
-            AudioBubble(
-              url: url,
-              headers: headers,
-              mime: file.mime,
-              durationLabel: file.humanSize,
-              voice: file.isVoice,
-              seed: file.id.isEmpty ? url : file.id,
-              width: 220,
-            ),
-          ]),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 16),
+              AudioBubble(
+                url: url,
+                headers: headers,
+                mime: file.mime,
+                durationLabel: file.humanSize,
+                voice: file.isVoice,
+                seed: file.id.isEmpty ? url : file.id,
+                width: 220,
+              ),
+            ],
+          ),
         ),
       );
     }
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(FileType.of(file.name).icon, color: scheme.primary, size: 44),
-        const SizedBox(height: 10),
-        Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text([file.mime, file.humanSize].where((s) => s.isNotEmpty).join(' · '),
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-        if (download != null) ...[
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _save(context),
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Download'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(FileType.of(file.name).icon, color: scheme.primary, size: 44),
+          const SizedBox(height: 10),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            [file.mime, file.humanSize].where((s) => s.isNotEmpty).join(' · '),
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
+          if (download != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _save(context),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download'),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -261,8 +302,11 @@ class SharedFileViewer extends StatelessWidget {
 /// A desk card window showing a shared file: it is looked up by its id and
 /// shown with [SharedFileViewer].
 class SharedFileWindow extends StatefulWidget {
-  const SharedFileWindow(
-      {super.key, required this.service, required this.fileId});
+  const SharedFileWindow({
+    super.key,
+    required this.service,
+    required this.fileId,
+  });
   final AsemanService service;
   final String fileId;
 
@@ -271,34 +315,39 @@ class SharedFileWindow extends StatefulWidget {
 }
 
 class _SharedFileWindowState extends State<SharedFileWindow> {
-  late final Future<UploadedFile> _file =
-      widget.service.fetchFile(widget.fileId);
+  late final Future<UploadedFile> _file = widget.service.fetchFile(
+    widget.fileId,
+  );
 
   @override
   Widget build(BuildContext context) => FutureBuilder<UploadedFile>(
-        future: _file,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return const Center(
-                child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('This file is no longer available.',
-                  textAlign: TextAlign.center),
-            ));
-          }
-          final file = snap.data;
-          if (file == null) {
-            return const Padding(
-                padding: EdgeInsets.all(24),
-                child: SkeletonParagraph(lines: 8));
-          }
-          return SharedFileViewer(
-            file: file,
-            url: widget.service.fileContentUrl(widget.fileId),
-            headers: widget.service.authHeaders(),
-            download: (f) => widget.service.downloadFile(widget.fileId),
-            showHeader: false,
-          );
-        },
+    future: _file,
+    builder: (context, snap) {
+      if (snap.hasError) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'This file is no longer available.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      }
+      final file = snap.data;
+      if (file == null) {
+        return const Padding(
+          padding: EdgeInsets.all(24),
+          child: SkeletonParagraph(lines: 8),
+        );
+      }
+      return SharedFileViewer(
+        file: file,
+        url: widget.service.fileContentUrl(widget.fileId),
+        headers: widget.service.authHeaders(),
+        download: (f) => widget.service.downloadFile(widget.fileId),
+        showHeader: false,
       );
+    },
+  );
 }

@@ -175,47 +175,49 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  /// Pushes the workspace desk above Home on compact windows. The workspace
+  /// Whether a workspace route is already on the stack (compact windows), so
+  /// a double tap cannot push a second desk.
+  bool _workspacePushed = false;
+
+  /// Pushes the workspace desk above Home on compact windows, exactly like a
+  /// direct chat: a normal page route that Home stays under, and that back
+  /// (system or the header's back control) pops one step. The workspace
   /// library is deferred so Pulse/login do not download the desk + tools +
   /// Elpian stack until a space is opened.
   Future<void> _pushWorkspace() async {
-    await workspace_entry.loadWorkspace();
-    if (!mounted) return;
-    final navigator = Navigator.of(context);
-    // Avoid stacking a second desk if Home somehow fires again while one is
-    // already open; pop back to Home first, then push the requested desk.
-    if (navigator.canPop()) {
-      navigator.popUntil((route) => route.isFirst);
-    }
-    unawaited(
-      navigator
-          .push<void>(
-            PageRouteBuilder<void>(
-              settings: const RouteSettings(name: 'workspace'),
-              opaque: true,
-              // Drop Home's subtree while a workspace covers it so only the desk is
-              // mounted (same as the old page swap); popping rebuilds Home.
-              maintainState: false,
-              transitionDuration: Duration.zero,
-              reverseTransitionDuration: Duration.zero,
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  workspace_entry.workspaceScreen(
-                    key: ValueKey(
-                      'workspace-desk-$_workspace-${_initialSpaceId ?? ''}-'
-                      '${_initialRoomId ?? _initialRoom ?? ''}',
-                    ),
-                    dependencies: widget.dependencies,
-                    initialWorkspace: _workspace,
-                    initialSpaceId: _initialSpaceId,
-                    initialRoom: _initialRoom,
-                    initialRoomId: _initialRoomId,
-                    onBackToFeed: _popToHome,
-                    onWorkspaceChanged: _setWorkspace,
-                  ),
+    if (_workspacePushed) return;
+    _workspacePushed = true;
+    try {
+      await workspace_entry.loadWorkspace();
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: 'workspace'),
+          builder: (context) => workspace_entry.workspaceScreen(
+            key: ValueKey(
+              'workspace-desk-$_workspace-${_initialSpaceId ?? ''}-'
+              '${_initialRoomId ?? _initialRoom ?? ''}',
             ),
-          )
-          .whenComplete(_onReturnedHome),
-    );
+            dependencies: widget.dependencies,
+            initialWorkspace: _workspace,
+            initialSpaceId: _initialSpaceId,
+            initialRoom: _initialRoom,
+            initialRoomId: _initialRoomId,
+            onBackToFeed: _popWorkspace,
+            onWorkspaceChanged: _setWorkspace,
+          ),
+        ),
+      );
+    } finally {
+      _workspacePushed = false;
+      _onReturnedHome();
+    }
+  }
+
+  /// Back from a pushed workspace: one step, like leaving a direct chat.
+  void _popWorkspace() {
+    if (!mounted) return;
+    unawaited(Navigator.of(context).maybePop());
   }
 
   /// After any pop back to Home (Home control or system back), land on chats

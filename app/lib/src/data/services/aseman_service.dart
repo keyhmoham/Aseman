@@ -630,6 +630,7 @@ class AsemanService implements BackendService {
       'blocked': m['blocked'] == true,
       'can_send': m['can_send'] != false,
       'typing': m['peer_typing'] == true,
+      'pinned_at': m['pinned_at'],
     });
   }
 
@@ -664,7 +665,11 @@ class AsemanService implements BackendService {
     final agent = chat.peer?.isAgent ?? false;
     final hasBotId = chat.peer?.botId.isNotEmpty ?? false;
     if (chat.spaceId.isNotEmpty && (!agent || hasBotId)) return chat;
-    return openDirect(peer);
+    // The list row knows its pin; an older node's dm_list does not say.
+    final opened = await openDirect(peer);
+    return opened.pinnedAt == null && chat.pinnedAt != null
+        ? opened.copyWith(pinnedAt: chat.pinnedAt)
+        : opened;
   }
 
   /// Opens the caller's personal notes chat (Saved Messages / Aseman).

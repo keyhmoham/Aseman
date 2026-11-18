@@ -114,8 +114,12 @@ class RoomChat extends StatefulWidget {
   final bool suggestions;
   final List<Bot> mentionable;
   final Future<void> Function(
-      String body, List<String> mentions, List<String> attachments,
-      {String replyTo})? onSend;
+    String body,
+    List<String> mentions,
+    List<String> attachments, {
+    String replyTo,
+  })?
+  onSend;
   final bool flat;
   final double topContentInset;
 
@@ -247,15 +251,21 @@ class _ChatScrollPosition extends ScrollPositionWithSingleContext {
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
     final oldPixels = hasPixels ? pixels : 0.0;
-    final oldMax = hasContentDimensions ? this.maxScrollExtent : maxScrollExtent;
-    final accepted =
-        super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    final firstLayout = !hasContentDimensions;
+    final oldMax = hasContentDimensions
+        ? this.maxScrollExtent
+        : maxScrollExtent;
+    final accepted = super.applyContentDimensions(
+      minScrollExtent,
+      maxScrollExtent,
+    );
     final target = host.instantOffset(
       oldPixels: oldPixels,
       oldMax: oldMax,
       minExtent: minScrollExtent,
       maxExtent: maxScrollExtent,
       userDragging: activity is DragScrollActivity,
+      firstLayout: firstLayout,
     );
     if (target == null) return accepted;
     final next = target.clamp(minScrollExtent, maxScrollExtent);
@@ -370,9 +380,7 @@ class _RoomChatState extends State<RoomChat> {
   void _onScroll() {
     if (!_chatScroll.hasClients) return;
     _persistScroll();
-    if (widget.onLoadOlder == null ||
-        !widget.hasMore ||
-        widget.loadingOlder) {
+    if (widget.onLoadOlder == null || !widget.hasMore || widget.loadingOlder) {
       return;
     }
     // Near the top of an oldest→newest list: ask for the previous page.
@@ -391,6 +399,7 @@ class _RoomChatState extends State<RoomChat> {
     required double minExtent,
     required double maxExtent,
     required bool userDragging,
+    bool firstLayout = false,
   }) {
     if (_shiftForPrepend && !userDragging) {
       _shiftForPrepend = false;
@@ -404,7 +413,12 @@ class _RoomChatState extends State<RoomChat> {
       if (saved.nearBottom) return maxExtent;
       return saved.offsetFor(maxExtent).clamp(minExtent, maxExtent);
     }
-    if (_pinToBottom && !userDragging) return maxExtent;
+    // Follow the live end only while the list is actually resting there (or
+    // on its first layout). "Near the bottom" is not enough: a wheel or
+    // trackpad step is not a drag, so snapping back from a small scroll up
+    // would undo it on the next layout and the list would feel stuck.
+    final atBottom = firstLayout || oldPixels >= oldMax - 0.5;
+    if (_pinToBottom && !userDragging && atBottom) return maxExtent;
     if (!userDragging && (oldPixels < minExtent || oldPixels > maxExtent)) {
       return oldPixels.clamp(minExtent, maxExtent);
     }
@@ -457,10 +471,14 @@ class _RoomChatState extends State<RoomChat> {
     if (service == null || widget.spaceId.isEmpty || widget.roomId.isEmpty) {
       return;
     }
-    _work = RoomWorkController(service,
-        spaceId: widget.spaceId, roomId: widget.roomId)
-      ..addListener(_workChanged)
-      ..start();
+    _work =
+        RoomWorkController(
+            service,
+            spaceId: widget.spaceId,
+            roomId: widget.roomId,
+          )
+          ..addListener(_workChanged)
+          ..start();
   }
 
   void _workChanged() {
@@ -476,9 +494,13 @@ class _RoomChatState extends State<RoomChat> {
     if (work == null) return;
     final error = await work.stopAll();
     if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
           content: Text(
-              'Some work could not be stopped: only the person who asked for it or a project manager can stop it.')));
+            'Some work could not be stopped: only the person who asked for it or a project manager can stop it.',
+          ),
+        ),
+      );
     }
   }
 
@@ -487,8 +509,9 @@ class _RoomChatState extends State<RoomChat> {
       await _work?.answer(q, answer);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not answer: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not answer: $e')));
       }
     }
   }
@@ -497,8 +520,9 @@ class _RoomChatState extends State<RoomChat> {
   Future<void> _runAgain(WorkEntry failed) async {
     _work?.dismiss(failed.runId);
     try {
-      await widget.onSend
-          ?.call(failed.prompt, [failed.botId], const <String>[]);
+      await widget.onSend?.call(failed.prompt, [
+        failed.botId,
+      ], const <String>[]);
     } catch (_) {
       // The parent reports the error.
     }
@@ -507,7 +531,9 @@ class _RoomChatState extends State<RoomChat> {
   void _pickCommand(PromptCommand c) {
     final text = '${c.command} ';
     input.value = TextEditingValue(
-        text: text, selection: TextSelection.collapsed(offset: text.length));
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
     setState(() {});
   }
 
@@ -529,7 +555,8 @@ class _RoomChatState extends State<RoomChat> {
     }
     final oldOldest = _oldestId(oldWidget.messages);
     final newOldest = _oldestId(widget.messages);
-    final prepended = oldOldest != null &&
+    final prepended =
+        oldOldest != null &&
         newOldest != null &&
         oldOldest != newOldest &&
         widget.messages.length > oldWidget.messages.length;
@@ -562,47 +589,58 @@ class _RoomChatState extends State<RoomChat> {
   void _pickMention([BuildContext? anchor]) {
     final agents = widget.mentionable;
     if (agents.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No agents in this workspace to mention.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No agents in this workspace to mention.'),
+        ),
+      );
       return;
     }
     showAppPicker<Bot>(
-        context: context,
-        anchor: anchor,
-        showDragHandle: false,
-        builder: (context) => SafeArea(
-                child: SizedBox(
-              height: 360,
-              child: Column(children: [
-                const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('Mention an agent',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w900))),
-                Expanded(
-                    child: ListView.separated(
-                        itemCount: agents.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final b = agents[i];
-                          final already = _mentions.contains(b.id);
-                          return ListTile(
-                              leading: BotAvatar(
-                                bot: b,
-                                radius: 14,
-                                userId: widget.me,
-                              ),
-                              title: Text(b.name,
-                                  style: const TextStyle(fontSize: 13)),
-                              subtitle: Text(b.kind,
-                                  style: const TextStyle(fontSize: 10)),
-                              trailing: Icon(already
-                                  ? Icons.check_circle_rounded
-                                  : Icons.add_circle_outline_rounded),
-                              onTap: () => Navigator.pop(context, b));
-                        })),
-              ]),
-            ))).then((b) {
+      context: context,
+      anchor: anchor,
+      showDragHandle: false,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: 360,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Mention an agent',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: agents.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final b = agents[i];
+                    final already = _mentions.contains(b.id);
+                    return ListTile(
+                      leading: BotAvatar(bot: b, radius: 14, userId: widget.me),
+                      title: Text(b.name, style: const TextStyle(fontSize: 13)),
+                      subtitle: Text(
+                        b.kind,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                      trailing: Icon(
+                        already
+                            ? Icons.check_circle_rounded
+                            : Icons.add_circle_outline_rounded,
+                      ),
+                      onTap: () => Navigator.pop(context, b),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).then((b) {
       if (b == null || !mounted) return;
       setState(() {
         _mentions.add(b.id);
@@ -629,8 +667,12 @@ class _RoomChatState extends State<RoomChat> {
         .toList();
     input.text = md;
     try {
-      await widget.onSend?.call(md, _mentions.toList(), attachments,
-          replyTo: _replyTo?.id ?? '');
+      await widget.onSend?.call(
+        md,
+        _mentions.toList(),
+        attachments,
+        replyTo: _replyTo?.id ?? '',
+      );
     } catch (_) {
       // The parent reports the error. Keep the designed message and files.
       return;
@@ -666,15 +708,20 @@ class _RoomChatState extends State<RoomChat> {
       }
       return;
     }
-    final drafts =
-        _drafts.where((d) => d.uploaded && d.fileId.isNotEmpty).toList();
+    final drafts = _drafts
+        .where((d) => d.uploaded && d.fileId.isNotEmpty)
+        .toList();
     final attachments = drafts.map((d) => d.fileId).toList();
     if (value.trim().isEmpty && attachments.isEmpty) return;
     if (_sending) return;
     setState(() => _sending = true);
     try {
-      await widget.onSend?.call(value.trim(), _mentions.toList(), attachments,
-          replyTo: _replyTo?.id ?? '');
+      await widget.onSend?.call(
+        value.trim(),
+        _mentions.toList(),
+        attachments,
+        replyTo: _replyTo?.id ?? '',
+      );
       if (!mounted) return;
       // Success: drop the sent attachments and clear the composer.
       for (final d in _drafts.toList()) {
@@ -703,9 +750,13 @@ class _RoomChatState extends State<RoomChat> {
 
   static const _reactEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
-  Future<void> _messageMenu(RoomMessage m, {Offset? at, BuildContext? anchor}) async {
+  Future<void> _messageMenu(
+    RoomMessage m, {
+    Offset? at,
+    BuildContext? anchor,
+  }) async {
     if (m.id.isEmpty || m.kind == 'log') return;
-    final mine = m.senderId == widget.me;
+    final mine = _isMine(m);
     final canWrite = widget.onSend != null && widget.composerNotice == null;
     final canSocial = widget.dependencies != null && m.id.isNotEmpty;
     final actions = <(IconData, String, String)>[
@@ -721,8 +772,7 @@ class _RoomChatState extends State<RoomChat> {
         (Icons.history_rounded, 'Edit history', 'history'),
       if (canSocial && !mine && m.attachments.isNotEmpty)
         (Icons.bookmark_add_outlined, 'Keep files', 'keep'),
-      if (canSocial)
-        (Icons.visibility_off_outlined, 'Hide for me', 'hide'),
+      if (canSocial) (Icons.visibility_off_outlined, 'Hide for me', 'hide'),
       if ((mine || widget.canModerate) && widget.onDelete != null)
         (Icons.delete_outline_rounded, 'Delete for everyone', 'delete'),
       if (!mine && widget.onReport != null)
@@ -734,17 +784,23 @@ class _RoomChatState extends State<RoomChat> {
       anchor: anchor,
       anchorPoint: at,
       builder: (context) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          for (final (icon, label, value) in actions)
-            ListTile(
-                leading: Icon(icon,
-                    color: value == 'delete' || value == 'report'
-                        ? Theme.of(context).colorScheme.error
-                        : null),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (icon, label, value) in actions)
+              ListTile(
+                leading: Icon(
+                  icon,
+                  color: value == 'delete' || value == 'report'
+                      ? Theme.of(context).colorScheme.error
+                      : null,
+                ),
                 title: Text(label),
-                onTap: () => Navigator.pop(context, value)),
-          const SizedBox(height: 8),
-        ]),
+                onTap: () => Navigator.pop(context, value),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
     if (!mounted || picked == null) return;
@@ -759,8 +815,9 @@ class _RoomChatState extends State<RoomChat> {
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.body));
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Copied')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Copied')));
         }
       case 'edit':
         setState(() {
@@ -771,21 +828,20 @@ class _RoomChatState extends State<RoomChat> {
       case 'forward':
         final deps = widget.dependencies;
         if (deps != null) {
-          final from = m.senderId == widget.me
-              ? 'you'
-              : _senderOf(m).name;
-          await showForwardMessageSheet(context,
-              dependencies: deps,
-              message: m,
-              fromName: from,
-              excludeSpaceId: widget.spaceId,
-              excludeRoomId: widget.roomId);
+          final from = _isMine(m) ? 'you' : _senderOf(m).name;
+          await showForwardMessageSheet(
+            context,
+            dependencies: deps,
+            message: m,
+            fromName: from,
+            excludeSpaceId: widget.spaceId,
+            excludeRoomId: widget.roomId,
+          );
         }
       case 'history':
         final service = widget.dependencies?.service;
         if (service != null) {
-          await showMessageEditHistory(context,
-              service: service, message: m);
+          await showMessageEditHistory(context, service: service, message: m);
         }
       case 'keep':
         await _keepFiles(m);
@@ -800,11 +856,13 @@ class _RoomChatState extends State<RoomChat> {
             content: const Text('It is removed for everyone in the chat.'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel')),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Delete')),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
             ],
           ),
         );
@@ -852,13 +910,15 @@ class _RoomChatState extends State<RoomChat> {
       }
       if (mounted) {
         setState(() => _myReaction[m.id] = emoji);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Reacted $emoji')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Reacted $emoji')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not react: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not react: $e')));
       }
     }
   }
@@ -874,13 +934,15 @@ class _RoomChatState extends State<RoomChat> {
       }
       if (mounted) {
         setState(() => _hiddenHere.add(m.id));
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Hidden for you')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Hidden for you')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not hide: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not hide: $e')));
       }
     }
   }
@@ -899,13 +961,15 @@ class _RoomChatState extends State<RoomChat> {
         await service.messageKeep(widget.spaceId, m.id);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kept in your storage')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Kept in your storage')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not keep files: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not keep files: $e')));
       }
     }
   }
@@ -948,43 +1012,59 @@ class _RoomChatState extends State<RoomChat> {
     final scheme = Theme.of(context).colorScheme;
     final editing = _editing;
     final target = editing ?? _replyTo!;
-    final who =
-        target.senderId == widget.me ? 'yourself' : _senderOf(target).name;
+    final who = _isMine(target) ? 'yourself' : _senderOf(target).name;
     return Container(
       margin: const EdgeInsets.fromLTRB(4, 2, 4, 6),
       padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
       decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
-          border: Border(left: BorderSide(color: scheme.primary, width: 3))),
-      child: Row(children: [
-        Icon(editing != null ? Icons.edit_outlined : Icons.reply_rounded,
-            size: 18, color: scheme.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(editing != null ? 'Edit message' : 'Reply to $who',
-                style: TextStyle(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
+        border: Border(left: BorderSide(color: scheme.primary, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            editing != null ? Icons.edit_outlined : Icons.reply_rounded,
+            size: 18,
+            color: scheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  editing != null ? 'Edit message' : 'Reply to $who',
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: scheme.primary)),
-            Text(_quoteText(target),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-          ]),
-        ),
-        IconButton(
+                    color: scheme.primary,
+                  ),
+                ),
+                Text(
+                  _quoteText(target),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
             tooltip: editing != null ? 'Cancel edit' : 'Cancel reply',
             visualDensity: VisualDensity.compact,
             onPressed: () => setState(() {
-                  if (_editing != null) input.clear();
-                  _editing = null;
-                  _replyTo = null;
-                }),
-            icon: const Icon(Icons.close_rounded, size: 18)),
-      ]),
+              if (_editing != null) input.clear();
+              _editing = null;
+              _replyTo = null;
+            }),
+            icon: const Icon(Icons.close_rounded, size: 18),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1005,7 +1085,11 @@ class _RoomChatState extends State<RoomChat> {
   String _avatarOf(RoomMessage m) {
     if (m.senderAvatar.isNotEmpty) return m.senderAvatar;
     for (final b in widget.mentionable) {
-      if (b.id == m.senderId || b.accountId == m.senderId) return b.avatar;
+      if ((m.agentId.isNotEmpty &&
+              (b.id == m.agentId || b.accountId == m.agentId)) ||
+          b.id == m.senderId ||
+          b.accountId == m.senderId)
+        return b.avatar;
     }
     return '';
   }
@@ -1013,7 +1097,10 @@ class _RoomChatState extends State<RoomChat> {
   /// Prefs key for an agent sender: bot record id when known.
   String _agentPrefsId(RoomMessage m) {
     for (final b in widget.mentionable) {
-      if (b.id == m.senderId || b.accountId == m.senderId) {
+      if ((m.agentId.isNotEmpty &&
+              (b.id == m.agentId || b.accountId == m.agentId)) ||
+          b.id == m.senderId ||
+          b.accountId == m.senderId) {
         return b.id.isNotEmpty ? b.id : b.accountId;
       }
     }
@@ -1022,7 +1109,10 @@ class _RoomChatState extends State<RoomChat> {
 
   AgentHumanoid? _agentHumanoidOf(RoomMessage m) {
     for (final b in widget.mentionable) {
-      if (b.id == m.senderId || b.accountId == m.senderId) {
+      if ((m.agentId.isNotEmpty &&
+              (b.id == m.agentId || b.accountId == m.agentId)) ||
+          b.id == m.senderId ||
+          b.accountId == m.senderId) {
         return b.humanoid;
       }
     }
@@ -1031,17 +1121,43 @@ class _RoomChatState extends State<RoomChat> {
 
   Bot? _agentBotOf(RoomMessage m) {
     for (final b in widget.mentionable) {
-      if (b.id == m.senderId || b.accountId == m.senderId) return b;
+      if ((m.agentId.isNotEmpty &&
+              (b.id == m.agentId || b.accountId == m.agentId)) ||
+          b.id == m.senderId ||
+          b.accountId == m.senderId)
+        return b;
     }
     return null;
   }
 
+  /// Whether [m] was written by the signed-in user. Assistant/agent replies
+  /// can carry the user's own account id, so they never count as mine.
+  bool _isMine(RoomMessage m) {
+    if (m.senderId != widget.me) return false;
+    if (m.senderIsAgent) return false;
+    return !_senderOf(m).agent;
+  }
+
   ({String name, bool agent}) _senderOf(RoomMessage m) {
+    if (m.agentId.isNotEmpty) {
+      for (final b in widget.mentionable) {
+        if (b.id == m.agentId || b.accountId == m.agentId) {
+          return (name: b.name, agent: true);
+        }
+      }
+      return (
+        name: m.senderName.isNotEmpty && m.senderId != widget.me
+            ? m.senderName
+            : 'Aseman',
+        agent: true,
+      );
+    }
     var sender = _sender(m.senderId);
     if (m.senderName.isNotEmpty &&
         !widget.memberNames.containsKey(m.senderId) &&
         !widget.mentionable.any(
-            (b) => b.id == m.senderId || b.accountId == m.senderId)) {
+          (b) => b.id == m.senderId || b.accountId == m.senderId,
+        )) {
       sender = (name: m.senderName, agent: m.senderIsAgent);
     }
     return sender;
@@ -1055,28 +1171,36 @@ class _RoomChatState extends State<RoomChat> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
       decoration: BoxDecoration(
-          color: fg.withValues(alpha: .07),
-          borderRadius: BorderRadius.circular(8),
-          border: Border(left: BorderSide(color: scheme.primary, width: 3))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (original != null)
-          Text(
-              original.senderId == widget.me ? 'You' : _senderOf(original).name,
+        color: fg.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: scheme.primary, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (original != null)
+            Text(
+              _isMine(original) ? 'You' : _senderOf(original).name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: scheme.primary)),
-        Text(original == null ? 'An earlier message' : _quoteText(original),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: scheme.primary,
+              ),
+            ),
+          Text(
+            original == null ? 'An earlier message' : _quoteText(original),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                fontSize: 12,
-                fontStyle:
-                    original == null ? FontStyle.italic : FontStyle.normal,
-                color: fg.withValues(alpha: .75))),
-      ]),
+              fontSize: 12,
+              fontStyle: original == null ? FontStyle.italic : FontStyle.normal,
+              color: fg.withValues(alpha: .75),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1085,76 +1209,101 @@ class _RoomChatState extends State<RoomChat> {
   void _showAttachSheet([BuildContext? anchor]) {
     final scheme = Theme.of(context).colorScheme;
     showAppPicker<void>(
-        context: context,
-        anchor: anchor,
-        showDragHandle: false,
-        builder: (context) => SafeArea(
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Add to message',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: scheme.onSurfaceVariant)),
-                      const SizedBox(height: 12),
-                      Wrap(spacing: 10, runSpacing: 10, children: [
-                        _attachOption(Icons.photo_rounded, 'Photo / GIF', () {
-                          Navigator.pop(context);
-                          _pickFile(_imageTypes);
-                        }),
-                        _attachOption(Icons.videocam_rounded, 'Video', () {
-                          Navigator.pop(context);
-                          _pickFile(_videoTypes);
-                        }),
-                        _attachOption(Icons.audiotrack_rounded, 'Audio file',
-                            () {
-                          Navigator.pop(context);
-                          _pickFile(_audioTypes);
-                        }),
-                        _attachOption(
-                            Icons.insert_drive_file_rounded, 'Document', () {
-                          Navigator.pop(context);
-                          _pickFile(_documentTypes);
-                        }),
-                        // A folder of a project computer, in the prompt's
-                        // context; the agent works in it there.
-                        _attachOption(
-                            Icons.folder_shared_rounded, 'Project folder', () {
-                          Navigator.pop(context);
-                          _attachFolder();
-                        }),
-                        _attachOption(Icons.auto_awesome_rounded,
-                            'Design a message', () {
-                          Navigator.pop(context);
-                          _openDesigner();
-                        }),
-                      ]),
-                    ]))));
+      context: context,
+      anchor: anchor,
+      showDragHandle: false,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Add to message',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _attachOption(Icons.photo_rounded, 'Photo / GIF', () {
+                    Navigator.pop(context);
+                    _pickFile(_imageTypes);
+                  }),
+                  _attachOption(Icons.videocam_rounded, 'Video', () {
+                    Navigator.pop(context);
+                    _pickFile(_videoTypes);
+                  }),
+                  _attachOption(Icons.audiotrack_rounded, 'Audio file', () {
+                    Navigator.pop(context);
+                    _pickFile(_audioTypes);
+                  }),
+                  _attachOption(
+                    Icons.insert_drive_file_rounded,
+                    'Document',
+                    () {
+                      Navigator.pop(context);
+                      _pickFile(_documentTypes);
+                    },
+                  ),
+                  // A folder of a project computer, in the prompt's
+                  // context; the agent works in it there.
+                  _attachOption(
+                    Icons.folder_shared_rounded,
+                    'Project folder',
+                    () {
+                      Navigator.pop(context);
+                      _attachFolder();
+                    },
+                  ),
+                  _attachOption(
+                    Icons.auto_awesome_rounded,
+                    'Design a message',
+                    () {
+                      Navigator.pop(context);
+                      _openDesigner();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _attachOption(IconData icon, String label, VoidCallback onTap) {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
-        onTap: onTap,
-        borderRadius: AppShape.borderRadius(context, 16),
-        child: Container(
-            width: 96,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest,
-                borderRadius: AppShape.borderRadius(context, 16)),
-            child: Column(children: [
-              Icon(icon, color: AppColors.primaryOf(context), size: 26),
-              const SizedBox(height: 6),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700)),
-            ])));
+      onTap: onTap,
+      borderRadius: AppShape.borderRadius(context, 16),
+      child: Container(
+        width: 96,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: AppShape.borderRadius(context, 16),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primaryOf(context), size: 26),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   static const _imageTypes = [
@@ -1201,7 +1350,7 @@ class _RoomChatState extends State<RoomChat> {
         'opus',
         'webm',
         'aac',
-        'amr'
+        'amr',
       ],
     ),
   ];
@@ -1251,8 +1400,7 @@ class _RoomChatState extends State<RoomChat> {
   /// `spaces.message_send` for Directs still claims `direct_attachments`, so
   /// `spaces.file_upload` ids 400. Person↔person and person↔agent DMs both use
   /// this path.
-  bool get _useDmFileUpload =>
-      widget.direct && widget.peerId.isNotEmpty;
+  bool get _useDmFileUpload => widget.direct && widget.peerId.isNotEmpty;
 
   Future<void> _pickFile(List<XTypeGroup> types) async {
     final deps = widget.dependencies;
@@ -1269,30 +1417,42 @@ class _RoomChatState extends State<RoomChat> {
       final bytes = await picked.readAsBytes();
       if (bytes.isEmpty) return;
       final draft = _DraftAttachment(
-          name: picked.name, mime: _mimeFromName(picked.name), bytes: bytes);
+        name: picked.name,
+        mime: _mimeFromName(picked.name),
+        bytes: bytes,
+      );
       setState(() => _drafts.add(draft));
       await _uploadDraft(draft);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Read failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Read failed: $e')));
     }
   }
 
   Future<void> _attachFolder() async {
     final deps = widget.dependencies;
     if (deps == null) return;
-    final folder = await attachProjectFolder(context, deps,
-        initialSpace: widget.spaceId);
+    final folder = await attachProjectFolder(
+      context,
+      deps,
+      initialSpace: widget.spaceId,
+    );
     if (folder == null || !mounted) return;
     final ref = 'folder:${folder['id']}';
     if (_drafts.any((d) => d.fileId == ref)) return;
-    setState(() => _drafts.add(_DraftAttachment(
-        name: '${folder['name']}',
-        mime: 'inode/directory',
-        bytes: Uint8List(0))
-      ..fileId = ref
-      ..uploaded = true));
+    setState(
+      () => _drafts.add(
+        _DraftAttachment(
+            name: '${folder['name']}',
+            mime: 'inode/directory',
+            bytes: Uint8List(0),
+          )
+          ..fileId = ref
+          ..uploaded = true,
+      ),
+    );
   }
 
   Future<void> _uploadDraft(_DraftAttachment draft) async {
@@ -1351,9 +1511,7 @@ class _RoomChatState extends State<RoomChat> {
     } catch (e) {
       await recorder.dispose();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       return;
     }
     if (!mounted) {
@@ -1376,9 +1534,13 @@ class _RoomChatState extends State<RoomChat> {
       if (!mounted) return;
       if (!voiceLongEnough(file.durationMs)) {
         await _cancelVoiceMessage();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
             content: Text(
-                'That was too short. Tap the mic and speak, then send.')));
+              'That was too short. Tap the mic and speak, then send.',
+            ),
+          ),
+        );
         return;
       }
       setState(() {
@@ -1388,8 +1550,9 @@ class _RoomChatState extends State<RoomChat> {
     } catch (e) {
       await _cancelVoiceMessage();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Record failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Record failed: $e')));
     }
   }
 
@@ -1419,8 +1582,9 @@ class _RoomChatState extends State<RoomChat> {
         file = await recorder.stop();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Record failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Record failed: $e')));
         return;
       }
     }
@@ -1428,9 +1592,13 @@ class _RoomChatState extends State<RoomChat> {
     if (!voiceLongEnough(file.durationMs)) {
       await _cancelVoiceMessage();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('That was too short. Tap the mic and speak, then send.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That was too short. Tap the mic and speak, then send.',
+          ),
+        ),
+      );
       return;
     }
     setState(() {
@@ -1456,14 +1624,16 @@ class _RoomChatState extends State<RoomChat> {
       if (!draft.uploaded || draft.fileId.isEmpty) {
         throw StateError(draft.error ?? 'Upload failed');
       }
-      await widget.onSend?.call('', const [], [draft.fileId],
-          replyTo: _replyTo?.id ?? '');
+      await widget.onSend?.call('', const [], [
+        draft.fileId,
+      ], replyTo: _replyTo?.id ?? '');
       if (!mounted) return;
       setState(() => _replyTo = null);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Voice send failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Voice send failed: $e')));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1486,60 +1656,83 @@ class _RoomChatState extends State<RoomChat> {
   Widget _draftChip(_DraftAttachment d) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-        width: 160,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: AppShape.borderRadius(context, 12)),
-        child: Row(children: [
+      width: 160,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: AppShape.borderRadius(context, 12),
+      ),
+      child: Row(
+        children: [
           if (d.bytes.isNotEmpty && d.mime.startsWith('image/'))
             ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.memory(d.bytes,
-                    width: 30, height: 30, fit: BoxFit.cover))
+              borderRadius: BorderRadius.circular(6),
+              child: Image.memory(
+                d.bytes,
+                width: 30,
+                height: 30,
+                fit: BoxFit.cover,
+              ),
+            )
           else
             Icon(
-                d.mime == 'inode/directory'
-                    ? Icons.folder_shared_rounded
-                    : d.mime.startsWith('audio/')
-                    ? Icons.mic_rounded
-                    : d.mime.startsWith('video/')
-                        ? Icons.videocam_rounded
-                        : Icons.insert_drive_file_rounded,
-                size: 22,
-                color: AppColors.primaryOf(context)),
+              d.mime == 'inode/directory'
+                  ? Icons.folder_shared_rounded
+                  : d.mime.startsWith('audio/')
+                  ? Icons.mic_rounded
+                  : d.mime.startsWith('video/')
+                  ? Icons.videocam_rounded
+                  : Icons.insert_drive_file_rounded,
+              size: 22,
+              color: AppColors.primaryOf(context),
+            ),
           const SizedBox(width: 7),
           Expanded(
-              child: d.uploading
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : d.error != null
-                      ? Icon(Icons.error_outline_rounded,
-                          color: AppColors.dangerOf(context), size: 16)
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                              Text(d.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700)),
-                              Text('ready to send',
-                                  style: TextStyle(
-                                      fontSize: 8,
-                                      color: AppColors.successOf(context))),
-                            ])),
+            child: d.uploading
+                ? const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : d.error != null
+                ? Icon(
+                    Icons.error_outline_rounded,
+                    color: AppColors.dangerOf(context),
+                    size: 16,
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        d.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'ready to send',
+                        style: TextStyle(
+                          fontSize: 8,
+                          color: AppColors.successOf(context),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           const SizedBox(width: 3),
           IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 14,
-              onPressed: () => _removeDraft(d),
-              icon: const Icon(Icons.close_rounded)),
-        ]));
+            visualDensity: VisualDensity.compact,
+            iconSize: 14,
+            onPressed: () => _removeDraft(d),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _olderLoading() {
@@ -1553,31 +1746,39 @@ class _RoomChatState extends State<RoomChat> {
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : const SizedBox(height: 18),
       ),
     );
   }
 
   List<Widget> _messageChildren(
-      BuildContext context, List<RoomMessage> messages, Widget? working,
-      {bool withHeader = false}) {
+    BuildContext context,
+    List<RoomMessage> messages,
+    Widget? working, {
+    bool withHeader = false,
+  }) {
     return [
-      if (withHeader) ...[
-        _chatHeader(),
-        const SizedBox(height: 10),
-      ],
+      if (withHeader) ...[_chatHeader(), const SizedBox(height: 10)],
       if (widget.hasMore || widget.loadingOlder) _olderLoading(),
       if (messages.isEmpty && working == null && widget.typing.isEmpty)
         (widget.loading
             ? const SkeletonMessages(
-                count: 5, scrollable: false, padding: EdgeInsets.zero)
+                count: 5,
+                scrollable: false,
+                padding: EdgeInsets.zero,
+              )
             : const _NoMessages())
       else ...[
         ...List.generate(
-            messages.length,
-            (i) => _chatBubble(context, messages[i],
-                previous: i == 0 ? null : messages[i - 1])),
+          messages.length,
+          (i) => _chatBubble(
+            context,
+            messages[i],
+            previous: i == 0 ? null : messages[i - 1],
+          ),
+        ),
         if (working != null) working,
         if (widget.typing.isNotEmpty) _typingRow(),
       ],
@@ -1605,23 +1806,24 @@ class _RoomChatState extends State<RoomChat> {
       chrome.openWork = work == null
           ? null
           : () => showRoomWork(
-                context,
-                work,
-                onRunAgain: widget.onSend == null ? null : _runAgain,
-              );
+              context,
+              work,
+              onRunAgain: widget.onSend == null ? null : _runAgain,
+            );
       chrome.openRoutines = deps == null
           ? null
           : () => showRoutinesSheet(
-                context,
-                deps,
-                widget.spaceId,
-                widget.roomId,
-                widget.room,
-              );
+              context,
+              deps,
+              widget.spaceId,
+              widget.roomId,
+              widget.room,
+            );
     }
     // Show the conversation chronologically (oldest→newest). message_list
     // returns newest-first, so sort by createdAt with the id as a tiebreaker.
-    final messages = [..._visibleMessages]..sort((a, b) {
+    final messages = [..._visibleMessages]
+      ..sort((a, b) {
         final c = a.createdAt.compareTo(b.createdAt);
         return c != 0 ? c : a.id.compareTo(b.id);
       });
@@ -1637,48 +1839,70 @@ class _RoomChatState extends State<RoomChat> {
     if (widget.flat) {
       final bottomPad = 72 + widget.bottomContentInset;
       return _Panel(
-          flat: true,
-          child: Stack(children: [
+        flat: true,
+        child: Stack(
+          children: [
             Positioned.fill(
-                child: CustomPaint(
-              painter: _ChatPatternPainter(
-                  Theme.of(context).colorScheme.primary, widget.room),
-              child: _messageList(
+              child: CustomPaint(
+                painter: _ChatPatternPainter(
+                  Theme.of(context).colorScheme.primary,
+                  widget.room,
+                ),
+                child: _messageList(
                   padding: EdgeInsets.fromLTRB(
-                      12, widget.topContentInset, 12, bottomPad),
-                  children: _messageChildren(context, messages, working,
-                      withHeader: widget.showListHeader)),
-            )),
+                    12,
+                    widget.topContentInset,
+                    12,
+                    bottomPad,
+                  ),
+                  children: _messageChildren(
+                    context,
+                    messages,
+                    working,
+                    withHeader: widget.showListHeader,
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               left: 10,
               right: 10,
               bottom: 10 + widget.bottomContentInset,
               child: _composer(),
             ),
-          ]));
+          ],
+        ),
+      );
     }
     return _Panel(
       flat: widget.flat || widget.bare,
-      child: Column(children: [
-        _chatHeader(),
-        Expanded(
+      child: Column(
+        children: [
+          _chatHeader(),
+          Expanded(
             child: CustomPaint(
-          painter: _ChatPatternPainter(
-              Theme.of(context).colorScheme.primary, widget.room),
-          child: messages.isEmpty &&
-                  widget.typing.isEmpty &&
-                  working == null &&
-                  !widget.loadingOlder &&
-                  !widget.loading
-              ? const _NoMessages()
-              : messages.isEmpty && widget.loading
+              painter: _ChatPatternPainter(
+                Theme.of(context).colorScheme.primary,
+                widget.room,
+              ),
+              child:
+                  messages.isEmpty &&
+                      widget.typing.isEmpty &&
+                      working == null &&
+                      !widget.loadingOlder &&
+                      !widget.loading
+                  ? const _NoMessages()
+                  : messages.isEmpty && widget.loading
                   ? const SkeletonMessages()
                   : _messageList(
                       padding: const EdgeInsets.all(12),
-                      children: _messageChildren(context, messages, working)),
-        )),
-        Padding(padding: const EdgeInsets.all(10), child: _composer()),
-      ]),
+                      children: _messageChildren(context, messages, working),
+                    ),
+            ),
+          ),
+          Padding(padding: const EdgeInsets.all(10), child: _composer()),
+        ],
+      ),
     );
   }
 
@@ -1690,31 +1914,39 @@ class _RoomChatState extends State<RoomChat> {
     final draft = work?.drafting;
     if (draft != null) {
       return _WorkingIndicator(
-          agent: draft.agent, draft: draft.draft, waiting: waiting);
+        agent: draft.agent,
+        draft: draft.draft,
+        waiting: waiting,
+      );
     }
     final activity = work?.activity ?? const <LiveActivity>[];
     if (activity.isNotEmpty) {
       return _WorkingIndicator(
-          agent: activity.first.agent,
-          detail: activity.first.detail,
-          waiting: waiting);
+        agent: activity.first.agent,
+        detail: activity.first.detail,
+        waiting: waiting,
+      );
     }
     final running = work?.running ?? const <WorkRun>[];
     if (running.isNotEmpty) {
       return _WorkingIndicator(
-          agent: running.first.botName,
-          detail: widget.workingDetail,
-          waiting: waiting);
+        agent: running.first.botName,
+        detail: widget.workingDetail,
+        waiting: waiting,
+      );
     }
     if (waiting > 0) {
       return _WorkingIndicator(
-          agent: work!.queued.first.botName,
-          detail: 'waiting to start',
-          waiting: waiting - 1);
+        agent: work!.queued.first.botName,
+        detail: 'waiting to start',
+        waiting: waiting - 1,
+      );
     }
     if (widget.working.isNotEmpty) {
       return _WorkingIndicator(
-          agent: widget.working, detail: widget.workingDetail);
+        agent: widget.working,
+        detail: widget.workingDetail,
+      );
     }
     return null;
   }
@@ -1725,15 +1957,18 @@ class _RoomChatState extends State<RoomChat> {
     final who = names.length == 1
         ? '${names.first} is typing…'
         : names.length == 2
-            ? '${names[0]} and ${names[1]} are typing…'
-            : 'Several people are typing…';
+        ? '${names[0]} and ${names[1]} are typing…'
+        : 'Several people are typing…';
     return Padding(
       padding: const EdgeInsets.fromLTRB(42, 8, 12, 4),
-      child: Text(who,
-          style: TextStyle(
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-              color: scheme.onSurfaceVariant)),
+      child: Text(
+        who,
+        style: TextStyle(
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 
@@ -1956,22 +2191,26 @@ class _RoomChatState extends State<RoomChat> {
   /// Uniform gap between composer icon buttons (and the field).
   static const double _composerIconGap = AppSpacing.xs;
 
-  ButtonStyle _composerIconStyle({Color? backgroundColor, Color? foregroundColor}) =>
-      IconButton.styleFrom(
-        backgroundColor: backgroundColor,
-        foregroundColor: foregroundColor,
-        minimumSize: const Size(_composerIconSize, _composerIconSize),
-        maximumSize: const Size(_composerIconSize, _composerIconSize),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-      );
+  ButtonStyle _composerIconStyle({
+    Color? backgroundColor,
+    Color? foregroundColor,
+  }) => IconButton.styleFrom(
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+    minimumSize: const Size(_composerIconSize, _composerIconSize),
+    maximumSize: const Size(_composerIconSize, _composerIconSize),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    padding: EdgeInsets.zero,
+    visualDensity: VisualDensity.compact,
+  );
 
-  ButtonStyle _composerSendStyle({Color? backgroundColor, Color? foregroundColor}) =>
-      _composerIconStyle(
-        backgroundColor: backgroundColor,
-        foregroundColor: foregroundColor,
-      );
+  ButtonStyle _composerSendStyle({
+    Color? backgroundColor,
+    Color? foregroundColor,
+  }) => _composerIconStyle(
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+  );
 
   Widget _composer() {
     final scheme = Theme.of(context).colorScheme;
@@ -1982,20 +2221,26 @@ class _RoomChatState extends State<RoomChat> {
         constraints: const BoxConstraints(minHeight: _composerHeight),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-            color: shell.color,
-            borderRadius: shell.radius),
-        child: Row(children: [
-          Icon(Icons.block_rounded, size: 18, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Text(notice,
-                  style:
-                      TextStyle(fontSize: 13, color: scheme.onSurfaceVariant))),
-        ]),
+          color: shell.color,
+          borderRadius: shell.radius,
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.block_rounded, size: 18, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                notice,
+                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
       );
     }
     final work = _work;
-    final hasChrome = _drafts.isNotEmpty ||
+    final hasChrome =
+        _drafts.isNotEmpty ||
         _mentions.isNotEmpty ||
         _editing != null ||
         _replyTo != null ||
@@ -2005,118 +2250,146 @@ class _RoomChatState extends State<RoomChat> {
         _voicePhase != null;
     final inputRow = _composerInputRow(scheme);
     final box = Material(
-        color: shell.color,
-        elevation: shell.elevation,
-        shadowColor: Colors.black.withValues(alpha: .25),
-        borderRadius: shell.radius,
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: math.max(6.0, shell.padding.left * 0.75),
-              vertical: hasChrome ? 6 : 0,
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (_drafts.isNotEmpty)
-                Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
-                    child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final d in _drafts) _draftChip(d)
-                            ]))),
-              if (_mentions.isNotEmpty)
-                Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
-                    child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(spacing: 6, runSpacing: 4, children: [
-                          for (final id in _mentions)
-                            InputChip(
-                                visualDensity: VisualDensity.compact,
-                                shape: const StadiumBorder(),
-                                avatar: const Icon(Icons.smart_toy_outlined,
-                                    size: 16),
-                                label: Text('@${_mentionNames[id] ?? id}',
-                                    style: const TextStyle(fontSize: 12)),
-                                onDeleted: () => _removeMention(id)),
-                        ]))),
-              if (_editing != null || _replyTo != null) _composerBanner(),
-              if (_editing == null &&
-                  _voicePhase == null &&
-                  PromptCommandSuggestions.matches(input.text))
-                PromptCommandSuggestions(
-                    typed: input.text, onPick: _pickCommand),
-              if (_voicePhase != null)
-                VoiceRecorderBar(
-                  phase: _voicePhase!,
-                  startedAt: _voiceStartedAt,
-                  level: () => _voiceRecorder?.level ?? 0,
-                  file: _voiceFile,
-                  onStop: () => unawaited(_stopVoiceForPreview()),
-                  onCancel: () => unawaited(_cancelVoiceMessage()),
-                  onSend: () => unawaited(_sendVoiceMessage()),
-                  onLimit: () => unawaited(_stopVoiceForPreview()),
-                )
-              else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: _composerHeight),
-                  child: inputRow,
+      color: shell.color,
+      elevation: shell.elevation,
+      shadowColor: Colors.black.withValues(alpha: .25),
+      borderRadius: shell.radius,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: math.max(6.0, shell.padding.left * 0.75),
+          vertical: hasChrome ? 6 : 0,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_drafts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [for (final d in _drafts) _draftChip(d)],
+                  ),
                 ),
-            ])));
+              ),
+            if (_mentions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final id in _mentions)
+                        InputChip(
+                          visualDensity: VisualDensity.compact,
+                          shape: const StadiumBorder(),
+                          avatar: const Icon(
+                            Icons.smart_toy_outlined,
+                            size: 16,
+                          ),
+                          label: Text(
+                            '@${_mentionNames[id] ?? id}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          onDeleted: () => _removeMention(id),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_editing != null || _replyTo != null) _composerBanner(),
+            if (_editing == null &&
+                _voicePhase == null &&
+                PromptCommandSuggestions.matches(input.text))
+              PromptCommandSuggestions(typed: input.text, onPick: _pickCommand),
+            if (_voicePhase != null)
+              VoiceRecorderBar(
+                phase: _voicePhase!,
+                startedAt: _voiceStartedAt,
+                level: () => _voiceRecorder?.level ?? 0,
+                file: _voiceFile,
+                onStop: () => unawaited(_stopVoiceForPreview()),
+                onCancel: () => unawaited(_cancelVoiceMessage()),
+                onSend: () => unawaited(_sendVoiceMessage()),
+                onLimit: () => unawaited(_stopVoiceForPreview()),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: _composerHeight),
+                child: inputRow,
+              ),
+          ],
+        ),
+      ),
+    );
     final deps = widget.dependencies;
     final banner = widget.suggestions && deps != null
         ? Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: SuggestionBanner(
-                dependencies: deps,
-                onOpenTasks: () => showTasksPanel(context, deps)),
+              dependencies: deps,
+              onOpenTasks: () => showTasksPanel(context, deps),
+            ),
           )
         : null;
     if (work == null && banner == null) return box;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      if (banner != null) banner,
-      if (work != null)
-        RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
-      box,
-    ]);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (banner != null) banner,
+        if (work != null)
+          RoomWorkNeeds(work: work, onAnswer: _answer, onRunAgain: _runAgain),
+        box,
+      ],
+    );
   }
 
   /// One-row bar: attach / mention, the text field, mic and send.
   Widget _composerInputRow(ColorScheme scheme) {
     final canAttach = !_sending;
     final actions = [
-      _composerAction(Icons.add_rounded, 'Attach file',
-          canAttach ? (ctx) => _showAttachSheet(ctx) : null),
-      _composerAction(Icons.alternate_email_rounded, 'Mention an agent',
-          (ctx) => _pickMention(ctx)),
+      _composerAction(
+        Icons.add_rounded,
+        'Attach file',
+        canAttach ? (ctx) => _showAttachSheet(ctx) : null,
+      ),
+      _composerAction(
+        Icons.alternate_email_rounded,
+        'Mention an agent',
+        (ctx) => _pickMention(ctx),
+      ),
     ];
     final field = TextField(
-        controller: input,
-        enabled: !_sending,
-        onSubmitted: _submit,
-        onChanged: _typed,
-        minLines: 1,
-        maxLines: 5,
-        textInputAction: TextInputAction.send,
-        style: const TextStyle(fontSize: 15),
-        decoration: InputDecoration(
-            hintText: (_work?.questions.isNotEmpty ?? false)
-                ? 'Answer ${_work!.questions.first.agent}…'
-                : widget.hint,
-            hintMaxLines: 1,
-            filled: false,
-            isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            disabledBorder: InputBorder.none));
+      controller: input,
+      enabled: !_sending,
+      onSubmitted: _submit,
+      onChanged: _typed,
+      minLines: 1,
+      maxLines: 5,
+      textInputAction: TextInputAction.send,
+      style: const TextStyle(fontSize: 15),
+      decoration: InputDecoration(
+        hintText: (_work?.questions.isNotEmpty ?? false)
+            ? 'Answer ${_work!.questions.first.agent}…'
+            : widget.hint,
+        hintMaxLines: 1,
+        filled: false,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+      ),
+    );
     // While agents work, an empty composer's button stops them.
-    final stop = _busy &&
+    final stop =
+        _busy &&
         !_sending &&
         _editing == null &&
         input.text.trim().isEmpty &&
@@ -2125,37 +2398,40 @@ class _RoomChatState extends State<RoomChat> {
     final Widget send;
     if (stop) {
       send = IconButton.filled(
-          tooltip: 'Stop the work in progress',
-          style: _composerSendStyle(
-              backgroundColor: scheme.error, foregroundColor: scheme.onError),
-          onPressed: (_work?.stopping ?? false) ? null : _stopWork,
-          icon: const Icon(Icons.stop_rounded, size: 20));
+        tooltip: 'Stop the work in progress',
+        style: _composerSendStyle(
+          backgroundColor: scheme.error,
+          foregroundColor: scheme.onError,
+        ),
+        onPressed: (_work?.stopping ?? false) ? null : _stopWork,
+        icon: const Icon(Icons.stop_rounded, size: 20),
+      );
     } else if (recordVoice) {
       // Empty composer: filled mic records a voice note (not STT).
       send = IconButton.filled(
-          tooltip: 'Record a voice message',
-          style: _composerSendStyle(),
-          onPressed: _sending ? null : () => unawaited(_startVoiceMessage()),
-          icon: const Icon(Icons.mic_rounded, size: 20));
+        tooltip: 'Record a voice message',
+        style: _composerSendStyle(),
+        onPressed: _sending ? null : () => unawaited(_startVoiceMessage()),
+        icon: const Icon(Icons.mic_rounded, size: 20),
+      );
     } else {
       send = IconButton.filled(
-          tooltip: 'Send',
-          style: _composerSendStyle(),
-          onPressed: _sending ? null : () => _submit(input.text),
-          icon: _sending
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.send_rounded, size: 20));
+        tooltip: 'Send',
+        style: _composerSendStyle(),
+        onPressed: _sending ? null : () => _submit(input.text),
+        icon: _sending
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.send_rounded, size: 20),
+      );
     }
     final deps = widget.dependencies;
     // Hide STT while the empty-composer mic means "voice note", so tapping
     // the microphone always records a message instead of calling dictate.
-    final dictate = deps == null ||
-            _sending ||
-            _editing != null ||
-            recordVoice
+    final dictate = deps == null || _sending || _editing != null || recordVoice
         ? null
         : DictationButton(
             dependencies: deps,
@@ -2163,37 +2439,47 @@ class _RoomChatState extends State<RoomChat> {
             style: _composerIconStyle(),
           );
     return Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        spacing: _composerIconGap,
-        children: [
-          ...actions,
-          Expanded(child: field),
-          if (dictate != null) dictate,
-          send,
-        ]);
+      crossAxisAlignment: CrossAxisAlignment.center,
+      spacing: _composerIconGap,
+      children: [
+        ...actions,
+        Expanded(child: field),
+        if (dictate != null) dictate,
+        send,
+      ],
+    );
   }
 
   /// Puts dictated text where the cursor is; the person sends it.
   void _dictated(String text) {
     final value = input.value;
-    final at = value.selection.isValid ? value.selection.start : value.text.length;
-    final end = value.selection.isValid ? value.selection.end : value.text.length;
+    final at = value.selection.isValid
+        ? value.selection.start
+        : value.text.length;
+    final end = value.selection.isValid
+        ? value.selection.end
+        : value.text.length;
     final before = value.text.substring(0, at);
     final spaced = before.isEmpty || before.endsWith(' ') ? text : ' $text';
     input.value = TextEditingValue(
-        text: before + spaced + value.text.substring(end),
-        selection: TextSelection.collapsed(offset: at + spaced.length));
+      text: before + spaced + value.text.substring(end),
+      selection: TextSelection.collapsed(offset: at + spaced.length),
+    );
     _typed(input.text);
   }
 
   Widget _composerAction(
-          IconData icon, String tooltip, void Function(BuildContext)? onTap) =>
-      Builder(
-          builder: (ctx) => IconButton(
-              tooltip: tooltip,
-              style: _composerIconStyle(),
-              onPressed: onTap == null ? null : () => onTap(ctx),
-              icon: Icon(icon, size: 20)));
+    IconData icon,
+    String tooltip,
+    void Function(BuildContext)? onTap,
+  ) => Builder(
+    builder: (ctx) => IconButton(
+      tooltip: tooltip,
+      style: _composerIconStyle(),
+      onPressed: onTap == null ? null : () => onTap(ctx),
+      icon: Icon(icon, size: 20),
+    ),
+  );
 
   // Resolves a sender id to a display name: the agents in the workspace are
   // known by name, other members fall back to a short id.
@@ -2208,12 +2494,15 @@ class _RoomChatState extends State<RoomChat> {
     if (id.isEmpty) return (name: 'Unknown', agent: false);
     return (
       name: id.length > 8 ? 'Member ${id.substring(id.length - 4)}' : id,
-      agent: false
+      agent: false,
     );
   }
 
-  Widget _chatBubble(BuildContext context, RoomMessage m,
-      {RoomMessage? previous}) {
+  Widget _chatBubble(
+    BuildContext context,
+    RoomMessage m, {
+    RoomMessage? previous,
+  }) {
     // Microtool replies (kind tool) are for the desk / command path —
     // never list them in chat (they are not conversation).
     if (m.kind == 'tool') {
@@ -2231,177 +2520,225 @@ class _RoomChatState extends State<RoomChat> {
       );
     }
     final scheme = Theme.of(context).colorScheme;
-    final mine = m.senderId == widget.me;
+    final mine = _isMine(m);
     // Consecutive messages from the same sender are grouped: only the first
     // one shows the sender, and the group sits tighter together.
-    final continued = previous != null &&
+    final continued =
+        previous != null &&
         previous.kind != 'log' &&
         previous.senderId == m.senderId &&
+        previous.senderIsAgent == m.senderIsAgent &&
         m.createdAt.difference(previous.createdAt).inMinutes.abs() < 5;
     final time = _msgTime(m.createdAt);
     final deps = widget.dependencies;
     final sender = _senderOf(m);
-    final seen = mine &&
+    final seen =
+        mine &&
         widget.receipts &&
         widget.peerSeenAt != null &&
         !m.createdAt.isAfter(widget.peerSeenAt!);
     final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
     final bubble = Container(
-        padding: ThemeChrome.chatBubblePadding(context),
-        decoration: ThemeChrome.chatBubble(
-          context,
-          mine: mine,
-          continued: continued,
-        ),
-        child: DefaultTextStyle.merge(
-            style: TextStyle(color: fg, fontSize: 14, height: 1.4),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (m.replyTo.isNotEmpty) _quote(m, fg),
-              if (m.attachments.isNotEmpty)
-                ...m.attachments.map((f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: AttachmentBubble(
-                        file: f,
-                        headers: deps?.service.authHeaders() ?? const {},
-                        resolveUrl: deps == null
-                            ? null
-                            : (file) => deps.service.fileContentUrl(file.id),
-                        fetchBytes: (file) =>
-                            deps?.service.downloadFile(file.id) ??
-                            Future.value(Uint8List(0)),
-                        mine: mine,
-                      ),
-                    )),
-              if (m.body.trim().isNotEmpty) ..._agUiBody(context, m, deps, fg),
-              // A gateway proxy message gets an "open in webview" button
-              // so the room's users can view the page served from the
-              // sandbox behind it.
-              if (deps != null && _proxyPathIn(m.body) != null)
-                Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: _ProxyOpenButton(
-                        title: _proxyTitle(m.body) ?? 'Sandbox service',
-                        service: deps.service,
-                        page: _proxyPathIn(m.body) ?? '')),
-              _reactionChips(m, fg),
-              const SizedBox(height: 2),
-              Row(mainAxisSize: MainAxisSize.min, children: [
+      padding: ThemeChrome.chatBubblePadding(context),
+      decoration: ThemeChrome.chatBubble(
+        context,
+        mine: mine,
+        continued: continued,
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: fg, fontSize: 14, height: 1.4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (m.replyTo.isNotEmpty) _quote(m, fg),
+            if (m.attachments.isNotEmpty)
+              ...m.attachments.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: AttachmentBubble(
+                    file: f,
+                    headers: deps?.service.authHeaders() ?? const {},
+                    resolveUrl: deps == null
+                        ? null
+                        : (file) => deps.service.fileContentUrl(file.id),
+                    fetchBytes: (file) =>
+                        deps?.service.downloadFile(file.id) ??
+                        Future.value(Uint8List(0)),
+                    mine: mine,
+                  ),
+                ),
+              ),
+            if (m.body.trim().isNotEmpty) ..._agUiBody(context, m, deps, fg),
+            // A gateway proxy message gets an "open in webview" button
+            // so the room's users can view the page served from the
+            // sandbox behind it.
+            if (deps != null && _proxyPathIn(m.body) != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _ProxyOpenButton(
+                  title: _proxyTitle(m.body) ?? 'Sandbox service',
+                  service: deps.service,
+                  page: _proxyPathIn(m.body) ?? '',
+                ),
+              ),
+            _reactionChips(m, fg),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 if (m.edited)
                   _EditedLabel(
                     time: time,
                     color: fg.withValues(alpha: .65),
                     onTap: deps == null
                         ? null
-                        : () => showMessageEditHistory(context,
-                            service: deps.service, message: m),
+                        : () => showMessageEditHistory(
+                            context,
+                            service: deps.service,
+                            message: m,
+                          ),
                   )
                 else
-                  Text(time,
-                      style: TextStyle(
-                          fontSize: 10, color: fg.withValues(alpha: .65))),
+                  Text(
+                    time,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: fg.withValues(alpha: .65),
+                    ),
+                  ),
                 // In a direct chat, the caller's messages show whether the
                 // other side has read them.
                 if (mine && widget.receipts) ...[
                   const SizedBox(width: 3),
-                  Icon(seen ? Icons.done_all_rounded : Icons.done_rounded,
-                      size: 13,
-                      semanticLabel: seen ? 'Seen' : 'Sent',
-                      color: seen ? scheme.primary : fg.withValues(alpha: .65)),
+                  Icon(
+                    seen ? Icons.done_all_rounded : Icons.done_rounded,
+                    size: 13,
+                    semanticLabel: seen ? 'Seen' : 'Sent',
+                    color: seen ? scheme.primary : fg.withValues(alpha: .65),
+                  ),
                 ],
-              ]),
-            ])));
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
     final avatar = SizedBox(
-        width: 36,
-        child: continued
-            ? null
-            : sender.agent
-                ? BotAvatar(
-                    bot: _agentBotOf(m) ??
-                        Bot(
-                          id: _agentPrefsId(m),
-                          ownerId: '',
-                          accountId: m.senderId,
-                          name: sender.name,
-                          vmType: '',
-                          status: '',
-                          avatar: _avatarOf(m),
-                          humanoid: _agentHumanoidOf(m),
-                        ),
-                    radius: 15,
-                    userId: widget.me,
-                  )
-                : Builder(builder: (context) {
-                    const radius = 15.0;
-                    final faceSize = radius * 2;
-                    final corners = context.avatarBorderRadius(faceSize);
-                    final picture = Avatars.of(_avatarOf(m));
-                    return HaloRing(
-                      identity: HaloRingCache.person(m.senderId),
-                      accent: scheme.secondary,
-                      borderRadius: corners,
-                      child: AvatarFace(
-                        size: faceSize,
-                        borderRadius: corners,
-                        foregroundImage: picture,
-                        onImageError:
-                            picture == null ? null : (_, __) {},
-                        backgroundColor: ThemeRoles.wellFill(context),
-                        child: Icon(Icons.person_rounded,
-                            size: 17, color: ThemeRoles.wellInk(context)),
-                      ),
-                    );
-                  }));
+      width: 36,
+      child: continued
+          ? null
+          : sender.agent
+          ? BotAvatar(
+              bot:
+                  _agentBotOf(m) ??
+                  Bot(
+                    id: _agentPrefsId(m),
+                    ownerId: '',
+                    accountId: m.senderId,
+                    name: sender.name,
+                    vmType: '',
+                    status: '',
+                    avatar: _avatarOf(m),
+                    humanoid: _agentHumanoidOf(m),
+                  ),
+              radius: 15,
+              userId: widget.me,
+            )
+          : Builder(
+              builder: (context) {
+                const radius = 15.0;
+                final faceSize = radius * 2;
+                final corners = context.avatarBorderRadius(faceSize);
+                final picture = Avatars.of(_avatarOf(m));
+                return HaloRing(
+                  identity: HaloRingCache.person(m.senderId),
+                  accent: scheme.secondary,
+                  borderRadius: corners,
+                  child: AvatarFace(
+                    size: faceSize,
+                    borderRadius: corners,
+                    foregroundImage: picture,
+                    onImageError: picture == null ? null : (_, __) {},
+                    backgroundColor: ThemeRoles.wellFill(context),
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 17,
+                      color: ThemeRoles.wellInk(context),
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
     return Padding(
-        padding: EdgeInsets.only(top: continued ? 2 : 10),
-        child: Row(
-            mainAxisAlignment:
-                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (mine) const SizedBox(width: 32),
-              if (!mine) ...[avatar, const SizedBox(width: 8)],
-              Flexible(
-                  child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 380),
-                      child: Column(
-                          crossAxisAlignment: mine
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          children: [
-                            if (!mine && !continued)
-                              Padding(
-                                  padding:
-                                      const EdgeInsets.only(left: 4, bottom: 3),
-                                  child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                            child: Text(sender.name,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: sender.agent
-                                                        ? scheme.tertiary
-                                                        : scheme.primary))),
-                                        if (sender.agent) ...[
-                                          const SizedBox(width: 6),
-                                          MiniTag('AI', scheme.tertiary),
-                                        ],
-                                      ])),
-                            Builder(
-                                builder: (bubbleCtx) => GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onLongPressStart: (d) => _messageMenu(m,
-                                        at: d.globalPosition, anchor: bubbleCtx),
-                                    onSecondaryTapDown: (d) => _messageMenu(m,
-                                        at: d.globalPosition, anchor: bubbleCtx),
-                                    child: bubble)),
-                          ]))),
-              SizedBox(width: mine ? 4 : 12),
-            ]));
+      padding: EdgeInsets.only(top: continued ? 2 : 10),
+      child: Row(
+        mainAxisAlignment: mine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (mine) const SizedBox(width: 32),
+          if (!mine) ...[avatar, const SizedBox(width: 8)],
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(
+                crossAxisAlignment: mine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (!mine && !continued)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              sender.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: sender.agent
+                                    ? scheme.tertiary
+                                    : scheme.primary,
+                              ),
+                            ),
+                          ),
+                          if (sender.agent) ...[
+                            const SizedBox(width: 6),
+                            MiniTag('AI', scheme.tertiary),
+                          ],
+                        ],
+                      ),
+                    ),
+                  Builder(
+                    builder: (bubbleCtx) => GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPressStart: (d) => _messageMenu(
+                        m,
+                        at: d.globalPosition,
+                        anchor: bubbleCtx,
+                      ),
+                      onSecondaryTapDown: (d) => _messageMenu(
+                        m,
+                        at: d.globalPosition,
+                        anchor: bubbleCtx,
+                      ),
+                      child: bubble,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(width: mine ? 4 : 12),
+        ],
+      ),
+    );
   }
 
   static String _msgTime(DateTime t) =>
@@ -2409,66 +2746,96 @@ class _RoomChatState extends State<RoomChat> {
 
   /// Caption markdown + AG-UI surface (if the body carries an `agui` fence).
   List<Widget> _agUiBody(
-      BuildContext context, RoomMessage m, AppDependencies? deps, Color fg) {
+    BuildContext context,
+    RoomMessage m,
+    AppDependencies? deps,
+    Color fg,
+  ) {
     try {
       final offered = parseReplies(m.body);
       final parsed = parseAgUiBody(offered.text);
       final out = <Widget>[];
       final surface = parsed.surface;
       if (surface != null && surface.root != null) {
-        out.add(Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _withActions(
-            deps,
-            AgUiSurfaceView(
-              surface: surface,
-              onReply: widget.onSend == null
-                  ? null
-                  : (value, {meta}) {
-                      widget.onSend!(value, const [], const [], replyTo: m.id);
-                    },
+        out.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _withActions(
+              deps,
+              AgUiSurfaceView(
+                surface: surface,
+                onReply: widget.onSend == null
+                    ? null
+                    : (value, {meta}) {
+                        widget.onSend!(
+                          value,
+                          const [],
+                          const [],
+                          replyTo: m.id,
+                        );
+                      },
+              ),
             ),
           ),
-        ));
+        );
       }
       if (parsed.caption.trim().isNotEmpty) {
-        out.add(RichPostContent(parsed.caption,
+        out.add(
+          RichPostContent(
+            parsed.caption,
             headers: deps?.service.authHeaders() ?? const {},
             resolveUrl: deps?.service.resolveContentUrl,
             onLinkTap: deps == null
                 ? null
-                : (link) => openWorkspaceLink(context, deps.service, link)));
-      } else if (surface == null &&
-          offered.text.trim().isNotEmpty) {
+                : (link) => openWorkspaceLink(context, deps.service, link),
+          ),
+        );
+      } else if (surface == null && offered.text.trim().isNotEmpty) {
         // No fence — original markdown body.
-        out.add(RichPostContent(offered.text,
+        out.add(
+          RichPostContent(
+            offered.text,
             headers: deps?.service.authHeaders() ?? const {},
             resolveUrl: deps?.service.resolveContentUrl,
             onLinkTap: deps == null
                 ? null
-                : (link) => openWorkspaceLink(context, deps.service, link)));
+                : (link) => openWorkspaceLink(context, deps.service, link),
+          ),
+        );
       }
       if (offered.replies.isNotEmpty &&
           m.id == _repliesFor &&
           widget.onSend != null) {
-        out.add(Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final reply in offered.replies)
-              ActionChip(
-                label: Text(reply),
-                onPressed: () =>
-                    widget.onSend!(reply, const [], const [], replyTo: m.id),
-              ),
-          ]),
-        ));
+        out.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final reply in offered.replies)
+                  ActionChip(
+                    label: Text(reply),
+                    onPressed: () => widget.onSend!(
+                      reply,
+                      const [],
+                      const [],
+                      replyTo: m.id,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
       }
       return out;
     } catch (_) {
       // Never let one bad body grey out the whole message list.
       final plain = m.body.replaceAll(RegExp(r'\s+'), ' ').trim();
       if (plain.isEmpty) return const [];
-      return [Text(plain, style: TextStyle(color: fg, fontSize: 14, height: 1.4))];
+      return [
+        Text(plain, style: TextStyle(color: fg, fontSize: 14, height: 1.4)),
+      ];
     }
   }
 
@@ -2588,8 +2955,11 @@ String? _proxyTitle(String body) {
 // _ProxyOpenButton opens the proxied sandbox page. On web the page is opened in
 // a new browser tab (reliable); on native platforms it opens the in-app webview.
 class _ProxyOpenButton extends StatelessWidget {
-  const _ProxyOpenButton(
-      {required this.title, required this.service, required this.page});
+  const _ProxyOpenButton({
+    required this.title,
+    required this.service,
+    required this.page,
+  });
 
   final String title;
   final AsemanService service;
@@ -2600,9 +2970,13 @@ class _ProxyOpenButton extends StatelessWidget {
       await openWorkspacePage(context, service, page, title: title);
     } catch (_) {
       if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
             content: Text(
-                'Could not open preview. Try again or download the delivered files.')));
+              'Could not open preview. Try again or download the delivered files.',
+            ),
+          ),
+        );
     }
   }
 
@@ -2620,18 +2994,21 @@ class _ProxyOpenButton extends StatelessWidget {
           onTap: () => _open(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
                   switch (target) {
                     WorkspacePageTarget.desk => Icons.dashboard_rounded,
                     WorkspacePageTarget.screen => Icons.open_in_browser_rounded,
                     WorkspacePageTarget.browser => Icons.open_in_new_rounded,
                   },
                   size: 16,
-                  color: scheme.onPrimary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
+                  color: scheme.onPrimary,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
                     switch (target) {
                       WorkspacePageTarget.desk => 'Open on the desk',
                       WorkspacePageTarget.screen => 'Open page',
@@ -2640,11 +3017,14 @@ class _ProxyOpenButton extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: scheme.onPrimary)),
-              ),
-            ]),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2661,24 +3041,35 @@ class _NoMessages extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
                 color: ThemeRoles.wellFill(context),
-                borderRadius: BorderRadius.circular(AppShape.innerOf(context))),
-            child: Icon(Icons.forum_rounded,
-                size: 30, color: ThemeRoles.wellInk(context)),
-          ),
-          const SizedBox(height: 14),
-          const Text('No messages yet',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('Say hello, or mention an agent with @ to put it to work.',
+                borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
+              ),
+              child: Icon(
+                Icons.forum_rounded,
+                size: 30,
+                color: ThemeRoles.wellInk(context),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'No messages yet',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Say hello, or mention an agent with @ to put it to work.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
-        ]),
+              style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2695,19 +3086,24 @@ class _EditedLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = Text.rich(
-      TextSpan(children: [
-        TextSpan(
+      TextSpan(
+        children: [
+          TextSpan(
             text: 'edited',
             style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color,
-                decoration: onTap == null ? null : TextDecoration.underline,
-                decorationColor: color.withValues(alpha: .5))),
-        TextSpan(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+              decoration: onTap == null ? null : TextDecoration.underline,
+              decorationColor: color.withValues(alpha: .5),
+            ),
+          ),
+          TextSpan(
             text: ' · $time',
-            style: TextStyle(fontSize: 10, color: color)),
-      ]),
+            style: TextStyle(fontSize: 10, color: color),
+          ),
+        ],
+      ),
     );
     if (onTap == null) return label;
     return Tooltip(
@@ -2728,11 +3124,12 @@ class _EditedLabel extends StatelessWidget {
 // a live sentence of what it is doing ("running in the sandbox…") or the
 // answer it is writing as it comes, with how many requests wait after it.
 class _WorkingIndicator extends StatefulWidget {
-  const _WorkingIndicator(
-      {required this.agent,
-      this.detail = '',
-      this.draft = '',
-      this.waiting = 0});
+  const _WorkingIndicator({
+    required this.agent,
+    this.detail = '',
+    this.draft = '',
+    this.waiting = 0,
+  });
   final String agent;
   final String detail;
 
@@ -2749,8 +3146,9 @@ class _WorkingIndicator extends StatefulWidget {
 class _WorkingIndicatorState extends State<_WorkingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1300))
-    ..repeat();
+    vsync: this,
+    duration: const Duration(milliseconds: 1300),
+  )..repeat();
 
   @override
   void dispose() {
@@ -2765,53 +3163,62 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
     final detail = draft.isNotEmpty
         ? 'writing'
         : widget.detail.trim().isEmpty
-            ? 'working'
-            : widget.detail.trim();
+        ? 'working'
+        : widget.detail.trim();
     final muted = TextStyle(
-        fontSize: 12,
-        fontStyle: FontStyle.italic,
-        color: scheme.onSurfaceVariant);
+      fontSize: 12,
+      fontStyle: FontStyle.italic,
+      color: scheme.onSurfaceVariant,
+    );
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 560),
         margin: const EdgeInsets.only(top: 10, left: 38),
         padding: ThemeChrome.chatBubblePadding(context),
-        decoration: ThemeChrome.chatBubble(
-          context,
-          mine: false,
-          agent: true,
-        ),
+        decoration: ThemeChrome.chatBubble(context, mine: false, agent: true),
         child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(widget.agent,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.primary)),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.agent,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Flexible(
-                    child: Text(detail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: muted)),
+                  child: Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: muted,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 _WorkingDots(controller: _controller, color: scheme.primary),
                 if (widget.waiting > 0) ...[
                   const SizedBox(width: 8),
                   Text('+${widget.waiting} waiting', style: muted),
                 ],
-              ]),
-              if (draft.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(draft,
-                    key: const ValueKey('live-draft'),
-                    style: const TextStyle(fontSize: 14, height: 1.35)),
               ],
-            ]),
+            ),
+            if (draft.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                draft,
+                key: const ValueKey('live-draft'),
+                style: const TextStyle(fontSize: 14, height: 1.35),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -2839,10 +3246,10 @@ class _WorkingDots extends StatelessWidget {
             return Opacity(
               opacity: opacity.clamp(0.2, 1.0),
               child: Container(
-                  width: 5,
-                  height: 5,
-                  decoration:
-                      BoxDecoration(color: color, shape: BoxShape.circle)),
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
             );
           }),
         ),
@@ -2894,54 +3301,75 @@ class _LogSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: .4)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
-            child: Row(children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                    color: ThemeRoles.wellFill(context),
-                    borderRadius: BorderRadius.circular(9)),
-                child: Icon(Icons.terminal_rounded,
-                    size: 15, color: ThemeRoles.wellInk(context)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: ThemeRoles.wellFill(context),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(
+                      Icons.terminal_rounded,
+                      size: 15,
+                      color: ThemeRoles.wellInk(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: scheme.onSurfaceVariant)),
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? .5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      size: 20,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
-              AnimatedRotation(
-                turns: expanded ? .5 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(Icons.expand_more_rounded,
-                    size: 20, color: scheme.onSurfaceVariant),
-              ),
-            ]),
+            ),
           ),
-        ),
-        if (expanded)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
-            child: body.trim().isEmpty
-                ? Text('(no output)',
-                    style:
-                        TextStyle(fontSize: 11, color: scheme.onSurfaceVariant))
-                : RichPostContent(body,
-                    headers: dependencies?.service.authHeaders() ?? const {},
-                    resolveUrl: dependencies?.service.resolveContentUrl),
-          ),
-      ]),
+          if (expanded)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+              child: body.trim().isEmpty
+                  ? Text(
+                      '(no output)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  : RichPostContent(
+                      body,
+                      headers: dependencies?.service.authHeaders() ?? const {},
+                      resolveUrl: dependencies?.service.resolveContentUrl,
+                    ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2956,21 +3384,23 @@ class _Panel extends StatelessWidget {
       : Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-              color:
-                  Theme.of(context).colorScheme.surface.withValues(alpha: .92),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outlineVariant
-                      .withValues(alpha: .6)),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: .12),
-                    blurRadius: 30,
-                    offset: const Offset(0, 12))
-              ]),
-          child: Material(type: MaterialType.transparency, child: child));
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: .92),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: .6),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .12),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Material(type: MaterialType.transparency, child: child),
+        );
 }
 
 class _ChatPatternPainter extends CustomPainter {
@@ -2980,22 +3410,26 @@ class _ChatPatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(
-        Offset.zero & size,
-        Paint()
-          ..shader = LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withValues(alpha: .075),
-                Colors.transparent,
-                color.withValues(alpha: .035)
-              ]).createShader(Offset.zero & size));
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: .075),
+            Colors.transparent,
+            color.withValues(alpha: .035),
+          ],
+        ).createShader(Offset.zero & size),
+    );
     final seed = room.codeUnits.fold(29, (a, b) => a * 37 + b);
     final random = math.Random(seed);
     final count = math.max(18, (size.width * size.height / 12500).round());
     for (var i = 0; i < count; i++) {
       final center = Offset(
-          size.width * random.nextDouble(), size.height * random.nextDouble());
+        size.width * random.nextDouble(),
+        size.height * random.nextDouble(),
+      );
       final scale = 7 + random.nextDouble() * 15;
       final paint = Paint()
         ..color = color.withValues(alpha: .035 + random.nextDouble() * .055)
@@ -3006,16 +3440,27 @@ class _ChatPatternPainter extends CustomPainter {
       canvas.rotate(random.nextDouble() * math.pi * 2);
       switch (i % 5) {
         case 0:
-          canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: scale), 0,
-              math.pi * 1.45, false, paint);
+          canvas.drawArc(
+            Rect.fromCircle(center: Offset.zero, radius: scale),
+            0,
+            math.pi * 1.45,
+            false,
+            paint,
+          );
           canvas.drawCircle(Offset(scale * .8, scale * .5), 2, paint);
           break;
         case 1:
           canvas.drawLine(
-              Offset(-scale, scale * .5), Offset(scale, -scale * .5), paint);
+            Offset(-scale, scale * .5),
+            Offset(scale, -scale * .5),
+            paint,
+          );
           for (var x = -1; x <= 1; x++)
             canvas.drawCircle(
-                Offset(x * scale * .65, x.isEven ? -2 : 4), 2.2, paint);
+              Offset(x * scale * .65, x.isEven ? -2 : 4),
+              2.2,
+              paint,
+            );
           break;
         case 2:
           final path = Path()
@@ -3029,14 +3474,17 @@ class _ChatPatternPainter extends CustomPainter {
         case 3:
           for (var bar = 0; bar < 3; bar++)
             canvas.drawRRect(
-                RRect.fromRectAndRadius(
-                    Rect.fromLTWH(
-                        -scale + bar * scale * .7,
-                        -scale * (.3 + random.nextDouble() * .5),
-                        scale * .25,
-                        scale * (1 + random.nextDouble())),
-                    const Radius.circular(2)),
-                paint);
+              RRect.fromRectAndRadius(
+                Rect.fromLTWH(
+                  -scale + bar * scale * .7,
+                  -scale * (.3 + random.nextDouble() * .5),
+                  scale * .25,
+                  scale * (1 + random.nextDouble()),
+                ),
+                const Radius.circular(2),
+              ),
+              paint,
+            );
           break;
         default:
           canvas.drawCircle(Offset.zero, scale, paint);

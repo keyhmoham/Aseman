@@ -274,10 +274,6 @@ class WorkspaceHeader extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      if (!compact) ...[
-                        const Flexible(child: _LivePill()),
-                        const SizedBox(width: 6),
-                      ],
                       if (!compact && onOpenAdmin != null) ...[
                         IconButton.filledTonal(
                           style: iconStyle,
@@ -470,7 +466,6 @@ class _AnchoredWorkspaceBar extends StatelessWidget {
                     onPressed: onGoHome,
                     icon: const Icon(Icons.home_outlined),
                   ),
-                const _LivePill(),
                 if (onOpenAdmin != null)
                   IconButton.filledTonal(
                     style: iconStyle,
@@ -605,37 +600,6 @@ class EdgeBumpPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant EdgeBumpPainter old) =>
       old.fill != fill || old.shadow != shadow;
-}
-
-class _LivePill extends StatelessWidget {
-  const _LivePill();
-  @override
-  Widget build(BuildContext context) {
-    final success = AppColors.successOf(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.chipRecipe.paddingH.clamp(6, 12),
-        vertical: context.chipRecipe.paddingV.clamp(3, 8),
-      ),
-      decoration: context.metaChipDecoration(accent: success),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.circle, color: success, size: 7),
-          const SizedBox(width: 7),
-          Text(
-            'Live now',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: -.1,
-              fontWeight: FontWeight.w700,
-              color: success,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Workspace switcher dialog/sheet with a searchable grid of the user's real

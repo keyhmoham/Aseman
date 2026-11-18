@@ -13,11 +13,11 @@ import '../../features/search_feed/presentation/feed_post_card.dart';
 import '../../features/search_feed/presentation/search_feed_view_model.dart'
     show feedPostFromServer;
 import 'avatar.dart';
-import 'avatar_face.dart';
 import 'avatar_editor.dart';
 import 'mini_tag.dart';
 import 'overlay_panels.dart';
 import 'panel_empty.dart';
+import 'settings_kit.dart';
 import 'skeleton.dart';
 import 'sky_ui.dart';
 
@@ -48,6 +48,8 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
   int _workspaces = 0;
   bool _loading = true;
   bool _publishing = false;
+  String _displayName = '';
+  String _bio = '';
 
   @override
   void initState() {
@@ -63,6 +65,16 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
 
   Future<void> _load() async {
     final service = widget.dependencies.service;
+    try {
+      final tree = await service.fetchMyMetadata();
+      final profile = tree['profile'];
+      if (profile is Map && mounted) {
+        setState(() {
+          _displayName = profile['displayName']?.toString().trim() ?? '';
+          _bio = profile['bio']?.toString().trim() ?? '';
+        });
+      }
+    } catch (_) {}
     try {
       final me = widget.dependencies.sessionController.session?.accountId ?? '';
       final results = await Future.wait([
@@ -91,8 +103,9 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     if (id.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: id));
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Account id copied')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Account id copied')));
   }
 
   Future<void> _edit() async {
@@ -118,17 +131,23 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
         {
           'op': 'set',
           'path': 'profile/displayName',
-          'value': result.displayName
+          'value': result.displayName,
         },
         {'op': 'set', 'path': 'profile/bio', 'value': result.bio},
       ]);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Profile updated')));
+      setState(() {
+        _displayName = result.displayName;
+        _bio = result.bio;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile updated')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Update failed: $e')));
     }
   }
 
@@ -142,8 +161,9 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Publish failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Publish failed: $e')));
     }
     if (!mounted) return;
     setState(() => _publishing = false);
@@ -154,85 +174,132 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     final session = widget.dependencies.sessionController.session;
     final handle = session?.handle ?? 'guest';
     final initials = handle.isEmpty ? '?' : handle[0].toUpperCase();
+    final embedded = widget.embedded;
     return ListView(
-      shrinkWrap: widget.embedded,
-      physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg - 4, AppSpacing.md, AppSpacing.lg - 4, AppSpacing.xl),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
+      padding: embedded
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(
+              AppSpacing.lg - 4,
+              AppSpacing.md,
+              AppSpacing.lg - 4,
+              AppSpacing.xl,
+            ),
       children: [
         _ProfileHeader(
+          initials: initials,
+          handle: handle,
+          displayName: _displayName,
+          bio: _bio,
+          avatar: AvatarEditor(
+            service: widget.dependencies.service,
+            avatar: widget.dependencies.sessionController.avatar,
             initials: initials,
-            handle: handle,
-            avatar: AvatarEditor(
-              service: widget.dependencies.service,
-              avatar: widget.dependencies.sessionController.avatar,
-              initials: initials,
-              radius: 34,
-              subject: 'profile picture',
-              enabled: session?.isLoggedIn ?? false,
-              identity: session?.accountId ?? '',
-              onChanged: (id) async {
-                await widget.dependencies.sessionController.setAvatar(id);
-                if (mounted) setState(() {});
-              },
-            ),
-            onShare: _share,
-            onEdit: _edit),
-        const SizedBox(height: AppSpacing.sm),
-        _ProfileStats(
-          balance: _balance,
-          bots: _bots,
-          posts: _posts.length,
-          workspaces: _workspaces,
+            radius: 34,
+            subject: 'profile picture',
+            enabled: session?.isLoggedIn ?? false,
+            identity: session?.accountId ?? '',
+            onChanged: (id) async {
+              await widget.dependencies.sessionController.setAvatar(id);
+              if (mounted) setState(() {});
+            },
+          ),
+          onShare: _share,
+          onEdit: _edit,
         ),
-        const SizedBox(height: AppSpacing.sm + 2),
+        const SizedBox(height: AppSpacing.sm),
+        if (embedded)
+          _ProfileStatsStrip(
+            posts: _posts.length,
+            bots: _bots,
+            balance: _balance,
+            workspaces: _workspaces,
+          )
+        else
+          _ProfileStats(
+            balance: _balance,
+            bots: _bots,
+            posts: _posts.length,
+            workspaces: _workspaces,
+          ),
+        SizedBox(height: embedded ? AppSpacing.lg : AppSpacing.sm + 2),
         SoftCard(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Column(children: [
-              Row(children: [
-                AppAvatar(initials,
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  AppAvatar(
+                    initials,
                     color: AppColors.primaryOf(context),
                     radius: 17,
                     image: widget.dependencies.service.avatarImage(
-                        widget.dependencies.sessionController.avatar)),
-                const SizedBox(width: AppSpacing.sm - 2),
-                Expanded(
+                      widget.dependencies.sessionController.avatar,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm - 2),
+                  Expanded(
                     child: TextField(
-                        controller: composer,
-                        minLines: 1,
-                        maxLines: 4,
-                        decoration: const InputDecoration.collapsed(
-                            hintText: 'Share a thesis, chart or signal…'))),
-              ]),
+                      controller: composer,
+                      minLines: 1,
+                      maxLines: 4,
+                      decoration: const InputDecoration.collapsed(
+                        hintText: 'Share a thesis, chart or signal…',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.sm - 2),
-              Row(children: [
-                const _ProfileComposerAction(
-                    icon: Icons.show_chart_rounded, label: 'Chart'),
-                const _ProfileComposerAction(
-                    icon: Icons.image_outlined, label: 'Media'),
-                const _ProfileComposerAction(
-                    icon: Icons.tag_rounded, label: 'Ticker'),
-                const Spacer(),
-                FilledButton.icon(
+              Row(
+                children: [
+                  if (!embedded) ...const [
+                    _ProfileComposerAction(
+                      icon: Icons.show_chart_rounded,
+                      label: 'Chart',
+                    ),
+                    _ProfileComposerAction(
+                      icon: Icons.image_outlined,
+                      label: 'Media',
+                    ),
+                    _ProfileComposerAction(
+                      icon: Icons.tag_rounded,
+                      label: 'Ticker',
+                    ),
+                  ],
+                  const Spacer(),
+                  FilledButton.icon(
                     onPressed: _publishing ? null : _publish,
                     icon: const Icon(Icons.arrow_upward_rounded, size: 17),
-                    label: Text(_publishing ? 'Publishing…' : 'Publish'))
-              ])
-            ])),
+                    label: Text(_publishing ? 'Publishing…' : 'Publish'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg - 2),
-        SkySectionHeader(
-          dense: true,
-          title: 'Signal stream',
-          subtitle: 'Your published posts',
-          icon: Icons.sensors_rounded,
-          actions: [
-            SoftMetaChip(label: '${_posts.length}'),
-            IconButton(
+        if (embedded)
+          SettingsCaption(
+            'Your posts',
+            trailing: SoftMetaChip(label: '${_posts.length}'),
+          )
+        else
+          SkySectionHeader(
+            dense: true,
+            title: 'Signal stream',
+            subtitle: 'Your published posts',
+            icon: Icons.sensors_rounded,
+            actions: [
+              SoftMetaChip(label: '${_posts.length}'),
+              IconButton(
                 tooltip: 'Filter posts',
                 onPressed: () {},
-                icon: const Icon(Icons.tune_rounded, size: 19)),
-          ],
-        ),
+                icon: const Icon(Icons.tune_rounded, size: 19),
+              ),
+            ],
+          ),
         const SizedBox(height: AppSpacing.xs),
         if (_loading)
           const SkeletonList(itemCount: 2, item: SkeletonPost())
@@ -242,38 +309,44 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
             child: PanelEmpty(
               compact: true,
               icon: Icons.edit_note_rounded,
-                title: 'No posts yet',
-                message: 'Publish your first signal above.',
+              title: 'No posts yet',
+              message: 'Publish your first signal above.',
+            ),
+          )
+        else
+          ..._posts.map(
+            (p) => FeedPostCard(
+              key: ValueKey('my-post-${p.id}'),
+              post: feedPostFromServer(p),
+              dependencies: widget.dependencies,
+              onToggleLike: () => _toggleLike(p),
+              onEdited: (body) => _replace(
+                p.id,
+                (old) => old.copyWith(body: body, editedAt: DateTime.now()),
               ),
-            )
-          else
-            ..._posts.map((p) => FeedPostCard(
-                  key: ValueKey('my-post-${p.id}'),
-                  post: feedPostFromServer(p),
-                  dependencies: widget.dependencies,
-                  onToggleLike: () => _toggleLike(p),
-                  onEdited: (body) => _replace(p.id,
-                      (old) => old.copyWith(body: body, editedAt: DateTime.now())),
-                  onDeleted: () => setState(() =>
-                      _posts = _posts.where((old) => old.id != p.id).toList()),
-                  onShared: _load,
-                )),
+              onDeleted: () => setState(
+                () => _posts = _posts.where((old) => old.id != p.id).toList(),
+              ),
+              onShared: _load,
+            ),
+          ),
       ],
     );
   }
 
-  void _replace(String id, SocialPost Function(SocialPost) change) =>
-      setState(() => _posts = [
-            for (final p in _posts) p.id == id ? change(p) : p,
-          ]);
+  void _replace(String id, SocialPost Function(SocialPost) change) => setState(
+    () => _posts = [for (final p in _posts) p.id == id ? change(p) : p],
+  );
 
   Future<void> _toggleLike(SocialPost post) async {
     final liked = !post.likedByMe;
     _replace(
-        post.id,
-        (p) => p.withLike(
-            likes: liked ? p.likes + 1 : (p.likes > 0 ? p.likes - 1 : 0),
-            likedByMe: liked));
+      post.id,
+      (p) => p.withLike(
+        likes: liked ? p.likes + 1 : (p.likes > 0 ? p.likes - 1 : 0),
+        likedByMe: liked,
+      ),
+    );
     try {
       if (liked) {
         await widget.dependencies.service.likePost(post.id);
@@ -292,21 +365,27 @@ class _ProfileComposerAction extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) => IconButton(
-      tooltip: label,
-      visualDensity: VisualDensity.compact,
-      onPressed: () {},
-      icon: Icon(icon, size: 18));
+    tooltip: label,
+    visualDensity: VisualDensity.compact,
+    onPressed: () {},
+    icon: Icon(icon, size: 18),
+  );
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader(
-      {required this.initials,
-      required this.handle,
-      this.avatar,
-      this.onShare,
-      this.onEdit});
+  const _ProfileHeader({
+    required this.initials,
+    required this.handle,
+    this.displayName = '',
+    this.bio = '',
+    this.avatar,
+    this.onShare,
+    this.onEdit,
+  });
   final String initials;
   final String handle;
+  final String displayName;
+  final String bio;
 
   /// The account's avatar; its initials when not given.
   final Widget? avatar;
@@ -316,50 +395,65 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return LayoutBuilder(builder: (context, box) {
-      final compact = box.maxWidth < 500;
-      return SoftCard(
+    return LayoutBuilder(
+      builder: (context, box) {
+        final compact = box.maxWidth < 500;
+        return SoftCard(
           padding: EdgeInsets.zero,
-          child: Column(children: [
-            Container(
+          child: Column(
+            children: [
+              Container(
                 height: compact ? 76 : 92,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
                       scheme.primary,
                       scheme.tertiary,
                       AppColors.cyanOf(context),
-                    ])),
-                child: Stack(children: [
-                  Positioned(
+                    ],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
                       right: -24,
                       top: -34,
-                      child: Icon(Icons.blur_circular_rounded,
-                          size: 144,
-                          color: Colors.white.withValues(alpha: .17))),
-                  const Positioned(
+                      child: Icon(
+                        Icons.blur_circular_rounded,
+                        size: 144,
+                        color: Colors.white.withValues(alpha: .17),
+                      ),
+                    ),
+                    const Positioned(
                       left: 18,
                       top: 14,
-                      child: MiniTag('MEMBER', Colors.white))
-                ])),
-            Transform.translate(
+                      child: MiniTag('MEMBER', Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.translate(
                 offset: const Offset(0, -27),
                 child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md),
-                    child: Column(children: [
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                  child: Column(
+                    children: [
                       Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            avatar ??
-                                Builder(builder: (context) {
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          avatar ??
+                              Builder(
+                                builder: (context) {
                                   const radius = 34.0;
                                   final size = radius * 2;
-                                  final corners =
-                                      context.avatarBorderRadius(size);
+                                  final corners = context.avatarBorderRadius(
+                                    size,
+                                  );
                                   final scheme = Theme.of(context).colorScheme;
                                   return HaloRing(
                                     pad: 3,
@@ -369,47 +463,77 @@ class _ProfileHeader extends StatelessWidget {
                                       borderRadius: corners,
                                       backgroundColor:
                                           scheme.surfaceContainerHighest,
-                                      child: Text(initials,
-                                          style: const TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w900)),
+                                      child: Text(
+                                        initials,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
                                     ),
                                   );
-                                }),
-                            const Spacer(),
-                            IconButton.filledTonal(
-                                tooltip: 'Share profile',
-                                onPressed: onShare,
-                                icon: const Icon(Icons.ios_share_rounded,
-                                    size: 18)),
-                            const SizedBox(width: AppSpacing.xs - 2),
-                            FilledButton.tonalIcon(
-                                onPressed: onEdit,
-                                icon:
-                                    const Icon(Icons.edit_outlined, size: 17),
-                                label: const Text('Edit')),
-                          ]),
+                                },
+                              ),
+                          const Spacer(),
+                          IconButton.filledTonal(
+                            tooltip: 'Share profile',
+                            onPressed: onShare,
+                            icon: const Icon(Icons.ios_share_rounded, size: 18),
+                          ),
+                          const SizedBox(width: AppSpacing.xs - 2),
+                          FilledButton.tonalIcon(
+                            onPressed: onEdit,
+                            icon: const Icon(Icons.edit_outlined, size: 17),
+                            label: const Text('Edit'),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: AppSpacing.sm - 3),
                       Align(
-                          alignment: Alignment.centerLeft,
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(handle,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900,
-                                        color: scheme.onSurface)),
-                                Text('@$handle',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: scheme.onSurfaceVariant))
-                              ])),
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName.isEmpty ? handle : displayName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                            Text(
+                              '@$handle',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (bio.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  bio,
+                                  style: TextStyle(
+                                    height: 1.4,
+                                    color: scheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.sm - 2),
-                    ])))
-          ]));
-    });
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -425,18 +549,25 @@ class ProfileStat extends StatelessWidget {
       onTap: onTap,
       radius: 15,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-      child: Column(children: [
-        Text(value,
+      child: Column(
+        children: [
+          Text(
+            value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: scheme.onSurface)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant))
-      ]),
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -454,24 +585,93 @@ class _ProfileStats extends StatelessWidget {
   final int workspaces;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        const gap = 7.0;
-        final columns = math.max(
-            2, math.min(4, ((box.maxWidth + gap) / (120 + gap)).floor()));
-        final width = (box.maxWidth - gap * (columns - 1)) / columns;
-        final items = [
-          ProfileStat('$posts', 'Posts'),
-          ProfileStat('$bots', 'Bots'),
-          ProfileStat('$balance', 'Credits'),
-          ProfileStat('$workspaces', 'Workspaces'),
-        ];
-        return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: items
-                .map((item) => SizedBox(width: width, child: item))
-                .toList());
-      });
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      const gap = 7.0;
+      final columns = math.max(
+        2,
+        math.min(4, ((box.maxWidth + gap) / (120 + gap)).floor()),
+      );
+      final width = (box.maxWidth - gap * (columns - 1)) / columns;
+      final items = [
+        ProfileStat('$posts', 'Posts'),
+        ProfileStat('$bots', 'Bots'),
+        ProfileStat('$balance', 'Credits'),
+        ProfileStat('$workspaces', 'Workspaces'),
+      ];
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: items
+            .map((item) => SizedBox(width: width, child: item))
+            .toList(),
+      );
+    },
+  );
+}
+
+/// The four profile numbers in one card, split by hairlines.
+class _ProfileStatsStrip extends StatelessWidget {
+  const _ProfileStatsStrip({
+    required this.posts,
+    required this.bots,
+    required this.balance,
+    required this.workspaces,
+  });
+  final int posts;
+  final int bots;
+  final int balance;
+  final int workspaces;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final cells = [
+      ('$posts', 'Posts'),
+      ('$bots', 'Bots'),
+      ('$balance', 'Credits'),
+      ('$workspaces', 'Spaces'),
+    ];
+    return SoftCard(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            for (var i = 0; i < cells.length; i++) ...[
+              if (i > 0)
+                VerticalDivider(
+                  width: 1,
+                  color: scheme.outlineVariant.withValues(alpha: .5),
+                ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      cells[i].$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cells[i].$2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EditProfileResult {
@@ -505,29 +705,35 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
       title: const Text('Edit profile'),
       content: SizedBox(
         width: 400,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: nameController,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Display name'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(
-            controller: bioController,
-            maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Bio'),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Display name'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: bioController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Bio'),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () => Navigator.pop(
             context,
             _EditProfileResult(
-                nameController.text.trim(), bioController.text.trim()),
+              nameController.text.trim(),
+              bioController.text.trim(),
+            ),
           ),
           child: const Text('Save'),
         ),

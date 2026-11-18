@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../agui/agui.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
+import '../../../../shared/widgets/panel_header.dart';
+import '../../../../shared/widgets/panel_scaffold.dart';
 import '../../domain/room_work.dart';
 import '../room_work_controller.dart';
 
@@ -176,26 +178,30 @@ class RoomWorkPanel extends StatelessWidget {
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       color: scheme.onSurfaceVariant)));
-          return ListView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-              children: [
-                const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('Work',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800))),
-                if (now.isEmpty && done.isEmpty)
-                  Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Center(
-                          child: Text('No agent has worked in this room yet.',
-                              style:
-                                  TextStyle(color: scheme.onSurfaceVariant)))),
-                if (now.isNotEmpty) heading('NOW'),
-                for (final r in now) _run(context, r),
-                if (done.isNotEmpty) heading('EARLIER'),
-                for (final e in done) _entry(context, e),
-              ]);
+          return PanelScaffold(
+            header: PanelHeader(
+              icon: Icons.work_history_outlined,
+              title: 'Work',
+              subtitle: 'What the room’s agents are doing, and what they did.',
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            body: ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: [
+                  if (now.isEmpty && done.isEmpty)
+                    Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(
+                            child: Text('No agent has worked in this room yet.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: scheme.onSurfaceVariant)))),
+                  if (now.isNotEmpty) heading('NOW'),
+                  for (final r in now) _run(context, r),
+                  if (done.isNotEmpty) heading('EARLIER'),
+                  for (final e in done) _entry(context, e),
+                ]),
+          );
         },
       );
 

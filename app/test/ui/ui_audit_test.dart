@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aseman/src/app.dart';
@@ -50,6 +51,12 @@ const sizes = {'phone': Size(390, 844), 'desktop': Size(1440, 900)};
 
 void main() {
   setUpAll(() async {
+    // The chat composer creates an audio recorder; tests have no plugin.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.llfbandit.record/messages'),
+          (_) async => null,
+        );
     if (shots != null) await loadFonts();
   });
   tearDown(() {

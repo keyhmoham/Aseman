@@ -7,9 +7,22 @@ FROM ${FLUTTER_IMAGE}
 
 USER root
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      nginx inotify-tools \
+      nginx inotify-tools gettext-base \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
+
+# API proxy: the Decillion node (render-api-conf.sh, run by
+# tool/debug_server.sh before nginx starts). Default
+# https://preview.decillionai.com, or DECILLION_API_URL. Rendered once here
+# too (against the default) so `nginx -t` below has something to include;
+# it's resolver+variable based (api.decillion.conf.template), so it needs no
+# DNS to validate, unlike api.local.conf's literal proxy_pass. Always
+# re-rendered for real at container start.
+COPY deploy/api.local.conf /etc/nginx/aseman-api.local.conf
+COPY deploy/api.decillion.conf.template /etc/nginx/aseman-api.decillion.template
+COPY deploy/render-api-conf.sh /usr/local/bin/aseman-render-api-conf
+RUN chmod 755 /usr/local/bin/aseman-render-api-conf \
+    && /usr/local/bin/aseman-render-api-conf
 
 COPY deploy/nginx.debug.conf /etc/nginx/aseman-debug.conf
 RUN mkdir -p /tmp/nginx-client /tmp/nginx-proxy /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi \

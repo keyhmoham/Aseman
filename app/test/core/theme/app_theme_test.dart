@@ -7,14 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final (name, theme) in [
-    (
-      'dark',
-      AppTheme.darkWith(Colors.teal, pack: DefaultThemePacks.sky),
-    ),
-    (
-      'light',
-      AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.sky),
-    ),
+    ('dark', AppTheme.darkWith(Colors.teal, pack: DefaultThemePacks.sky)),
+    ('light', AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.sky)),
   ]) {
     test('$name theme gives every modal surface the same colour and scrim', () {
       // The pack's tokens set the overlay opacity (Sky: its own per mode).
@@ -49,40 +43,39 @@ void main() {
       expect(fab.backgroundColor, AppFab.containerOf(scheme));
       expect(fab.foregroundColor, AppFab.inkOf(scheme));
       expect(fab.shape, isA<RoundedRectangleBorder>());
-      expect(
-        (fab.shape! as RoundedRectangleBorder).side,
-        BorderSide.none,
-      );
+      expect((fab.shape! as RoundedRectangleBorder).side, BorderSide.none);
       expect(fab.enableFeedback, isTrue);
       expect(fab.extendedIconLabelSpacing, 10);
     });
 
-    test('$name filled buttons stay primary; elevated / outlined follow M3',
-        () {
-      final scheme = theme.colorScheme;
-      // Filled theme leaves colors to Material so FilledButton.tonal can use
-      // secondary-container; elevated / outlined set explicit roles.
-      expect(
-        theme.elevatedButtonTheme.style?.backgroundColor?.resolve({}),
-        scheme.surfaceContainerLow,
-      );
-      expect(
-        theme.elevatedButtonTheme.style?.foregroundColor?.resolve({}),
-        scheme.primary,
-      );
-      expect(
-        theme.outlinedButtonTheme.style?.foregroundColor?.resolve({}),
-        scheme.onSurfaceVariant,
-      );
-      expect(
-        theme.outlinedButtonTheme.style?.backgroundColor?.resolve({}),
-        Colors.transparent,
-      );
-      expect(
-        theme.textButtonTheme.style?.foregroundColor?.resolve({}),
-        scheme.primary,
-      );
-    });
+    test(
+      '$name filled buttons stay primary; elevated / outlined follow M3',
+      () {
+        final scheme = theme.colorScheme;
+        // Filled theme leaves colors to Material so FilledButton.tonal can use
+        // secondary-container; elevated / outlined set explicit roles.
+        expect(
+          theme.elevatedButtonTheme.style?.backgroundColor?.resolve({}),
+          scheme.surfaceContainerLow,
+        );
+        expect(
+          theme.elevatedButtonTheme.style?.foregroundColor?.resolve({}),
+          scheme.primary,
+        );
+        expect(
+          theme.outlinedButtonTheme.style?.foregroundColor?.resolve({}),
+          scheme.onSurfaceVariant,
+        );
+        expect(
+          theme.outlinedButtonTheme.style?.backgroundColor?.resolve({}),
+          Colors.transparent,
+        );
+        expect(
+          theme.textButtonTheme.style?.foregroundColor?.resolve({}),
+          scheme.primary,
+        );
+      },
+    );
   }
 
   test('AppFab shapes match Material 3 Expressive FAB radii', () {
@@ -101,8 +94,9 @@ void main() {
     );
   });
 
-  testWidgets('AppFab reads primary-container floatingActionButtonTheme',
-      (tester) async {
+  testWidgets('AppFab reads primary-container floatingActionButtonTheme', (
+    tester,
+  ) async {
     late Color bg;
     late Color fg;
     await tester.pumpWidget(
@@ -122,8 +116,9 @@ void main() {
     expect(fg, scheme.onPrimaryContainer);
   });
 
-  testWidgets('FloatingActionButton inherits primary-container fill',
-      (tester) async {
+  testWidgets('FloatingActionButton inherits primary-container fill', (
+    tester,
+  ) async {
     final theme = AppTheme.lightWith(Colors.teal);
     await tester.pumpWidget(
       MaterialApp(
@@ -152,8 +147,9 @@ void main() {
     expect(material.color, theme.colorScheme.primaryContainer);
   });
 
-  testWidgets('SkyFab paints primary-container capsule with label',
-      (tester) async {
+  testWidgets('SkyFab paints primary-container capsule with label', (
+    tester,
+  ) async {
     final theme = AppTheme.lightWith(Colors.teal);
     await tester.pumpWidget(
       MaterialApp(
@@ -171,10 +167,7 @@ void main() {
     expect(find.byIcon(Icons.edit_rounded), findsOneWidget);
     final material = tester.widget<Material>(
       find
-          .descendant(
-            of: find.byType(SkyFab),
-            matching: find.byType(Material),
-          )
+          .descendant(of: find.byType(SkyFab), matching: find.byType(Material))
           .first,
     );
     expect(material.color, theme.colorScheme.primaryContainer);

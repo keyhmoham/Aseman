@@ -543,7 +543,6 @@ Future<T?> showAppSheet<T>(
 }) => showModalBottomSheet<T>(
   context: context,
   backgroundColor: Colors.transparent,
-  sheetAnimationStyle: AnimationStyle.noAnimation,
   // Handle is drawn inside [_appSheetChrome] so it sits on glass.
   showDragHandle: false,
   // Always scroll-controlled: a tall body may use the full screen and then
@@ -941,25 +940,31 @@ class FloatingPanelSurface extends StatelessWidget {
   }
 }
 
-/// Slides and fades a right-edge panel by its own width, in and out.
-class _TrailingDrawerMotion extends StatefulWidget {
-  const _TrailingDrawerMotion({required this.animation, required this.child});
+/// Slides and fades an edge panel by its own width, in and out. [fromRight]
+/// picks the edge it travels from.
+class _DrawerMotion extends StatefulWidget {
+  const _DrawerMotion({
+    required this.animation,
+    required this.child,
+    required this.fromRight,
+  });
 
   final Animation<double> animation;
   final Widget child;
+  final bool fromRight;
 
   @override
-  State<_TrailingDrawerMotion> createState() => _TrailingDrawerMotionState();
+  State<_DrawerMotion> createState() => _DrawerMotionState();
 }
 
-class _TrailingDrawerMotionState extends State<_TrailingDrawerMotion> {
+class _DrawerMotionState extends State<_DrawerMotion> {
   late final CurvedAnimation _motion = CurvedAnimation(
     parent: widget.animation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
   late final Animation<Offset> _slide = Tween<Offset>(
-    begin: const Offset(1, 0),
+    begin: Offset(widget.fromRight ? 1 : -1, 0),
     end: Offset.zero,
   ).animate(_motion);
 
@@ -983,10 +988,10 @@ enum DockedEdge { leading, trailing }
 
 /// Opens [builder] as a full-height panel stuck to [edge].
 ///
-/// The surface is Material and the full window tall. A trailing panel slides
-/// and fades in from the right by its own width, and slides and fades back
-/// out the same distance, like a navigation drawer. A leading panel appears
-/// in place. Tapping the remaining page dismisses it.
+/// The surface is Material and the full window tall. The panel slides and
+/// fades in from its [edge] by its own width, and slides and fades back out
+/// the same distance, like a navigation drawer. Tapping the remaining page
+/// dismisses it.
 Future<T?> showDockedPanel<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -1001,9 +1006,7 @@ Future<T?> showDockedPanel<T>({
     barrierDismissible: barrierDismissible,
     barrierLabel: barrierLabel,
     barrierColor: AppSurfaces.barrierOf(context),
-    transitionDuration: fromRight
-        ? const Duration(milliseconds: 250)
-        : Duration.zero,
+    transitionDuration: const Duration(milliseconds: 250),
     pageBuilder: (routeContext, animation, __) {
       final size = MediaQuery.sizeOf(routeContext);
       final panelWidth = math.min(width, size.width);
@@ -1043,9 +1046,11 @@ Future<T?> showDockedPanel<T>({
           ),
         ),
       );
-      if (fromRight) {
-        panel = _TrailingDrawerMotion(animation: animation, child: panel);
-      }
+      panel = _DrawerMotion(
+        animation: animation,
+        fromRight: fromRight,
+        child: panel,
+      );
       return Align(
         alignment: onTrailing ? Alignment.centerRight : Alignment.centerLeft,
         child: panel,

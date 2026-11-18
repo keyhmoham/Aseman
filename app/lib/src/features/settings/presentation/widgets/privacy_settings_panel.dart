@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/app_inputs.dart' show AppChoice;
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
 import '../../../../shared/widgets/panel_scaffold.dart';
+import '../../../../shared/widgets/settings_kit.dart';
 import '../../../../shared/widgets/skeleton.dart';
 import '../../../../shared/widgets/sky_ui.dart';
 
@@ -12,6 +14,12 @@ const _audiences = [
   ('everyone', 'Everyone'),
   ('contacts', 'Contacts'),
   ('nobody', 'Nobody'),
+];
+
+const _audienceChoices = [
+  AppChoice('everyone', 'Everyone', icon: Icons.public_rounded),
+  AppChoice('contacts', 'Contacts only', icon: Icons.people_outline_rounded),
+  AppChoice('nobody', 'Nobody', icon: Icons.block_rounded),
 ];
 
 const _fields = [
@@ -25,12 +33,11 @@ const _fields = [
 Future<void> showPrivacySettings(
   BuildContext context,
   AppDependencies dependencies,
-) =>
-    showFloatingPanel(
-      context,
-      PrivacySettingsPanel(dependencies: dependencies),
-      maxWidth: 520,
-    );
+) => showFloatingPanel(
+  context,
+  PrivacySettingsPanel(dependencies: dependencies),
+  maxWidth: 520,
+);
 
 class PrivacySettingsPanel extends StatefulWidget {
   const PrivacySettingsPanel({
@@ -92,13 +99,41 @@ class _PrivacySettingsPanelState extends State<PrivacySettingsPanel> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _prefs[key] = previous ?? 'everyone');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not save: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 
+  Widget _embeddedBody() => SettingsRefreshHook(
+    onRefresh: _load,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_error != null) SettingsError(_error!, onRetry: _load),
+        SettingsGroup(
+          caption: 'Who can reach you',
+          footer: 'Applies to everyone who is not already in your contacts.',
+          children: _loading
+              ? const [SettingsLoading()]
+              : [
+                  for (final f in _fields)
+                    SettingsChoiceRow<String>(
+                      icon: f.$3,
+                      label: f.$2,
+                      choices: _audienceChoices,
+                      value: _prefs[f.$1]!,
+                      onChanged: (v) => _set(f.$1, v),
+                    ),
+                ],
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return _embeddedBody();
     final scheme = Theme.of(context).colorScheme;
     final body = _loading
         ? const Padding(
@@ -148,7 +183,6 @@ class _PrivacySettingsPanelState extends State<PrivacySettingsPanel> {
               ],
             ],
           );
-    if (widget.embedded) return body;
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Privacy',

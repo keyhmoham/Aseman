@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../shared/widgets/overlay_panels.dart';
+import '../../shared/widgets/settings_kit.dart';
 
 /// Shared plumbing for the assistant's panels: JSON helpers, a loader that
 /// shows errors in place, and calls that report failures in a snack bar.
@@ -102,27 +103,20 @@ class _LoadedPanelState extends State<LoadedPanel> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (widget.embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              tooltip: 'Refresh',
-              onPressed: reload,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          if (error.isNotEmpty && data == null)
-            Text(error, style: TextStyle(color: scheme.error))
-          else if (data == null)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else
-            widget.build(context, data!, reload),
-        ],
+      // Settings owns the scroll and the refresh gesture.
+      return SettingsRefreshHook(
+        onRefresh: reload,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (error.isNotEmpty && data == null)
+              SettingsError(error, onRetry: reload)
+            else if (data == null)
+              const SettingsLoading()
+            else
+              widget.build(context, data!, reload),
+          ],
+        ),
       );
     }
     return Scaffold(

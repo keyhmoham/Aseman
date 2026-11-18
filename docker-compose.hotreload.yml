@@ -14,6 +14,9 @@ services:
     init: true
     environment:
       DEVELOPER_API_BASE: ${DEVELOPER_API_BASE:-${DEVELOPER_DOMAIN:+https://${DEVELOPER_DOMAIN}/v1}}
+      DECILLION_API_URL: ${DECILLION_API_URL:-https://preview.decillionai.com}
+      DECILLION_API_HOST: ${DECILLION_API_HOST:-}
+      DECILLION_API_RESOLVER: ${DECILLION_API_RESOLVER:-1.1.1.1 8.8.8.8}
       ASEMAN_UID: ${ASEMAN_UID:-0}
       ASEMAN_GID: ${ASEMAN_GID:-0}
     volumes: !override

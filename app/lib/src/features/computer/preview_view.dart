@@ -1,13 +1,14 @@
 import 'dart:async';
-import '../../core/theme/app_shape.dart';
-import '../../core/theme/theme_roles.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme/app_shape.dart';
+import '../../core/theme/theme_roles.dart';
 import '../../core/utils/context_extensions.dart';
 import '../../data/services/aseman_service.dart';
+import '../../shared/widgets/overlay_panels.dart';
 import '../desk/presentation/desk_controller.dart';
 import '../desk/presentation/web/web_page_frame.dart';
 import '../desk/presentation/web_page_view.dart';
@@ -75,6 +76,27 @@ Future<void> openPreview(
   if (desk != null &&
       MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
     await desk.openPage(page, title: title);
+    return;
+  }
+  if (MediaQuery.sizeOf(context).width >= computerSheetBreakpoint) {
+    // Wide screen without a desk: a docked panel, never a bottom sheet.
+    await showFloatingPanel(
+      context,
+      Builder(
+        builder: (panel) => ColoredBox(
+          color: const Color(0xFF1B1F25),
+          child: LivePreview(
+            service: service,
+            spaceId: spaceId,
+            page: page,
+            title: title,
+            embed: 'screen',
+            onClose: () => Navigator.of(panel).pop(),
+          ),
+        ),
+      ),
+      maxWidth: 960,
+    );
     return;
   }
   await showModalBottomSheet<void>(
@@ -286,12 +308,16 @@ class _LivePreviewState extends State<LivePreview> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: scheme.primary))
+                  strokeWidth: 2,
+                  color: scheme.primary,
+                ),
+              )
             : Icon(
                 _phase == _Phase.asleep
                     ? Icons.bedtime_outlined
                     : Icons.cloud_off_rounded,
-                color: scheme.onSurfaceVariant),
+                color: scheme.onSurfaceVariant,
+              ),
       );
     }
     final body = switch (_phase) {

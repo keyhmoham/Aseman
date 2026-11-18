@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../layout/app_layout.dart';
@@ -36,6 +38,76 @@ abstract final class AppTheme {
     accent: accent,
     paletteId: paletteId,
   );
+
+  /// WCAG contrast ratio between two colours.
+  static double contrastRatio(Color a, Color b) {
+    double lum(Color c) {
+      double ch(double v) => v <= .03928
+          ? v / 12.92
+          : math.pow((v + .055) / 1.055, 2.4).toDouble();
+      return .2126 * ch(c.r) + .7152 * ch(c.g) + .0722 * ch(c.b);
+    }
+
+    final l1 = lum(a), l2 = lum(b);
+    return (math.max(l1, l2) + .05) / (math.min(l1, l2) + .05);
+  }
+
+  /// Text or icon colour for content on [bg]: [preferred] when it already
+  /// reaches [min] contrast, else the nearest shade of it that does, else
+  /// whichever of white and black reads best.
+  static Color readableOn(Color bg, Color preferred, double min) {
+    if (contrastRatio(preferred, bg) >= min) return preferred;
+    final towards =
+        contrastRatio(Colors.white, bg) >= contrastRatio(Colors.black, bg)
+        ? Colors.white
+        : Colors.black;
+    for (var i = 1; i <= 20; i++) {
+      final c = Color.lerp(preferred, towards, i / 20)!;
+      if (contrastRatio(c, bg) >= min) return c;
+    }
+    return towards;
+  }
+
+  /// The scheme with every "on" colour re-derived against the colour it
+  /// sits on. Packs override `primary` and the containers with their own
+  /// accent, which leaves the generated foregrounds unreadable (dark text on
+  /// a mid-tone accent, an accent on a tint of itself).
+  ///
+  /// [min] is the text ratio. The accent itself is nudged until it reaches
+  /// [accentMin] against the surface it is drawn on (3:1, the WCAG minimum
+  /// for interactive controls, unless a pack asks for more).
+  static ColorScheme ensureReadable(
+    ColorScheme scheme,
+    double min, {
+    double accentMin = 3,
+  }) {
+    final s = scheme.copyWith(
+      primary: readableOn(scheme.surface, scheme.primary, accentMin),
+      error: readableOn(scheme.surface, scheme.error, accentMin),
+    );
+    return s.copyWith(
+      onPrimary: readableOn(s.primary, s.onPrimary, min),
+      onSecondary: readableOn(s.secondary, s.onSecondary, min),
+      onTertiary: readableOn(s.tertiary, s.onTertiary, min),
+      onError: readableOn(s.error, s.onError, min),
+      onPrimaryContainer: readableOn(
+        s.primaryContainer,
+        s.onPrimaryContainer,
+        min,
+      ),
+      onSecondaryContainer: readableOn(
+        s.secondaryContainer,
+        s.onSecondaryContainer,
+        min,
+      ),
+      onTertiaryContainer: readableOn(
+        s.tertiaryContainer,
+        s.onTertiaryContainer,
+        min,
+      ),
+      onErrorContainer: readableOn(s.errorContainer, s.onErrorContainer, min),
+    );
+  }
 
   /// Builds Material [ThemeData] + [AsemanTokens] from an installable pack.
   ///
@@ -120,7 +192,7 @@ abstract final class AppTheme {
       final secondary = unified
           ? seed
           : (tokens.secondaryAccent ?? seeded.secondary);
-      scheme = seeded.copyWith(
+      final raw = seeded.copyWith(
         primary: seed,
         secondary: secondary,
         error: tokens.danger ?? seeded.error,
@@ -171,6 +243,9 @@ abstract final class AppTheme {
                 onSurf,
               ),
       );
+      // High contrast promises AAA; every other pack AA text, 3:1 accents.
+      final aaa = pack.id == DefaultThemePacks.contrastId;
+      scheme = ensureReadable(raw, aaa ? 7.0 : 4.5, accentMin: aaa ? 7.0 : 3.0);
     }
     var extension = AsemanTokens.fromTokens(
       packId: pack.id,
@@ -385,9 +460,7 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
         shape: WidgetStatePropertyAll(buttonShape),
         foregroundColor: WidgetStatePropertyAll(scheme.primary),
         splashFactory: _inkFactory(lang.interaction.ink),
-        textStyle: WidgetStatePropertyAll(
-          label.copyWith(fontWeight: quiet),
-        ),
+        textStyle: WidgetStatePropertyAll(label.copyWith(fontWeight: quiet)),
       ),
     ),
     iconButtonTheme: IconButtonThemeData(style: iconStyle),
@@ -421,7 +494,9 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
         final selected = states.contains(WidgetState.selected);
         return label.copyWith(
           fontSize: 11,
-          fontWeight: selected ? (paper ? FontWeight.w500 : FontWeight.w700) : FontWeight.w500,
+          fontWeight: selected
+              ? (paper ? FontWeight.w500 : FontWeight.w700)
+              : FontWeight.w500,
           // Vertical items: label sits below the pill → secondary.
           color: selected ? scheme.secondary : scheme.onSurfaceVariant,
         );

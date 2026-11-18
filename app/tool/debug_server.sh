@@ -5,6 +5,7 @@ set -eu
 
 cd /src
 mkdir -p /tmp/nginx-client /tmp/nginx-proxy /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi
+/usr/local/bin/aseman-render-api-conf
 
 # The SDK image runs git against the mounted tree, which is owned by the host user.
 git config --global --replace-all safe.directory /src

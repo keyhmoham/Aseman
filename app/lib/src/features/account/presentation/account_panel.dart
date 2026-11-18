@@ -6,6 +6,7 @@ import '../../../core/notifications/push_notification_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/panel_header.dart';
 import '../../../shared/widgets/panel_scaffold.dart';
+import '../../../shared/widgets/settings_kit.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'account_forms.dart';
 import 'account_hub_content.dart';
@@ -164,10 +165,7 @@ class _AccountPanelState extends State<AccountPanel> {
     final area = widget.area;
     final body = loading
         ? (widget.embedded
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              )
+            ? const SettingsLoading()
             : const SkeletonPage(padding: EdgeInsets.zero))
         : AccountHubContent(
             key: ValueKey(area),
@@ -179,7 +177,9 @@ class _AccountPanelState extends State<AccountPanel> {
             onNotifications: setNotifications,
             notificationsSupported: PushNotificationService.supported,
           );
-    if (widget.embedded) return body;
+    if (widget.embedded) {
+      return SettingsRefreshHook(onRefresh: load, child: body);
+    }
     return PanelScaffold(
       compact: compact,
       header: PanelHeader(

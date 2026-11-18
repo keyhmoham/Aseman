@@ -4,6 +4,7 @@ import '../../../../app_dependencies.dart';
 import '../../../../shared/widgets/overlay_panels.dart';
 import '../../../../shared/widgets/panel_header.dart';
 import '../../../../shared/widgets/panel_scaffold.dart';
+import '../../../../shared/widgets/settings_kit.dart';
 import '../../../../shared/widgets/skeleton.dart';
 import '../../../../shared/widgets/sky_ui.dart';
 
@@ -18,12 +19,11 @@ const _categories = [
 Future<void> showNotifyPrefs(
   BuildContext context,
   AppDependencies dependencies,
-) =>
-    showFloatingPanel(
-      context,
-      NotifyPrefsPanel(dependencies: dependencies),
-      maxWidth: 520,
-    );
+) => showFloatingPanel(
+  context,
+  NotifyPrefsPanel(dependencies: dependencies),
+  maxWidth: 520,
+);
 
 class NotifyPrefsPanel extends StatefulWidget {
   const NotifyPrefsPanel({
@@ -43,9 +43,7 @@ class NotifyPrefsPanel extends StatefulWidget {
 class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
   bool _loading = true;
   String? _error;
-  final Map<String, bool> _cats = {
-    for (final c in _categories) c.$1: true,
-  };
+  final Map<String, bool> _cats = {for (final c in _categories) c.$1: true};
   int _mutedSpaces = 0;
   int _mutedPeers = 0;
 
@@ -70,10 +68,12 @@ class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
             _cats[c.$1] = cats[c.$1] != false;
           }
         }
-        _mutedSpaces =
-            (got['muted_spaces'] is List) ? (got['muted_spaces'] as List).length : 0;
-        _mutedPeers =
-            (got['muted_peers'] is List) ? (got['muted_peers'] as List).length : 0;
+        _mutedSpaces = (got['muted_spaces'] is List)
+            ? (got['muted_spaces'] as List).length
+            : 0;
+        _mutedPeers = (got['muted_peers'] is List)
+            ? (got['muted_peers'] as List).length
+            : 0;
         _loading = false;
       });
     } catch (e) {
@@ -89,18 +89,56 @@ class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
     final previous = _cats[category] ?? true;
     setState(() => _cats[category] = enabled);
     try {
-      await widget.dependencies.service
-          .notifySet(category: category, enabled: enabled);
+      await widget.dependencies.service.notifySet(
+        category: category,
+        enabled: enabled,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _cats[category] = previous);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not save: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
+  }
+
+  Widget _embeddedBody() {
+    final muted = _mutedSpaces + _mutedPeers;
+    return SettingsRefreshHook(
+      onRefresh: _load,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_error != null) SettingsError(_error!, onRetry: _load),
+          SettingsGroup(
+            caption: 'Push notifications',
+            children: _loading
+                ? const [SettingsLoading()]
+                : [
+                    for (final c in _categories)
+                      QuietSwitchTile(
+                        icon: c.$4,
+                        label: c.$2,
+                        subtitle: c.$3,
+                        value: _cats[c.$1] ?? true,
+                        onChanged: (v) => _toggle(c.$1, v),
+                      ),
+                  ],
+            footer: _loading
+                ? null
+                : muted == 0
+                ? 'Mute a chat or room from its menu to silence its push alerts.'
+                : '$_mutedSpaces rooms and $_mutedPeers chats are muted. '
+                      'Unmute them from each chat’s menu.',
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) return _embeddedBody();
     final scheme = Theme.of(context).colorScheme;
     final body = _loading
         ? const Padding(
@@ -142,7 +180,6 @@ class _NotifyPrefsPanelState extends State<NotifyPrefsPanel> {
               ),
             ],
           );
-    if (widget.embedded) return body;
     return PanelScaffold(
       header: const PanelHeader(
         title: 'Notifications',

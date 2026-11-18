@@ -5,7 +5,7 @@ part of 'developer_console.dart';
 /// A small installer to start from: a space with an agent, and a web page
 /// written to the space's computer and served.
 const String kWorkflowStarter = '''{
-  "\$schema": "https://raw.githubusercontent.com/keyhmoham/Aseman/main/docs/workflows/workflow.schema.json",
+  "\$schema": "https://raw.githubusercontent.com/keyhmoham/Decillion/main/docs/workflows/workflow.schema.json",
   "decillion_workflow": "1",
   "name": "my-product",
   "inputs": {
@@ -24,6 +24,23 @@ const String kWorkflowStarter = '''{
   "outputs": {"space": "\${{ steps.space.outputs.id }}", "preview": "\${{ steps.site.outputs.proxy.url }}"}
 }
 ''';
+
+/// The Decillion node only accepts its own names. A document opened from
+/// Aseman is rewritten in place: the format key and the toolchain names.
+String decillionWorkflowDocument(String text) {
+  return text
+      .replaceAll(
+        'https://raw.githubusercontent.com/keyhmoham/Aseman/main/docs/workflows/workflow.schema.json',
+        'https://raw.githubusercontent.com/keyhmoham/Decillion/main/docs/workflows/workflow.schema.json',
+      )
+      .replaceAll('aseman_workflow', 'decillion_workflow')
+      .replaceAll('ASEMAN_DEVELOPER_API_URL', 'DECILLION_DEVELOPER_API_URL')
+      .replaceAll('ASEMAN_DEVELOPER_KEY', 'DECILLION_DEVELOPER_KEY')
+      .replaceAll('ASEMAN_APPUI_ROOT', 'DECILLION_APPUI_ROOT')
+      .replaceAll('/opt/aseman-appui', '/opt/decillion-appui')
+      .replaceAll('aseman-elpian', 'decillion-elpian')
+      .replaceAll('aseman-appui', 'decillion-appui');
+}
 
 String? _jsonProblem(String text, {bool object = true}) {
   if (text.trim().isEmpty)
@@ -111,7 +128,7 @@ class _WorkflowsState extends _LoadedState<_Workflows> {
       ],
     );
     if (file == null) return;
-    final text = await file.readAsString();
+    final text = decillionWorkflowDocument(await file.readAsString());
     setState(() {
       _doc.text = text;
       _validation = null;
@@ -169,7 +186,13 @@ class _WorkflowsState extends _LoadedState<_Workflows> {
     unawaited(_validate(quiet: true));
   }
 
+  void _useDecillionDocument() {
+    final next = decillionWorkflowDocument(_doc.text);
+    if (next != _doc.text) _doc.text = next;
+  }
+
   Future<void> _validate({bool quiet = false}) async {
+    _useDecillionDocument();
     final problem = _jsonProblem(_doc.text);
     if (problem != null) {
       setState(
@@ -200,6 +223,7 @@ class _WorkflowsState extends _LoadedState<_Workflows> {
   }
 
   _Json? _request() {
+    _useDecillionDocument();
     final problem = _jsonProblem(_doc.text) ?? _jsonProblem(_inputs.text);
     if (problem != null) {
       _snack(context, problem);

@@ -21,6 +21,7 @@ import '../../features/settings/presentation/widgets/devices_panel.dart'
     deferred as devices_ui;
 import 'avatar_editor.dart';
 import 'overlay_panels.dart';
+import 'settings_kit.dart' show shortAccountId;
 import 'sky_ui.dart';
 import 'theme_slot_host.dart';
 
@@ -492,7 +493,7 @@ class _IdentityMasthead extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  accountId.isEmpty ? 'Signed out' : accountId,
+                  accountId.isEmpty ? 'Signed out' : shortAccountId(accountId),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

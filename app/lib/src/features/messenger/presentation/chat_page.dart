@@ -111,6 +111,18 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _poll;
   bool _loading = false;
 
+  /// A refresh was asked for while one was running: the running one may have
+  /// read the chat before what just changed (a message sent, an answer
+  /// started), so it runs again as soon as that one ends.
+  bool _reloadAfter = false;
+
+  /// Polling ticks every second; an idle chat loads on every third tick.
+  int _tick = 0;
+
+  /// After sending, the chat is polled every second until then, so an answer
+  /// that starts (the "thinking" bubble) and ends quickly is still seen.
+  DateTime _fastUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// True until the first fetch of this chat finishes (success or failure).
   bool _initialLoading = true;
   bool _loadingOlder = false;
@@ -167,7 +179,11 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _load());
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) {
+      _tick++;
+      final fast = _page.working.isNotEmpty || DateTime.now().isBefore(_fastUntil);
+      if (fast || _tick % 3 == 0) _load();
+    });
     unawaited(_boot());
   }
 
@@ -230,7 +246,10 @@ class _ChatPageState extends State<ChatPage> {
   String get _peerId => chat.peer?.id ?? chat.roomId;
 
   Future<void> _load() async {
-    if (_loading) return;
+    if (_loading) {
+      _reloadAfter = true;
+      return;
+    }
     _loading = true;
     var switched = false;
     try {
@@ -272,7 +291,9 @@ class _ChatPageState extends State<ChatPage> {
       }
     } finally {
       _loading = false;
-      if (switched) unawaited(_load());
+      final again = _reloadAfter;
+      _reloadAfter = false;
+      if ((switched || again) && mounted) unawaited(_load());
     }
   }
 
@@ -535,6 +556,7 @@ class _ChatPageState extends State<ChatPage> {
         await _service.sendRoomMessage(chat.spaceId, _roomId, body,
             mentions: mentions, attachments: attachments, replyTo: replyTo);
       }
+      _fastUntil = DateTime.now().add(const Duration(seconds: 30));
       await _load();
     } catch (e) {
       _say('Send failed: $e');

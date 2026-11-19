@@ -41,17 +41,27 @@ class MarketScreen extends StatefulWidget {
   State<MarketScreen> createState() => _MarketScreenState();
 }
 
+/// Pagination state for one store tab. Agents and apps page independently:
+/// one kind can run out while the other still has more.
+class _Feed {
+  List<MarketListing> items = [];
+  bool hasMore = false;
+  bool loadingMore = false;
+  bool loadMoreFailed = false;
+}
+
 class _MarketScreenState extends State<MarketScreen> {
   static const _pageSize = 20;
-  List<MarketListing> _agents = [];
-  List<MarketListing> _tools = [];
+  final _agents = _Feed();
+  final _tools = _Feed();
   final search = TextEditingController();
   bool _loading = true;
-  bool _loadingMore = false;
-  bool _hasMore = false;
-  int _offset = 0;
   String? _error;
   String _query = '';
+
+  /// Bumped on every fresh load so late "load more" responses for a previous
+  /// query or refresh are discarded instead of being appended.
+  int _generation = 0;
 
   @override
   void initState() {
@@ -65,59 +75,83 @@ class _MarketScreenState extends State<MarketScreen> {
     super.dispose();
   }
 
-  Future<void> _load({bool more = false}) async {
-    if (more) {
-      if (_loadingMore || !_hasMore || _loading) return;
-      setState(() => _loadingMore = true);
-    } else {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
+  Future<List<MarketListing>> _fetch(String type, String query, int offset) =>
+      widget.dependencies.service.fetchMarket(
+        type: type,
+        query: query,
+        limit: _pageSize,
+        offset: offset,
+      );
+
+  Future<void> _load() async {
+    final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final query = search.text.trim();
-    final offset = more ? _offset : 0;
     try {
       final results = await Future.wait([
-        widget.dependencies.service.fetchMarket(
-          type: 'agent',
-          query: query,
-          limit: _pageSize,
-          offset: offset,
-        ),
-        widget.dependencies.service.fetchMarket(
-          type: 'tool',
-          query: query,
-          limit: _pageSize,
-          offset: offset,
-        ),
+        _fetch('agent', query, 0),
+        _fetch('tool', query, 0),
       ]);
-      if (!mounted) return;
-      final agents = results[0];
-      final tools = results[1];
+      if (!mounted || generation != _generation) return;
       setState(() {
-        if (more) {
-          _agents.addAll(agents);
-          _tools.addAll(tools);
-          _offset += agents.length;
-        } else {
-          _agents = agents;
-          _tools = tools;
-          _offset = agents.length;
+        for (final (feed, page) in [
+          (_agents, results[0]),
+          (_tools, results[1]),
+        ]) {
+          feed.items = _dedupe(page);
+          feed.hasMore = page.length >= _pageSize;
+          feed.loadingMore = false;
+          feed.loadMoreFailed = false;
         }
-        _hasMore = agents.length >= _pageSize || tools.length >= _pageSize;
         _query = query;
         _loading = false;
-        _loadingMore = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _error = e.toString();
         _loading = false;
-        _loadingMore = false;
       });
     }
+  }
+
+  Future<void> _loadMore(_Feed feed, String type) async {
+    if (_loading || feed.loadingMore || !feed.hasMore) return;
+    final generation = _generation;
+    setState(() {
+      feed.loadingMore = true;
+      feed.loadMoreFailed = false;
+    });
+    try {
+      final page = await _fetch(type, _query, feed.items.length);
+      if (!mounted || generation != _generation) return;
+      final known = {for (final item in feed.items) item.id};
+      final fresh = _dedupe(page).where((item) => known.add(item.id)).toList();
+      setState(() {
+        feed.items = [...feed.items, ...fresh];
+        // Stop when the server has nothing new, so a backend that ignores
+        // `offset` can never make the list repeat itself forever.
+        feed.hasMore = fresh.isNotEmpty && page.length >= _pageSize;
+        feed.loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        feed.loadingMore = false;
+        feed.loadMoreFailed = true;
+      });
+    }
+  }
+
+  static List<MarketListing> _dedupe(List<MarketListing> items) {
+    final seen = <String>{};
+    return [
+      for (final item in items)
+        if (seen.add(item.id)) item,
+    ];
   }
 
   Future<void> _addTo(MarketListing listing) async {
@@ -157,76 +191,75 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   Widget _searchField() => SoftSearchField(
-        controller: search,
-        dense: true,
-        hintText: 'Search Decillion Store',
-        onSubmitted: (_) => _load(),
-        trailing: IconButton(
-          onPressed: _load,
-          icon: const Icon(Icons.arrow_forward_rounded),
-        ),
-      );
+    controller: search,
+    dense: true,
+    hintText: 'Search Decillion Store',
+    onSubmitted: (_) => _load(),
+    trailing: IconButton(
+      onPressed: _load,
+      icon: const Icon(Icons.arrow_forward_rounded),
+    ),
+  );
 
   Widget _kindTabs({required bool compact}) => SegmentedTabBar(
-        compact: compact,
-        alignment: Alignment.centerLeft,
-        labels: const ['Agents', 'Apps'],
-        icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
-      );
+    compact: compact,
+    alignment: Alignment.centerLeft,
+    labels: const ['Agents', 'Apps'],
+    icons: const [Icons.smart_toy_outlined, Icons.apps_outlined],
+  );
 
   Widget _toolbar({required bool compact}) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _searchField(),
-          const SizedBox(height: AppSpacing.sm),
-          _kindTabs(compact: compact),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _searchField(),
+      const SizedBox(height: AppSpacing.sm),
+      _kindTabs(compact: compact),
+    ],
+  );
 
   List<Widget> get _actions => [
-        FilledButton.icon(
-          onPressed: _openPublish,
-          icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-          label: const Text('Publish'),
-        ),
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: _load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ];
+    FilledButton.icon(
+      onPressed: _openPublish,
+      icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+      label: const Text('Publish'),
+    ),
+    IconButton(
+      tooltip: 'Refresh',
+      onPressed: _load,
+      icon: const Icon(Icons.refresh_rounded),
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final body = _loading
-        ? const SkeletonList(
-            item: SkeletonCard(mediaHeight: 0),
-            spacing: 10,
-          )
+        ? const SkeletonList(item: SkeletonCard(mediaHeight: 0), spacing: 10)
         : _error != null
-            ? Center(child: Text(_error!))
-            : TabBarView(
-                children: [
-                  _ListingList(
-                    items: _agents,
-                    editorial: _query.isEmpty,
-                    hasMore: _hasMore,
-                    loadingMore: _loadingMore,
-                    onLoadMore: () => _load(more: true),
-                    onInstall: _addTo,
-                  ),
-                  _ListingList(
-                    items: _tools,
-                    editorial: _query.isEmpty,
-                    shelfNoun: 'apps',
-                    hasMore: _hasMore,
-                    loadingMore: _loadingMore,
-                    onLoadMore: () => _load(more: true),
-                    onInstall: _addTo,
-                  ),
-                ],
-              );
+        ? Center(child: Text(_error!))
+        : TabBarView(
+            children: [
+              _ListingList(
+                items: _agents.items,
+                editorial: _query.isEmpty,
+                hasMore: _agents.hasMore,
+                loadingMore: _agents.loadingMore,
+                loadMoreFailed: _agents.loadMoreFailed,
+                onLoadMore: () => _loadMore(_agents, 'agent'),
+                onInstall: _addTo,
+              ),
+              _ListingList(
+                items: _tools.items,
+                editorial: _query.isEmpty,
+                shelfNoun: 'apps',
+                hasMore: _tools.hasMore,
+                loadingMore: _tools.loadingMore,
+                loadMoreFailed: _tools.loadMoreFailed,
+                onLoadMore: () => _loadMore(_tools, 'tool'),
+                onInstall: _addTo,
+              ),
+            ],
+          );
     return DefaultTabController(
       length: 2,
       child: widget.embedded
@@ -270,6 +303,7 @@ class _ListingList extends StatefulWidget {
     this.shelfNoun = 'agents',
     this.hasMore = false,
     this.loadingMore = false,
+    this.loadMoreFailed = false,
     this.onLoadMore,
   });
 
@@ -283,6 +317,7 @@ class _ListingList extends StatefulWidget {
   final String shelfNoun;
   final bool hasMore;
   final bool loadingMore;
+  final bool loadMoreFailed;
   final VoidCallback? onLoadMore;
 
   @override
@@ -290,7 +325,28 @@ class _ListingList extends StatefulWidget {
 }
 
 class _ListingListState extends State<_ListingList> {
+  final _scroll = ScrollController();
   String? _category;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// A short first page (or a category filter) can leave the list too short
+  /// to scroll, so no scroll event would ever ask for the next page. Keep
+  /// loading until the viewport is filled or the feed is exhausted.
+  void _fillViewport() {
+    if (!mounted ||
+        !widget.hasMore ||
+        widget.loadingMore ||
+        widget.loadMoreFailed ||
+        !_scroll.hasClients) {
+      return;
+    }
+    if (_scroll.position.extentAfter < 250) widget.onLoadMore?.call();
+  }
 
   List<String> get _categories {
     final seen = <String>{};
@@ -320,6 +376,12 @@ class _ListingListState extends State<_ListingList> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fillViewport());
+  }
+
+  @override
   Widget build(BuildContext context) {
     final items = _visible;
     if (widget.items.isEmpty) {
@@ -335,10 +397,18 @@ class _ListingListState extends State<_ListingList> {
     final editorial = widget.editorial && _category == null && items.isNotEmpty;
     final railCount = editorial ? (items.length - 1).clamp(0, 8) : 0;
     final gridStart = editorial ? 1 + railCount : 0;
+    // Re-check after every build: covers the list being too short to scroll.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fillViewport());
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
-        if (widget.hasMore &&
+        // Only the main vertical list may page; the horizontal chart and
+        // category rails also bubble up here and ended up triggering loads.
+        if (n.depth == 0 &&
+            n.metrics.axis == Axis.vertical &&
+            n is! ScrollMetricsNotification &&
+            widget.hasMore &&
             !widget.loadingMore &&
+            !widget.loadMoreFailed &&
             n.metrics.extentAfter < 250) {
           widget.onLoadMore?.call();
         }
@@ -353,6 +423,7 @@ class _ListingListState extends State<_ListingList> {
               ? width
               : (width - (columns - 1) * gap) / columns;
           return ListView(
+            controller: _scroll,
             padding: const EdgeInsets.only(top: 4, bottom: 18),
             children: [
               if (_categories.isNotEmpty) ...[
@@ -370,8 +441,8 @@ class _ListingListState extends State<_ListingList> {
                     'Nothing in this category.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 )
               else ...[
@@ -417,7 +488,9 @@ class _ListingListState extends State<_ListingList> {
                   if (editorial) ...[
                     const SizedBox(height: 18),
                     _ShelfLabel(
-                      railCount > 0 ? 'More to explore' : 'All ${widget.shelfNoun}',
+                      railCount > 0
+                          ? 'More to explore'
+                          : 'All ${widget.shelfNoun}',
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -439,7 +512,16 @@ class _ListingListState extends State<_ListingList> {
                   ),
                 ],
               ],
-              if (widget.hasMore || widget.loadingMore) ...[
+              if (widget.loadMoreFailed) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: widget.onLoadMore,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Couldn\'t load more. Tap to retry'),
+                  ),
+                ),
+              ] else if (widget.hasMore || widget.loadingMore) ...[
                 const SizedBox(height: 12),
                 const SkeletonCard(mediaHeight: 0),
               ],
@@ -508,17 +590,17 @@ class _ShelfLabel extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.2,
-                ),
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.2,
+            ),
           ),
         ),
         if (trailing != null)
           Text(
             trailing!,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
       ],
     );
@@ -526,11 +608,7 @@ class _ShelfLabel extends StatelessWidget {
 }
 
 class _Spotlight extends StatelessWidget {
-  const _Spotlight({
-    required this.listing,
-    required this.wide,
-    this.onInstall,
-  });
+  const _Spotlight({required this.listing, required this.wide, this.onInstall});
 
   final MarketListing listing;
   final bool wide;
@@ -550,10 +628,10 @@ class _Spotlight extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -.6,
-                height: 1.05,
-              ),
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.6,
+            height: 1.05,
+          ),
         ),
         if (listing.description.isNotEmpty) ...[
           const SizedBox(height: 6),
@@ -562,9 +640,9 @@ class _Spotlight extends StatelessWidget {
             maxLines: wide ? 3 : 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
+              color: scheme.onSurfaceVariant,
+              height: 1.35,
+            ),
           ),
         ],
         const SizedBox(height: 12),
@@ -599,10 +677,7 @@ class _Spotlight extends StatelessWidget {
         ),
         if (onInstall != null) ...[
           const SizedBox(height: 14),
-          FilledButton(
-            onPressed: onInstall,
-            child: const Text('Add to'),
-          ),
+          FilledButton(onPressed: onInstall, child: const Text('Add to')),
         ],
       ],
     );
@@ -638,11 +713,7 @@ class _Spotlight extends StatelessWidget {
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    art,
-                    const SizedBox(height: 14),
-                    copy,
-                  ],
+                  children: [art, const SizedBox(height: 14), copy],
                 ),
         ),
       ),
@@ -651,11 +722,7 @@ class _Spotlight extends StatelessWidget {
 }
 
 class _ChartTile extends StatelessWidget {
-  const _ChartTile({
-    required this.rank,
-    required this.listing,
-    this.onInstall,
-  });
+  const _ChartTile({required this.rank, required this.listing, this.onInstall});
 
   final int rank;
   final MarketListing listing;
@@ -674,10 +741,10 @@ class _ChartTile extends StatelessWidget {
               Text(
                 '$rank',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: scheme.primary,
-                      height: 1,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: scheme.primary,
+                  height: 1,
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -687,11 +754,11 @@ class _ChartTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: listing.price == 0
-                            ? AppColors.successOf(context)
-                            : scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: listing.price == 0
+                        ? AppColors.successOf(context)
+                        : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -838,7 +905,8 @@ class _ListingArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BotAvatar(
-      bot: listing.bot ??
+      bot:
+          listing.bot ??
           Bot(
             id: listing.botId,
             ownerId: listing.publisherId,
@@ -871,10 +939,7 @@ class _SpaceChoice {
 }
 
 class _AddToDialog extends StatefulWidget {
-  const _AddToDialog({
-    required this.dependencies,
-    required this.listingName,
-  });
+  const _AddToDialog({required this.dependencies, required this.listingName});
 
   final AppDependencies dependencies;
   final String listingName;
@@ -924,11 +989,7 @@ class _AddToDialogState extends State<_AddToDialog> {
             if (chat.direct &&
                 chat.spaceId.isNotEmpty &&
                 seenDirect.add(chat.spaceId))
-              _SpaceChoice(
-                id: chat.spaceId,
-                title: chat.title,
-                direct: true,
-              ),
+              _SpaceChoice(id: chat.spaceId, title: chat.title, direct: true),
         ];
         _loading = false;
       });
@@ -957,9 +1018,9 @@ class _AddToDialogState extends State<_AddToDialog> {
                   child: Text(
                     'Add to a space',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -.3,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.3,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -974,8 +1035,8 @@ class _AddToDialogState extends State<_AddToDialog> {
               child: Text(
                 'Choose where ${widget.listingName} should live — a workspace or a direct chat.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -1001,7 +1062,8 @@ class _AddToDialogState extends State<_AddToDialog> {
       return const PanelEmpty(
         icon: Icons.workspaces_outlined,
         title: 'No spaces yet',
-        message: 'Create a workspace or open a direct chat, then add from here.',
+        message:
+            'Create a workspace or open a direct chat, then add from here.',
       );
     }
     return ListView(
@@ -1163,9 +1225,14 @@ class _PublishDialogState extends State<_PublishDialog> {
                   child: Material(
                     color: _selected?.id == b.id
                         ? ThemeRoles.selectedFill(context)
-                        : AppSurfaces.card(scheme, tokens: AsemanTokens.maybeOf(context)),
+                        : AppSurfaces.card(
+                            scheme,
+                            tokens: AsemanTokens.maybeOf(context),
+                          ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppShape.controlOf(context)),
+                      borderRadius: BorderRadius.circular(
+                        AppShape.controlOf(context),
+                      ),
                       side: BorderSide(
                         color: _selected?.id == b.id
                             ? scheme.primary.withValues(alpha: .35)
@@ -1178,8 +1245,12 @@ class _PublishDialogState extends State<_PublishDialog> {
                       leading: BotAvatar(
                         bot: b,
                         radius: 20,
-                        userId: widget.dependencies.sessionController
-                                .session?.accountId ??
+                        userId:
+                            widget
+                                .dependencies
+                                .sessionController
+                                .session
+                                ?.accountId ??
                             '',
                       ),
                       title: Text(

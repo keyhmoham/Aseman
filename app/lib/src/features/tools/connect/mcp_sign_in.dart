@@ -9,7 +9,7 @@ import 'oauth_window.dart';
 const String kOAuthRedirectUri = String.fromEnvironment('OAUTH_REDIRECT_URI');
 
 /// The provider wants an OAuth client someone creates (it will not register
-/// Aseman by itself): the person supplies its id, or a token.
+/// Aseman by itself): the person supplies its id.
 class McpNeedsClient implements Exception {
   McpNeedsClient(this.message, this.redirectUri);
   final String message;
@@ -25,12 +25,28 @@ class McpNeedsClient implements Exception {
 typedef OAuthOpener = Future<String> Function(
     String authorizationUrl, String redirectUri, String state);
 
-/// Signing a person in to an MCP tool that each person connects with their
-/// own account, and storing the connection for a project. Discovery, client
-/// registration and the token exchange run on the node (a page cannot reach
-/// most servers' sign-in documents); the app only shows the provider's page
-/// and brings the code back. The connection is made from the sign-in itself,
-/// so the node can renew it without the person.
+/// What connecting a person to a server came to.
+class McpConnectOutcome {
+  const McpConnectOutcome(this.status, {this.credential = ''});
+
+  /// connected (signed in, or already was), ready (the server needs no one
+  /// to sign in) or needs_token (it has no sign-in page: the person pastes its key).
+  final String status;
+
+  /// What the server's key is called, when it wants one.
+  final String credential;
+
+  bool get needsToken => status == 'needs_token';
+  bool get connected => status == 'connected' || status == 'ready';
+}
+
+/// Signing a person in to an MCP server that each person connects with their
+/// own account. The node does everything but the one step that needs a
+/// browser: it finds the provider the server names, gets a client there,
+/// builds the sign-in address (OAuth 2.1 with PKCE) and, when the person comes
+/// back with a code, trades it for tokens and keeps them, sealed, as theirs.
+/// The app only shows the provider's page and brings the code back: no token
+/// ever reaches it. One sign-in serves every space the server is added to.
 class McpSignIn {
   McpSignIn(this.service);
   final AsemanService service;
@@ -39,41 +55,62 @@ class McpSignIn {
       ? kOAuthRedirectUri
       : oauthRedirectUri(service.client.baseUrl);
 
-  /// Signs in to the tool [botId] and connects it in [spaceId]. With
-  /// [clientId], that OAuth client is used instead of the one saved for the
-  /// tool or registered on the fly. [open] shows the provider's page; by
-  /// default it is the platform's sign-in window, opened right away so a
-  /// browser keeps it as part of the tap.
-  Future<void> connect(BuildContext context,
+  /// A server whose sign-in failed is signed in to afresh next time: the
+  /// provider may no longer know the client the node kept.
+  static final _failed = <String>{};
+
+  /// Signs in to the tool [botId] from [spaceId]. With [clientId], that OAuth
+  /// client is used instead of the one saved for the tool or registered on
+  /// the fly. [open] shows the provider's page; by default it is the
+  /// platform's sign-in window, opened right away so a browser keeps it as
+  /// part of the tap. Throws [McpNeedsClient] for a provider that registers
+  /// no clients.
+  Future<McpConnectOutcome> connect(BuildContext context,
       {required String botId,
       required String spaceId,
       String clientId = '',
       String clientSecret = '',
-      OAuthOpener? open}) async {
-    OAuthWindow? window;
+      bool reconnect = false,
+      OAuthOpener? open,
+      OAuthWindow? window}) async {
     if (open == null) {
-      window = OAuthWindow.open();
+      window ??= OAuthWindow.open();
+      final w = window;
       open = (url, redirect, state) =>
-          window!.signIn(context, url, redirectUri: redirect, state: state);
+          w.signIn(context, url, redirectUri: redirect, state: state);
     }
     try {
       final redirect = redirectUri;
-      final prepared = await service.mcpOAuthPrepare(
-          bot: botId,
+      final start = await service.mcpConnectStart(
+          botId: botId,
+          spaceId: spaceId,
           redirectUri: redirect,
           clientId: clientId,
-          clientSecret: clientSecret);
-      if (prepared['needs_client'] == true) {
-        throw McpNeedsClient(
-            '${prepared['error'] ?? 'This provider needs an OAuth client you create.'}',
-            '${prepared['redirect_uri'] ?? redirect}');
+          clientSecret: clientSecret,
+          reconnect: reconnect,
+          freshClient: _failed.contains(botId));
+      switch (start.status) {
+        case 'ready':
+        case 'connected':
+          window?.close();
+          return McpConnectOutcome(start.status);
+        case 'needs_token':
+          window?.close();
+          return McpConnectOutcome('needs_token',
+              credential: start.credential);
+        case 'needs_client':
+          throw McpNeedsClient(
+              start.error.isEmpty
+                  ? 'This provider needs an OAuth client you create.'
+                  : start.error,
+              start.redirectUri.isEmpty ? redirect : start.redirectUri);
+        case 'authorize':
+          break;
+        default:
+          throw StateError('That app did not offer a sign-in page.');
       }
-      final url = '${prepared['authorization_url'] ?? ''}';
-      final state = '${prepared['state'] ?? ''}';
-      if (url.isEmpty || state.isEmpty) {
-        throw StateError('That app did not offer a sign-in page.');
-      }
-      final returned = Uri.parse(await open(url, redirect, state));
+      final returned =
+          Uri.parse(await open(start.authorizationUrl, redirect, start.state));
       final params = {
         ...Uri.splitQueryString(returned.fragment),
         ...returned.queryParameters,
@@ -85,25 +122,25 @@ class McpSignIn {
         throw StateError('The provider did not return an authorization code.');
       }
       final back = params['state'] ?? '';
-      if (back.isNotEmpty && back != state) {
+      if (back.isNotEmpty && back != start.state) {
         throw StateError('Sign-in came back for a different attempt.');
       }
-      final tokens = await service.mcpOAuthExchange(state, code);
-      if ('${tokens['access_token'] ?? ''}'.isEmpty) {
-        throw StateError('The provider did not return an access token.');
-      }
-      await service.setToolConnection(botId, spaceId, grant: state);
-    } catch (_) {
+      await service.mcpConnectFinish(start.state, code);
+      _failed.remove(botId);
+      return const McpConnectOutcome('connected');
+    } catch (e) {
       window?.close();
+      if (e is! McpNeedsClient) _failed.add(botId);
       rethrow;
     }
   }
 
-  /// Connects [botId] in [spaceId] with a token the person pasted (it cannot
-  /// renew itself).
-  Future<void> connectWithToken(
-          String botId, String spaceId, String token) =>
-      service.setToolConnection(botId, spaceId, token: token.trim());
+  /// Connects [botId] with a key the person holds. The node checks it with
+  /// the server before keeping it.
+  Future<void> connectWithToken(String botId, String spaceId, String token,
+          {String username = '', String header = ''}) =>
+      service.mcpConnectToken(botId, spaceId, token.trim(),
+          username: username.trim(), header: header.trim());
 }
 
 /// A sign-in failure in words a person can act on, with addresses reduced to

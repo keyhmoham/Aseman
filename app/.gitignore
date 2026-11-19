@@ -5,3 +5,9 @@
 build/
 .idea/
 *.iml
+
+# The Godot web export (a live Scene3D on the web), installed beside index.html by
+# packages/elpian_godot_native/tool/install-web-export.sh — large, reproducible.
+web/elpian_godot*
+web/libelpian_godot*
+web/godot_config.json

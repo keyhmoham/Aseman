@@ -71,7 +71,11 @@ class _CenterDesk extends StatelessWidget {
       ? _AppPinPreview(name: p.name)
       : _frontend(p.tool, p.shown);
 
-  Widget _emptyState(BuildContext context, {required bool widgets}) {
+  Widget _emptyState(
+    BuildContext context, {
+    required bool widgets,
+    bool free = false,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
@@ -93,7 +97,9 @@ class _CenterDesk extends StatelessWidget {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Text(
-                widgets
+                free
+                    ? 'A free whiteboard: apps open here as draggable widgets. Add notes, shapes and arrows from the bar below, or ask an agent to lay it out.'
+                    : widgets
                     ? (board
                           ? 'Apps sit here as widgets. Open one and it floats over the workspace.'
                           : 'App results open here as widgets. Ask an agent, or open an app from the library.')
@@ -132,6 +138,20 @@ class _CenterDesk extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, box) {
                   final widgets = board || box.maxWidth < compactDeskWidth;
+                  // A desk wider than a small tablet is a free whiteboard.
+                  if (board && box.maxWidth >= freeDeskWidth) {
+                    return FreeDesk(
+                      controller: controller,
+                      topInset: topContentInset,
+                      windowContent: _windowContent,
+                      pinPreview: _pinPreview,
+                      emptyState: _emptyState(
+                        context,
+                        widgets: true,
+                        free: true,
+                      ),
+                    );
+                  }
                   return widgets
                       ? CompactDesk(
                           controller: controller,

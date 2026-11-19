@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/layout/app_layout.dart';
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/split_pane.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
@@ -618,10 +619,12 @@ class _ChatPageState extends State<ChatPage> {
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.delete_sweep_outlined),
         title: const Text('Delete this chat?'),
-        content: Text(chat.saved
-            ? 'Your Aseman notes are removed for you.'
-            : 'It is deleted for you only; ${chat.title} keeps their copy. '
-                'It comes back if a new message arrives.'),
+        content: Text(
+          chat.saved
+              ? 'Your notes with the Decillion assistant are removed for you.'
+              : 'It is deleted for you only; ${chat.title} keeps their copy. '
+                    'It comes back if a new message arrives.',
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -995,7 +998,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   String get _headerSubtitle {
-    if (chat.isAseman) return 'Your personal Aseman';
+    if (chat.isAseman) return 'Your personal assistant';
     final peer = chat.peer;
     if (peer?.isAgent ?? false) return 'AI agent';
     if (peer == null) return 'Direct chat';
@@ -1123,9 +1126,11 @@ class _ChatPageState extends State<ChatPage> {
         showListHeader: !useOuterAvatar,
         topContentInset: chat.direct ? topPad + chrome : 0,
         bottomContentInset: embedded ? bottomInset : 0,
-        hint: chat.isAseman ? 'Message Aseman…' : 'Message ${chat.title}…',
+        hint: chat.isAseman
+            ? 'Message Decillion assistant…'
+            : 'Message ${chat.title}…',
         subtitle: chat.isAseman
-            ? 'Your personal Aseman'
+            ? 'Your personal assistant'
             : chat.direct
                 ? (peer == null
                     ? 'Direct chat'
@@ -1175,87 +1180,81 @@ class _ChatPageState extends State<ChatPage> {
 
     Widget body;
     if (_deskBeside) {
-      final deskWidth = AppLayout.roomDeskPaneWidth(
-        innerWidth: box.maxWidth,
-        libraryWidth: 0,
-      );
       body = Stack(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: AppPane(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Column(
-                          children: [
-                            if (chat.isAseman)
-                              BrainProposalsBar(
-                                dependencies: widget.dependencies,
-                              ),
-                            Expanded(child: chatBody),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        top: topPad,
-                        left: 0,
-                        right: 0,
-                        child: _CollapsingDmHeader(
-                          height: _avatarHeaderHeight,
-                          collapse: _avatarCollapse,
-                          title: chat.title,
-                          subtitle: _headerSubtitle,
-                          avatarBuilder: _headerAvatar,
-                          leading: embedded || !(modal || canPop)
-                              ? null
-                              : IconButton(
-                                  tooltip: modal ? 'Close' : 'Back',
-                                  onPressed: () =>
-                                      Navigator.of(context).maybePop(),
-                                  icon: Icon(
-                                    modal
-                                        ? Icons.close_rounded
-                                        : Icons.arrow_back_rounded,
-                                  ),
-                                ),
-                          onRoom: _openLibrary,
-                          onCustomize: _isAiChat ? _editAvatar : null,
-                          actions: _directHeaderActions(),
-                          menu: _menu(),
-                        ),
-                      ),
-                      if (_isAiChat)
-                        Positioned(
-                          right: 18,
-                          bottom:
-                              _voiceFabBottom + (embedded ? bottomInset : 0),
-                          child: _VoiceFab(
-                            active: _voice?.active ?? false,
-                            onPressed: _openVoiceSheet,
-                          ),
-                        ),
-                    ],
+          // The chat and its desk: the desk's width is the person's to drag,
+          // and the two can trade places (kept per kind of chat).
+          SplitPane(
+            storageKey: chat.isAseman ? 'desk.assistant' : 'desk.direct',
+            sideLabel: 'desk',
+            swappable: true,
+            minSideWidth: 220,
+            minMainWidth: 320,
+            defaultSideWidth: (total) =>
+                AppLayout.roomDeskPaneWidth(innerWidth: total, libraryWidth: 0),
+            main: AppPane(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Column(
+                      children: [
+                        if (chat.isAseman)
+                          BrainProposalsBar(dependencies: widget.dependencies),
+                        Expanded(child: chatBody),
+                      ],
+                    ),
                   ),
-                ),
+                  Positioned(
+                    top: topPad,
+                    left: 0,
+                    right: 0,
+                    child: _CollapsingDmHeader(
+                      height: _avatarHeaderHeight,
+                      collapse: _avatarCollapse,
+                      title: chat.title,
+                      subtitle: _headerSubtitle,
+                      avatarBuilder: _headerAvatar,
+                      leading: embedded || !(modal || canPop)
+                          ? null
+                          : IconButton(
+                              tooltip: modal ? 'Close' : 'Back',
+                              onPressed: () => Navigator.of(context).maybePop(),
+                              icon: Icon(
+                                modal
+                                    ? Icons.close_rounded
+                                    : Icons.arrow_back_rounded,
+                              ),
+                            ),
+                      onRoom: _openLibrary,
+                      onCustomize: _isAiChat ? _editAvatar : null,
+                      actions: _directHeaderActions(),
+                      menu: _menu(),
+                    ),
+                  ),
+                  if (_isAiChat)
+                    Positioned(
+                      right: 18,
+                      bottom: _voiceFabBottom + (embedded ? bottomInset : 0),
+                      child: _VoiceFab(
+                        active: _voice?.active ?? false,
+                        onPressed: _openVoiceSheet,
+                      ),
+                    ),
+                ],
               ),
-              const PaneDivider(),
-              AppPane(
-                width: deskWidth,
-                child: _DeferredDmDeskPanel(
-                  dependencies: widget.dependencies,
-                  controller: _desk,
-                  spaceId: chat.spaceId,
-                  roomId: chat.roomId,
-                  title: chat.title,
-                  board: true,
-                  topInset: 0,
-                  bottomInset: embedded ? bottomInset : 0,
-                ),
+            ),
+            side: AppPane(
+              child: _DeferredDmDeskPanel(
+                dependencies: widget.dependencies,
+                controller: _desk,
+                spaceId: chat.spaceId,
+                roomId: chat.roomId,
+                title: chat.title,
+                board: true,
+                topInset: 0,
+                bottomInset: embedded ? bottomInset : 0,
               ),
-            ],
+            ),
           ),
             SpaceLibraryFlyout(
               open: _libraryOpen,

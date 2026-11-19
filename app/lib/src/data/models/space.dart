@@ -564,7 +564,7 @@ class ChatSummary {
       (direct && (spaceName == 'Aseman' || spaceName == 'Saved Messages'));
 
   String get title => isAseman
-      ? 'Aseman'
+      ? 'Decillion assistant'
       : direct
       ? (peer?.displayName ?? 'Direct chat')
       : roomName;

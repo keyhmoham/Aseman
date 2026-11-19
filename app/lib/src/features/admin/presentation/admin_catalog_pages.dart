@@ -283,9 +283,10 @@ Widget _buildAppsPage(_AppPageContentState state) {
           return kind == 'tool' || kind == 'mcp';
         })
         .toList();
-    final samples = _listOfMaps(
-      _map(state.widget.results['tools.mcp_samples'])['samples'],
-    );
+    // Servers rooms added from the MCP directory (Glama), shared by every room
+    // that has one: who is signed in to each, and whether it has a sign-in app.
+    final directory = _map(state.widget.results['tools.mcp_directory_list']);
+    final fromDirectory = _listOfMaps(directory['servers']);
     final listings = _listOfMaps(
       _map(state.widget.results['market.catalog'])['listings'],
     );
@@ -322,6 +323,14 @@ Widget _buildAppsPage(_AppPageContentState state) {
               tone: AppColors.cyanOf(state.context),
             ),
             AdminStatCard(
+              label: directory['enabled'] == false
+                  ? 'MCP directory (off)'
+                  : 'From the MCP directory',
+              value: '${fromDirectory.length}',
+              icon: Icons.travel_explore_rounded,
+              tone: AppColors.cyanOf(state.context),
+            ),
+            AdminStatCard(
               label: 'In the catalog',
               value:
                   '${bots.where((b) => listedIds.contains('${b['id']}')).length}',
@@ -342,17 +351,6 @@ Widget _buildAppsPage(_AppPageContentState state) {
             onChanged: (_) => state.setState(() {}),
           ),
           [
-            OutlinedButton.icon(
-              onPressed: () => state.widget.onAction(
-                'tools',
-                'mcp_import_samples',
-                const <String, dynamic>{},
-              ),
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: Text(
-                samples.isEmpty ? 'Import samples' : 'Import catalog',
-              ),
-            ),
             FilledButton.icon(
               onPressed: () =>
                   state.widget.onAction('tools', 'mcp_register', const {}),
@@ -382,7 +380,7 @@ Widget _buildAppSection(
           ? AdminEmptyState(
               'No apps',
               state.search.text.isEmpty
-                  ? 'Add an app or import the catalog.'
+                  ? 'People add apps from the MCP directory in a room’s Apps; add one for everyone by its address.'
                   : 'No apps match your search.',
               icon: Icons.apps_outlined,
             )

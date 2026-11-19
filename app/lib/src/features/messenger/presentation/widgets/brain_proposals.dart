@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app_dependencies.dart';
+import '../../../tools/connect/mcp_login_card.dart';
+import '../../../tools/domain/mcp_directory.dart';
 
-/// Compact brain UX for the personal Aseman chat: pending proposal cards + thinking.
+/// Compact brain UX for the personal Decillion assistant chat: pending proposal cards + thinking.
 class BrainProposalsBar extends StatefulWidget {
   const BrainProposalsBar({
     super.key,
@@ -23,6 +25,8 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
   Timer? _poll;
   bool _thinking = false;
   List<_Proposal> _pending = const [];
+  // Apps the newest answer asks the person to sign in to (login cards).
+  List<LoginCard> _logins = const [];
   bool _busy = false;
 
   @override
@@ -67,11 +71,15 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
       final thinking = working is List && working.isNotEmpty;
       final messages = res['messages'];
       final pending = <_Proposal>[];
+      var logins = const <LoginCard>[];
       if (messages is List) {
         for (final raw in messages) {
           if (raw is! Map) continue;
           final proposal = raw['proposal'];
           if (proposal is! Map) continue;
+          // The newest answer's login cards stay until the person has signed in.
+          final cards = loginCardsOf(proposal['cards']);
+          if (cards.isNotEmpty) logins = cards;
           if ('${proposal['status']}' != 'pending') continue;
           final steps = proposal['steps'];
           pending.add(_Proposal(
@@ -86,6 +94,7 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
       setState(() {
         _thinking = thinking;
         _pending = pending.where((p) => p.id.isNotEmpty).toList();
+        _logins = logins;
       });
     } catch (_) {}
   }
@@ -109,7 +118,8 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.enabled || (!_thinking && _pending.isEmpty)) {
+    if (!widget.enabled ||
+        (!_thinking && _pending.isEmpty && _logins.isEmpty)) {
       return const SizedBox.shrink();
     }
     final scheme = Theme.of(context).colorScheme;
@@ -130,11 +140,23 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text('Aseman is thinking…',
+                Text('Decillion assistant is thinking…',
                     style: TextStyle(
                         fontStyle: FontStyle.italic,
                         color: scheme.onSurfaceVariant)),
               ],
+            ),
+          ),
+        for (final login in _logins)
+          Card(
+            margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: McpLoginCardView(
+                key: ValueKey('login:${login.bot}'),
+                service: widget.dependencies.service,
+                card: login,
+              ),
             ),
           ),
         for (final p in _pending)
@@ -145,7 +167,7 @@ class _BrainProposalsBarState extends State<BrainProposalsBar> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Aseman proposes',
+                  const Text('Decillion assistant proposes',
                       style: TextStyle(fontWeight: FontWeight.w800)),
                   if (p.body.trim().isNotEmpty) ...[
                     const SizedBox(height: 4),

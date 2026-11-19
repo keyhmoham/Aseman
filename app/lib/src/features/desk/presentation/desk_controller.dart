@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../data/desk_api.dart';
+import '../domain/desk_board.dart';
 import '../domain/desk_models.dart';
 
 /// The desk of the room on screen: what the node keeps (windows, pins) kept
@@ -37,11 +40,18 @@ class DeskController extends ChangeNotifier {
   /// board does not read this; a window stays on the widget grid either way.
   final Set<String> _presented = {};
 
+  /// The whiteboard's undo and redo: what this person did to its items.
+  final List<_ItemEdit> _undo = [];
+  final List<_ItemEdit> _redo = [];
+  static const _historyMax = 100;
+  static final math.Random _random = math.Random.secure();
+
   int _pending = 0;
   int _interacting = 0;
   Timer? _poll;
   Timer? _viewportTimer;
   Size _reported = Size.zero;
+  bool _reportedFree = false;
   bool _disposed = false;
 
   DeskState get state => _state;
@@ -112,6 +122,8 @@ class DeskController extends ChangeNotifier {
     _maximized = null;
     _minimized.clear();
     _presented.clear();
+    _undo.clear();
+    _redo.clear();
     _reported = Size.zero;
     _poll?.cancel();
     _notify();
@@ -445,22 +457,194 @@ class DeskController extends ChangeNotifier {
   }
 
   /// The size of the desk on this screen, for agents to place windows in
-  /// (sent when it settles).
-  void reportViewport(Size size) {
+  /// (sent when it settles). [free]: this screen shows the free whiteboard.
+  void reportViewport(Size size, {bool free = false}) {
     if (_space.isEmpty || size.width < 200 || size.height < 200) return;
     if ((size.width - _reported.width).abs() < 8 &&
-        (size.height - _reported.height).abs() < 8) {
+        (size.height - _reported.height).abs() < 8 &&
+        free == _reportedFree) {
       return;
     }
     _viewportTimer?.cancel();
     _viewportTimer = Timer(const Duration(milliseconds: 700), () {
       _reported = size;
+      _reportedFree = free;
       unawaited(
         api
-            .update(_space, _room, [DeskOps.viewport(size)])
+            .update(_space, _room, [DeskOps.viewport(size, free: free)])
             .then((_) {}, onError: (_) {}),
       );
     });
+  }
+
+  // --- the whiteboard's items --------------------------------------------
+
+  /// The front-most z of the windows and the items together.
+  int get _topAll => _state.items.fold(_topZ, (z, i) => i.z > z ? i.z : z);
+
+  DeskItem? itemById(String id) =>
+      _state.items.where((i) => i.id == id).firstOrNull;
+
+  /// A fresh id for an item made on this screen.
+  String newItemId() => List.generate(
+    12,
+    (_) => _random.nextInt(16).toRadixString(16),
+  ).join();
+
+  /// Where the arrow end [e] lies: the middle of what it is stuck to, else
+  /// its own point. [items] / [windows] default to the desk's.
+  Offset? endPoint(DeskEnd e) {
+    if (!e.stuck) return e.point;
+    final item = itemById(e.ref);
+    if (item != null && item.isBox) return item.rect.center;
+    final w = _state.windows.where((w) => w.id == e.ref).firstOrNull;
+    return w?.rect.center;
+  }
+
+  /// [items] with every arrow end that was stuck to [id] let go where [id]
+  /// was (what the node does when something an arrow points at goes).
+  List<DeskItem> _detached(List<DeskItem> items, String id) {
+    final at = items.where((i) => i.id == id).firstOrNull?.rect.center ??
+        _state.windows.where((w) => w.id == id).firstOrNull?.rect.center;
+    if (at == null) return items;
+    DeskEnd? free(DeskEnd? e) =>
+        e != null && e.ref == id ? DeskEnd(point: at) : e;
+    return [
+      for (final i in items)
+        i.isArrow && (i.from?.ref == id || i.to?.ref == id)
+            ? i.copyWith(from: free(i.from), to: free(i.to))
+            : i,
+    ];
+  }
+
+  /// Applies [edit] here at once and on the node, and remembers it so it can
+  /// be undone ([record] false while undoing or redoing).
+  Future<void> _applyEdit(_ItemEdit edit, {bool record = true}) {
+    final byId = {for (final i in _state.items) i.id: i};
+    var z = _topAll;
+    final ops = <Map<String, dynamic>>[];
+    for (final c in edit.changes) {
+      final before = byId[c.id];
+      final after = c.after;
+      if (after == null) {
+        if (before != null) ops.add(DeskOps.itemRemove(c.id));
+        byId.remove(c.id);
+      } else if (before == null) {
+        ops.add(DeskOps.itemAdd(after));
+        byId[c.id] = after.copyWith(z: ++z);
+      } else {
+        ops.add(DeskOps.itemUpdate(c.id, after.toPatch()));
+        byId[c.id] = after.copyWith(z: before.z);
+      }
+    }
+    if (ops.isEmpty) return Future.value();
+    if (record) {
+      _undo.add(edit);
+      if (_undo.length > _historyMax) _undo.removeAt(0);
+      _redo.clear();
+    }
+    return _send(
+      ops,
+      optimistic: _state.copyWith(items: byId.values.toList()),
+    );
+  }
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
+
+  Future<void> undo() {
+    if (_undo.isEmpty) return Future.value();
+    final edit = _undo.removeLast();
+    _redo.add(edit);
+    return _applyEdit(edit.inverse, record: false);
+  }
+
+  Future<void> redo() {
+    if (_redo.isEmpty) return Future.value();
+    final edit = _redo.removeLast();
+    _undo.add(edit);
+    return _applyEdit(edit, record: false);
+  }
+
+  /// Puts [item] on the whiteboard (a fresh id when it has none) and returns
+  /// its id at once; the node follows.
+  String addItem(DeskItem item) {
+    final id = item.id.isEmpty ? newItemId() : item.id;
+    final made = DeskItem.fromJson({...item.toJson(), 'id': id});
+    unawaited(_applyEdit(_ItemEdit([_Change(id, null, made)])));
+    return id;
+  }
+
+  /// Several items at once (a paste, a duplicate), as one undo step.
+  List<String> addItems(List<DeskItem> items) {
+    final made = [
+      for (final i in items)
+        DeskItem.fromJson({...i.toJson(), 'id': newItemId()}),
+    ];
+    unawaited(
+      _applyEdit(_ItemEdit([for (final i in made) _Change(i.id, null, i)])),
+    );
+    return [for (final i in made) i.id];
+  }
+
+  /// Sets each item to [next] (keyed by id); items that are not there or did
+  /// not change are left alone. One undo step.
+  Future<void> updateItems(Map<String, DeskItem> next) {
+    final changes = <_Change>[];
+    for (final e in next.entries) {
+      final cur = itemById(e.key);
+      if (cur == null || _same(cur, e.value)) continue;
+      changes.add(_Change(e.key, cur, e.value));
+    }
+    return _applyEdit(_ItemEdit(changes));
+  }
+
+  Future<void> updateItem(DeskItem next) => updateItems({next.id: next});
+
+  static bool _same(DeskItem a, DeskItem b) =>
+      mapEquals(a.toJson(), b.toJson());
+
+  /// Takes [ids] off the whiteboard; arrows stuck to them are let go where
+  /// they were. One undo step.
+  Future<void> removeItems(Iterable<String> ids) {
+    final gone = ids.toSet();
+    var items = [..._state.items];
+    final changes = <_Change>[];
+    for (final id in gone) {
+      final item = itemById(id);
+      if (item == null) continue;
+      final next = _detached(items, id);
+      for (var k = 0; k < next.length; k++) {
+        if (!identical(next[k], items[k]) && !gone.contains(next[k].id)) {
+          final prior = changes.where((c) => c.id == next[k].id).firstOrNull;
+          if (prior != null) {
+            changes[changes.indexOf(prior)] =
+                _Change(prior.id, prior.before, next[k]);
+          } else {
+            changes.add(_Change(next[k].id, items[k], next[k]));
+          }
+        }
+      }
+      items = next;
+      changes.add(_Change(id, item, null));
+    }
+    // Arrows first: they must be freed before the node removes the thing.
+    changes.sort((a, b) => (a.after == null ? 1 : 0) - (b.after == null ? 1 : 0));
+    return _applyEdit(_ItemEdit(changes));
+  }
+
+  /// Brings an item in front of the others.
+  Future<void> frontItem(String id) {
+    final item = itemById(id);
+    if (item == null || item.z >= _topAll) return Future.value();
+    return _send(
+      [DeskOps.itemFront(id)],
+      optimistic: _state.copyWith(
+        items: [
+          for (final i in _state.items) i.id == id ? i.copyWith(z: _topAll + 1) : i,
+        ],
+      ),
+    );
   }
 
   void _notify() {
@@ -488,4 +672,23 @@ class DeskScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(DeskScope old) => old.controller != controller;
+}
+
+/// One item's change: [before] null is an add, [after] null a removal.
+class _Change {
+  const _Change(this.id, this.before, this.after);
+  final String id;
+  final DeskItem? before;
+  final DeskItem? after;
+}
+
+/// What one person action did to the whiteboard, so it can be undone.
+class _ItemEdit {
+  const _ItemEdit(this.changes);
+  final List<_Change> changes;
+
+  /// The edit that undoes this one (its changes reversed, last first).
+  _ItemEdit get inverse => _ItemEdit([
+    for (final c in changes.reversed) _Change(c.id, c.after, c.before),
+  ]);
 }

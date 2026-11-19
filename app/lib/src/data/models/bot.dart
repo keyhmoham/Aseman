@@ -37,7 +37,7 @@ class Bot {
   bool get isTool => kind == 'tool';
   bool get isTheme => kind == 'theme';
 
-  /// Built-in Aseman assistant or lead — personal Aseman chat, not a New-chat peer.
+  /// Built-in Decillion assistant or lead — personal assistant chat, not a New-chat peer.
   bool get isBuiltin =>
       imageRef == 'decillion-chat' || imageRef == 'decillion.wasm';
 

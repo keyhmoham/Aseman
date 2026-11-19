@@ -710,15 +710,15 @@ void main() {
     expect(find.text('Pin to top'), findsNothing);
   });
 
-  testWidgets('Aseman opens the chat with oneself', (tester) async {
+  testWidgets('the Decillion assistant opens the chat with oneself', (tester) async {
     // Personal Aseman is a normal inbox row on the chats rail (not a header
     // shortcut). The home Aseman tab may already host the same chat.
     await openHomeChats(tester, const Size(1440, 900));
-    expect(inMessenger(find.text('Aseman')), findsOneWidget);
-    await tester.tap(inMessenger(find.text('Aseman')));
+    expect(inMessenger(find.text('Decillion assistant')), findsOneWidget);
+    await tester.tap(inMessenger(find.text('Decillion assistant')));
     await tester.pumpAndSettle();
-    expect(find.text('Message Aseman…'), findsWidgets);
-    expect(find.text('Your personal Aseman'), findsWidgets);
+    expect(find.text('Message Decillion assistant…'), findsWidgets);
+    expect(find.text('Your personal assistant'), findsWidgets);
     await tester.tap(find.byTooltip('Chat options').last);
     await tester.pumpAndSettle();
     expect(find.text('Block'), findsNothing);

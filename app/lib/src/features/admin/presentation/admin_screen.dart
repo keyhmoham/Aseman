@@ -165,11 +165,10 @@ class _AppScreenState extends State<AdminScreen> {
         Icons.apps_rounded,
         calls: [
           _Call('admin', 'bots_list'),
-          _Call('tools', 'mcp_samples'),
+          _Call('tools', 'mcp_directory_list'),
           _Call('market', 'catalog', {'status': 'all'}),
         ],
         actions: [
-          _Call('tools', 'mcp_import_samples'),
           _Call('tools', 'mcp_register'),
           _Call('tools', 'mcp_update'),
           _Call('tools', 'mcp_delete'),
@@ -308,7 +307,7 @@ class _AppScreenState extends State<AdminScreen> {
       ),
       _Page(
         'AI log',
-        'What people asked their Aseman',
+        'What people asked their Decillion assistant',
         Icons.history_edu_outlined,
         Icons.history_edu_rounded,
         custom: adminAILogPage,

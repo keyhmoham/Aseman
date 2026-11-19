@@ -9,7 +9,7 @@ import '../../shared/widgets/glass_surface.dart';
 import '../messenger/presentation/chat_page.dart';
 import 'brain_avatar.dart';
 
-/// Opens the personal Aseman chat (self chat) using the messenger panel flow.
+/// Opens the personal Decillion assistant chat (self chat) using the messenger panel flow.
 Future<void> openSavedMessages(
   BuildContext context,
   AppDependencies dependencies,
@@ -21,12 +21,12 @@ Future<void> openSavedMessages(
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not open Aseman: $e')),
+      SnackBar(content: Text('Could not open Decillion assistant: $e')),
     );
   }
 }
 
-/// Opens the personal Aseman chat shell (Desk | Chat). Kept for callers that
+/// Opens the personal Decillion assistant chat shell (Desk | Chat). Kept for callers that
 /// still name "brain sheet"; the overlay note/voice sheet is no longer the
 /// primary entry.
 Future<void> showBrainSheet(
@@ -80,7 +80,7 @@ class AsemanBrainButton extends StatelessWidget {
                 _MiniMark(accent: accent, size: 28),
                 const SizedBox(width: 8),
                 Text(
-                  'Aseman',
+                  'Decillion assistant',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/layout/app_layout.dart';
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/split_pane.dart';
 import '../../../data/models/space.dart';
 import '../../home/presentation/workspace_entry.dart' as workspace_entry;
 import 'chat_page.dart';
@@ -67,11 +68,6 @@ class _ChatsPageState extends State<ChatsPage> {
     final size = MediaQuery.sizeOf(context);
     final split =
         !AppHeightClass.fromHeight(size.height).isCompact && size.width >= 720;
-    final listWidth = AppLayout.paneWidths(
-      innerWidth: size.width,
-      leading: true,
-      trailing: false,
-    ).leading;
     final list = MessengerPanel(
       dependencies: widget.dependencies,
       embedded: true,
@@ -118,14 +114,23 @@ class _ChatsPageState extends State<ChatsPage> {
           );
     return ColoredBox(
       color: scheme.surface,
+      // The list's width is the person's to drag, and the list can be put
+      // away so the open chat (or room) takes the whole page.
       child: split
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppPane(width: listWidth, child: list),
-                const PaneDivider(),
-                Expanded(child: AppPane(child: detail)),
-              ],
+          ? SplitPane(
+              storageKey: 'chats.list',
+              sideLabel: 'chats list',
+              sideLeading: true,
+              collapsible: true,
+              minSideWidth: 240,
+              minMainWidth: AppLayout.flexiblePaneMin,
+              defaultSideWidth: (total) => AppLayout.paneWidths(
+                innerWidth: total,
+                leading: true,
+                trailing: false,
+              ).leading,
+              side: AppPane(child: list),
+              main: AppPane(child: detail),
             )
           : list,
     );

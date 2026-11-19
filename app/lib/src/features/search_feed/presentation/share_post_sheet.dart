@@ -722,7 +722,7 @@ class _ChatTarget extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final subtitle = chat.saved
-        ? 'Aseman'
+        ? 'Your assistant'
         : chat.direct
         ? (chat.peer?.isAgent ?? false)
               ? 'Agent'

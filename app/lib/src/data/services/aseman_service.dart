@@ -23,6 +23,7 @@ import '../models/profile.dart';
 import '../models/space.dart';
 import '../models/theme_pack_remote.dart';
 import '../models/uploaded_file.dart';
+import '../../features/tools/domain/mcp_directory.dart';
 import 'backend_capabilities.dart';
 import 'backend_service.dart';
 
@@ -816,47 +817,144 @@ class AsemanService implements BackendService {
 
   // ── MCP tool connections ──────────────────────────────────────────────────
 
-  /// Starts signing in to an MCP server (OAuth with PKCE). The node finds the
-  /// server's sign-in and registers itself where it can; the app only opens
-  /// the returned `authorization_url`. With [bot], the OAuth client a node
-  /// admin saved for that server is used, and its URL when [url] is empty.
-  /// `needs_client` means the provider wants a client someone creates.
-  Future<Map<String, dynamic>> mcpOAuthPrepare(
-      {String url = '',
-      String bot = '',
+  // The MCP directory (Glama), read by the node with its own key: nobody
+  // needs a Glama account and nothing anyone signs in with goes through it.
+
+  /// Whether this node has the directory set up.
+  Future<bool> glamaEnabled() async {
+    final resp = await client.call('tools', 'glama_status');
+    return (resp.body as Map?)?['enabled'] == true;
+  }
+
+  /// Searches the directory (the newest and best first when [query] is empty).
+  Future<GlamaPage> glamaSearch(
+      {String query = '',
+      List<String> attributes = const [],
+      String after = '',
+      int first = 20}) async {
+    final resp = await client.call('tools', 'glama_search',
+        body: {
+          if (query.isNotEmpty) 'query': query,
+          if (attributes.isNotEmpty) 'attributes': attributes,
+          if (after.isNotEmpty) 'after': after,
+          'first': first,
+        },
+        requestTimeout: const Duration(seconds: 30));
+    return GlamaPage.fromJson((resp.body as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  /// What the directory can be narrowed by.
+  Future<List<GlamaFilter>> glamaAttributes() async {
+    final resp = await client.call('tools', 'glama_attributes');
+    final list = (resp.body as Map?)?['attributes'] as List? ?? const [];
+    return [
+      for (final a in list)
+        if (a is Map)
+          GlamaFilter(key: '${a['key'] ?? ''}', name: '${a['name'] ?? ''}'),
+    ];
+  }
+
+  /// One server of the directory, with the tools it advertises.
+  Future<GlamaConnector> glamaGet(String key) async {
+    final resp = await client.call('tools', 'glama_get', body: {'key': key});
+    return GlamaConnector.fromJson((resp.body as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  // ── adding an MCP server to a space, and connecting a person to it ────────
+
+  /// Adds an MCP server to a space as a plugin: a server of the directory
+  /// ([key]) or one by its address ([url]). The node asks the server what it
+  /// wants of the person first, so one that is down, or is not MCP, is reported
+  /// at once.
+  Future<McpInstalled> mcpInstall(
+      {required String spaceId,
+      String key = '',
+      String url = '',
+      String name = '',
+      Map<String, String> headers = const {}}) async {
+    final resp = await client.call('tools', 'mcp_install',
+        body: {
+          'source': key.isNotEmpty ? 'glama' : 'custom',
+          if (key.isNotEmpty) 'key': key,
+          if (url.isNotEmpty) 'url': url,
+          if (name.isNotEmpty) 'name': name,
+          if (headers.isNotEmpty) 'headers': headers,
+          'space': spaceId,
+        },
+        requestTimeout: const Duration(minutes: 1));
+    return McpInstalled.fromJson((resp.body as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  /// Begins signing the caller in to a server at its own provider (OAuth 2.1
+  /// with PKCE, run by the node). Open the answer's `authorization_url`, then
+  /// [mcpConnectFinish] with the code the provider sends back.
+  Future<ConnectStart> mcpConnectStart(
+      {required String botId,
+      required String spaceId,
       required String redirectUri,
       String clientId = '',
-      String clientSecret = ''}) async {
-    final resp = await client.call('tools', 'oauth_prepare', body: {
-      if (url.isNotEmpty) 'url': url,
-      if (bot.isNotEmpty) 'bot': bot,
-      'redirect_uri': redirectUri,
-      if (clientId.isNotEmpty) 'client_id': clientId,
-      if (clientSecret.isNotEmpty) 'client_secret': clientSecret,
-    });
-    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+      String clientSecret = '',
+      bool reconnect = false,
+      bool freshClient = false}) async {
+    final resp = await client.call('tools', 'mcp_connect_start',
+        body: {
+          'bot': botId,
+          'space': spaceId,
+          'redirect_uri': redirectUri,
+          if (clientId.isNotEmpty) 'client_id': clientId,
+          if (clientSecret.isNotEmpty) 'client_secret': clientSecret,
+          if (reconnect) 'reconnect': true,
+          if (freshClient) 'fresh_client': true,
+        },
+        requestTimeout: const Duration(seconds: 45));
+    return ConnectStart.fromJson((resp.body as Map?)?.cast<String, dynamic>() ?? const {});
   }
 
-  /// Trades the code the provider sent back for tokens; the node keeps them
-  /// with the sign-in ([state]) so a connection made from it renews itself.
-  Future<Map<String, dynamic>> mcpOAuthExchange(
-      String state, String code) async {
-    final resp = await client
-        .call('tools', 'oauth_exchange', body: {'state': state, 'code': code});
-    return (resp.body as Map?)?.cast<String, dynamic>() ?? const {};
+  /// Finishes a sign-in with the code the provider sent back: the node keeps
+  /// the connection, sealed; no token returns here.
+  Future<void> mcpConnectFinish(String state, String code) async {
+    await client.call('tools', 'mcp_connect_finish',
+        body: {'state': state, 'code': code},
+        requestTimeout: const Duration(seconds: 45));
   }
 
-  /// Stores the caller's own connection to a per-person tool in a project:
-  /// from a completed sign-in ([grant], its state) or a pasted [token].
-  Future<bool> setToolConnection(String botId, String spaceId,
-      {String token = '', String grant = ''}) async {
-    final resp = await client.call('tools', 'connection_set', body: {
-      'bot': botId,
-      'space': spaceId,
-      if (token.isNotEmpty) 'token': token,
-      if (grant.isNotEmpty) 'grant': grant,
-    });
-    return (resp.body as Map?)?['connected'] == true;
+  /// Connects the caller to a server with a key they hold (a login with
+  /// [username]; under another header with [header]). The node checks it with
+  /// the server before keeping it.
+  Future<void> mcpConnectToken(String botId, String spaceId, String token,
+      {String username = '', String header = ''}) async {
+    await client.call('tools', 'mcp_connect_token',
+        body: {
+          'bot': botId,
+          'space': spaceId,
+          'token': token.trim(),
+          if (username.isNotEmpty) 'username': username,
+          if (header.isNotEmpty) 'header': header,
+        },
+        requestTimeout: const Duration(seconds: 45));
+  }
+
+  /// Forgets the caller's connection to a server.
+  Future<void> mcpDisconnect(String botId) async {
+    await client.call('tools', 'mcp_disconnect', body: {'bot': botId});
+  }
+
+  /// Which servers of the directory a space already has, by their key: the
+  /// space's apps that the node knows came from the directory.
+  Future<Set<String>> directoryKeysIn(String spaceId) async {
+    final bots = await fetchSpaceBots(spaceId);
+    final ids = {for (final b in bots) b.id};
+    final resp =
+        await client.call('tools', 'commands_list', body: {'space': spaceId});
+    final list = (resp.body as Map?)?['tools'] as List? ?? const [];
+    return {
+      for (final t in list)
+        if (t is Map &&
+            t['source'] == 'glama' &&
+            ids.contains('${t['bot_id']}') &&
+            '${t['source_key'] ?? ''}'.isNotEmpty)
+          '${t['source_key']}',
+    };
   }
 
   /// Whether a tool needs each person's own account ("user") and whether the

@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/layout/app_layout.dart';
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/split_pane.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
@@ -44,6 +45,7 @@ import '../../desk/presentation/compact_summary.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/desk_report_view.dart';
 import '../../desk/presentation/floating_desk.dart';
+import '../../desk/presentation/free_desk.dart';
 import '../../desk/presentation/frontend_presentation.dart';
 import '../../desk/presentation/widgets_library.dart';
 import '../../files/domain/file_types.dart';
@@ -483,13 +485,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                         child: _mobile(appBarInset: appBarInset),
                       );
                     }
-                    final inner = box.maxWidth;
                     // The library opens from the bar. Its old column is
-                    // part of the chat. The desk stays on the right.
-                    final deskWidth = AppLayout.roomDeskPaneWidth(
-                      innerWidth: inner,
-                      libraryWidth: 0,
-                    );
+                    // part of the chat. The desk starts on the right; its
+                    // width and side are the person's to change.
                     final spaceId = session.spaceFor(workspace)?.id ?? '';
                     final social = room == null
                         ? _SocialFeed(
@@ -560,14 +558,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen>
                           Expanded(
                             child: Stack(
                               children: [
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(child: AppPane(child: social)),
-                                    const PaneDivider(),
-                                    AppPane(width: deskWidth, child: desk),
-                                  ],
+                                SplitPane(
+                                  storageKey: 'desk.room',
+                                  sideLabel: 'desk',
+                                  swappable: true,
+                                  minSideWidth: 220,
+                                  minMainWidth: 320,
+                                  defaultSideWidth: (total) =>
+                                      AppLayout.roomDeskPaneWidth(
+                                        innerWidth: total,
+                                        libraryWidth: 0,
+                                      ),
+                                  main: AppPane(child: social),
+                                  side: AppPane(child: desk),
                                 ),
                                 SpaceLibraryFlyout(
                                   open: _libraryOpen,

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app_dependencies.dart';
 import '../../../core/layout/app_layout.dart';
 import '../../../core/layout/breakpoints.dart';
+import '../../../core/layout/split_pane.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
@@ -81,6 +82,9 @@ class SearchFeedScreen extends StatefulWidget {
 
 class _SearchFeedScreenState extends State<SearchFeedScreen>
     with TickerProviderStateMixin {
+  /// The posts pane's name in [PaneLayout]: its width and whether it is hidden.
+  static const _feedPaneKey = 'home.feed';
+
   late final SearchFeedViewModel model;
 
   /// The panels' motion, the same as a workspace switch: the feed arrives
@@ -189,20 +193,6 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   bool get _compact =>
       !widget.desktopShell &&
       MediaQuery.sizeOf(context).width < Breakpoints.expanded;
-
-  /// Desktop home panes for a content width of [width].
-  ///
-  /// Large windows: the conversation and the feed. Nothing else earns a
-  /// column — the chats list has its own dedicated nav destination.
-  ({double feed, bool showFeed}) _homePanes(double width) {
-    final showFeed = AppWindowScope.supportingPane(context);
-    final panes = AppLayout.paneWidths(
-      innerWidth: width,
-      leading: false,
-      trailing: showFeed,
-    );
-    return (feed: panes.trailing, showFeed: showFeed);
-  }
 
   void _onScroll() {
     if (!scrollController.hasClients) return;
@@ -334,8 +324,8 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
             children: [
               Text(
                 _asemanError == null
-                    ? 'Could not open Aseman'
-                    : 'Could not open Aseman: $_asemanError',
+                    ? 'Could not open Decillion assistant'
+                    : 'Could not open Decillion assistant: $_asemanError',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
@@ -448,49 +438,74 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                   }
                   // The bar sits only over the feed pane; Aseman (chat + desk)
                   // runs the full height beside it. When the feed pane is
-                  // hidden, the bar moves over Aseman so it is never lost.
-                  final metrics = _homePanes(box.maxWidth);
+                  // hidden (too narrow a window, or put away with its
+                  // handle), the bar moves over Aseman so it is never lost.
                   final bar = _workspaceBar(context, false, anchored: true);
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (metrics.showFeed) ...[
-                        WorkspacePanelMotion(
+                  final room = AppWindowScope.supportingPane(context);
+                  if (!room) {
+                    return WorkspacePanelMotion(
+                      animation: motion,
+                      scaleFrom: WorkspacePanelMotions.centerScale,
+                      child: AppPane(
+                        child: Column(
+                          children: [
+                            bar,
+                            Expanded(child: _asemanPane(bottomInset: 0)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return ListenableBuilder(
+                    listenable: PaneLayout.instance,
+                    builder: (context, _) {
+                      final feedHidden = PaneLayout.instance.hidden(
+                        _feedPaneKey,
+                      );
+                      return SplitPane(
+                        storageKey: _feedPaneKey,
+                        sideLabel: 'feed',
+                        sideLeading: true,
+                        collapsible: true,
+                        minSideWidth: 240,
+                        minMainWidth: AppLayout.flexiblePaneMin,
+                        defaultSideWidth: (total) => AppLayout.paneWidths(
+                          innerWidth: total,
+                          leading: false,
+                          trailing: true,
+                        ).trailing,
+                        side: WorkspacePanelMotion(
                           animation: motion,
                           hiddenOffset: WorkspacePanelMotions.left,
                           child: AppPane(
-                            width: metrics.feed,
                             child: Column(
                               children: [
-                                bar,
+                                if (!feedHidden) bar,
                                 Expanded(
+                                  key: const ValueKey('home-feed'),
                                   child: _feedPane(phone: false, topInset: 0),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const PaneDivider(),
-                      ],
-                      Expanded(
-                        child: WorkspacePanelMotion(
+                        main: WorkspacePanelMotion(
                           animation: motion,
                           scaleFrom: WorkspacePanelMotions.centerScale,
                           child: AppPane(
-                            child: metrics.showFeed
-                                ? _asemanPane(bottomInset: 0)
-                                : Column(
-                                    children: [
-                                      bar,
-                                      Expanded(
-                                        child: _asemanPane(bottomInset: 0),
-                                      ),
-                                    ],
-                                  ),
+                            child: Column(
+                              children: [
+                                if (feedHidden) bar,
+                                Expanded(
+                                  key: const ValueKey('home-assistant-pane'),
+                                  child: _asemanPane(bottomInset: 0),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   );
                 },
               ),

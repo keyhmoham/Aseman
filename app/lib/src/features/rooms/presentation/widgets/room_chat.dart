@@ -34,6 +34,8 @@ import '../../domain/room_work.dart';
 import '../room_chat_scroll.dart';
 import '../room_work_controller.dart';
 import 'attachment_bubble.dart';
+import '../../../tools/connect/mcp_login_card.dart';
+import '../../../tools/domain/mcp_directory.dart';
 import 'forward_message_sheet.dart';
 import 'message_edit_history.dart';
 import 'room_threads.dart';
@@ -1070,7 +1072,7 @@ class _RoomChatState extends State<RoomChat> {
 
   static String _quoteText(RoomMessage m) {
     // Strip AG-UI fences so reply quotes don't leak raw ```agui JSON.
-    final parsed = parseAgUiBody(m.body);
+    final parsed = parseAgUiBody(parseReplies(m.body).text);
     var body = parsed.caption.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (body.isEmpty && parsed.surface != null) {
       final title = parsed.surface!.title.trim();
@@ -1148,7 +1150,7 @@ class _RoomChatState extends State<RoomChat> {
       return (
         name: m.senderName.isNotEmpty && m.senderId != widget.me
             ? m.senderName
-            : 'Aseman',
+            : 'Decillion assistant',
         agent: true,
       );
     }
@@ -2538,17 +2540,21 @@ class _RoomChatState extends State<RoomChat> {
         widget.peerSeenAt != null &&
         !m.createdAt.isAfter(widget.peerSeenAt!);
     final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
+    // Only the viewer's own messages sit in a bubble: what agents and other
+    // people write is plain text on the page, under their name.
     final bubble = Container(
-      padding: ThemeChrome.chatBubblePadding(context),
-      decoration: ThemeChrome.chatBubble(
-        context,
-        mine: mine,
-        continued: continued,
-      ),
+      padding: mine
+          ? ThemeChrome.chatBubblePadding(context)
+          : const EdgeInsets.symmetric(vertical: 2),
+      decoration: mine
+          ? ThemeChrome.chatBubble(context, mine: mine, continued: continued)
+          : null,
       child: DefaultTextStyle.merge(
         style: TextStyle(color: fg, fontSize: 14, height: 1.4),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: mine
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             if (m.replyTo.isNotEmpty) _quote(m, fg),
             if (m.attachments.isNotEmpty)
@@ -2682,7 +2688,7 @@ class _RoomChatState extends State<RoomChat> {
           if (!mine) ...[avatar, const SizedBox(width: 8)],
           Flexible(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
+              constraints: BoxConstraints(maxWidth: mine ? 380 : 540),
               child: Column(
                 crossAxisAlignment: mine
                     ? CrossAxisAlignment.end
@@ -2759,11 +2765,14 @@ class _RoomChatState extends State<RoomChat> {
       if (surface != null && surface.root != null) {
         out.add(
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.only(
+              bottom: parsed.caption.trim().isNotEmpty ? 8 : 0,
+            ),
             child: _withActions(
               deps,
               AgUiSurfaceView(
                 surface: surface,
+                messageId: m.id,
                 onReply: widget.onSend == null
                     ? null
                     : (value, {meta}) {
@@ -2778,23 +2787,18 @@ class _RoomChatState extends State<RoomChat> {
             ),
           ),
         );
+      } else if (parsed.pending) {
+        out.add(
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: AgUiSkeleton(),
+          ),
+        );
       }
       if (parsed.caption.trim().isNotEmpty) {
         out.add(
           RichPostContent(
             parsed.caption,
-            headers: deps?.service.authHeaders() ?? const {},
-            resolveUrl: deps?.service.resolveContentUrl,
-            onLinkTap: deps == null
-                ? null
-                : (link) => openWorkspaceLink(context, deps.service, link),
-          ),
-        );
-      } else if (surface == null && offered.text.trim().isNotEmpty) {
-        // No fence — original markdown body.
-        out.add(
-          RichPostContent(
-            offered.text,
             headers: deps?.service.authHeaders() ?? const {},
             resolveUrl: deps?.service.resolveContentUrl,
             onLinkTap: deps == null
@@ -2809,21 +2813,15 @@ class _RoomChatState extends State<RoomChat> {
         out.add(
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final reply in offered.replies)
-                  ActionChip(
-                    label: Text(reply),
-                    onPressed: () => widget.onSend!(
-                      reply,
-                      const [],
-                      const [],
-                      replyTo: m.id,
-                    ),
-                  ),
-              ],
+            child: AgUiReplyChips(
+              key: ValueKey('replies-${m.id}'),
+              replies: offered.replies,
+              onPick: (reply) => widget.onSend!(
+                reply,
+                const [],
+                const [],
+                replyTo: m.id,
+              ),
             ),
           ),
         );
@@ -2849,6 +2847,16 @@ class _RoomChatState extends State<RoomChat> {
       spaceId: widget.spaceId,
       roomId: widget.roomId,
       onOpenTasks: () => showTasksPanel(context, deps),
+      // A login card: an app a person needs asks them to sign in, here.
+      connectBuilder: (context, props) {
+        final card = LoginCard.fromProps({
+          ...props,
+          if ('${props['space'] ?? ''}'.isEmpty) 'space': widget.spaceId,
+        });
+        return card == null
+            ? const SizedBox.shrink()
+            : McpLoginCardView(service: deps.service, card: card);
+      },
       child: child,
     );
   }
@@ -3175,8 +3183,7 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
       child: Container(
         constraints: const BoxConstraints(maxWidth: 560),
         margin: const EdgeInsets.only(top: 10, left: 38),
-        padding: ThemeChrome.chatBubblePadding(context),
-        decoration: ThemeChrome.chatBubble(context, mine: false, agent: true),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -3211,11 +3218,26 @@ class _WorkingIndicatorState extends State<_WorkingIndicator>
             ),
             if (draft.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(
-                draft,
-                key: const ValueKey('live-draft'),
-                style: const TextStyle(fontSize: 14, height: 1.35),
-              ),
+              // A card still being written is never shown as its JSON.
+              Builder(builder: (_) {
+                final shown = parseAgUiBody(parseReplies(draft).text);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (shown.caption.trim().isNotEmpty)
+                      Text(
+                        shown.caption,
+                        key: const ValueKey('live-draft'),
+                        style: const TextStyle(fontSize: 14, height: 1.35),
+                      ),
+                    if (shown.pending || shown.surface != null) ...[
+                      const SizedBox(height: 6),
+                      const AgUiSkeleton(),
+                    ],
+                  ],
+                );
+              }),
             ],
           ],
         ),

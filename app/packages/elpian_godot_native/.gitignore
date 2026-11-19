@@ -19,3 +19,6 @@ extension/**/*.os
 
 # Godot editor state
 godot-project/.godot/
+
+# tool/build-web-export.sh's default output.
+web-export/

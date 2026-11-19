@@ -12,7 +12,24 @@ import 'package:aseman/src/features/tools/ui_kit/kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _kit = '../deploy/sandbox-computer/appui/elpian';
+/// The validator's schema lives in the Decillion monorepo's `deploy/`: beside
+/// the app there when it is checked out as one (`../deploy`), else in a
+/// sibling `DecillionAIOS` checkout; `ELPIAN_KIT_DIR` names it directly.
+String _kitDir() {
+  const rel = 'deploy/sandbox-computer/appui/elpian';
+  final candidates = [
+    Platform.environment['ELPIAN_KIT_DIR'],
+    '../$rel',
+    '../../DecillionAIOS/$rel',
+  ];
+  for (final c in candidates) {
+    if (c != null && File('$c/schema.mjs').existsSync()) return c;
+  }
+  throw StateError('appui/elpian/schema.mjs not found; set ELPIAN_KIT_DIR '
+      '(tried: ${candidates.whereType<String>().join(', ')})');
+}
+
+final _kit = _kitDir();
 
 const _rows = [
   {'label': 'A', 'value': 3, 'x': 'a', 'y': 'b'},

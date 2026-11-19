@@ -30,8 +30,8 @@ class AgUiSurface {
       root: root is Map<String, dynamic>
           ? Map<String, dynamic>.from(root)
           : root is Map
-              ? Map<String, dynamic>.from(root)
-              : null,
+          ? Map<String, dynamic>.from(root)
+          : null,
       data: json['data'] is Map
           ? Map<String, dynamic>.from(json['data'] as Map)
           : const {},
@@ -39,46 +39,96 @@ class AgUiSurface {
   }
 
   /// Builds a HITL question card (same shape ask_user / ui_present emit).
-  factory AgUiSurface.question(String question, {List<String> options = const []}) =>
-      AgUiSurface(
-        layout: 'chat',
-        title: 'Question',
-        root: {
-          'c': 'Question',
-          'p': {
-            'question': question,
-            'options': options,
-            'allowFreeText': true,
-          },
-        },
-      );
+  factory AgUiSurface.question(
+    String question, {
+    List<String> options = const [],
+  }) => AgUiSurface(
+    layout: 'chat',
+    title: 'Question',
+    root: {
+      'c': 'Question',
+      'p': {'question': question, 'options': options, 'allowFreeText': true},
+    },
+  );
 
   Map<String, dynamic> toJson() => {
-        if (surfaceId.isNotEmpty) 'surfaceId': surfaceId,
-        'version': version,
-        'layout': layout,
-        if (title.isNotEmpty) 'title': title,
-        if (root != null) 'root': root,
-        if (data.isNotEmpty) 'data': data,
-      };
+    if (surfaceId.isNotEmpty) 'surfaceId': surfaceId,
+    'version': version,
+    'layout': layout,
+    if (title.isNotEmpty) 'title': title,
+    if (root != null) 'root': root,
+    if (data.isNotEmpty) 'data': data,
+  };
 }
 
-final _fence = RegExp(r'```(?:agui|surface)\s*\n([\s\S]*?)\n```', multiLine: true);
+final _fence = RegExp(
+  r'```(?:agui|surface)[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```',
+  multiLine: true,
+);
+
+/// A fence that has been opened and not closed yet: an answer still being
+/// written.
+final _openFence = RegExp(r'```(?:agui|surface)[ \t]*(?:\r?\n[\s\S]*)?$');
 
 /// Parse the first AG-UI fence from a chat [body]. Returns surface + remaining
-/// caption text (fence stripped).
-({AgUiSurface? surface, String caption}) parseAgUiBody(String body) {
+/// caption text (fence stripped). `pending` is true while the card is still
+/// being written (its fence is open): half a JSON tree is never shown as
+/// text, the caller shows a placeholder instead.
+({AgUiSurface? surface, String caption, bool pending}) parseAgUiBody(
+  String body,
+) {
   final m = _fence.firstMatch(body);
-  if (m == null) return (surface: null, caption: body);
+  if (m == null) {
+    final open = _openFence.firstMatch(body);
+    if (open != null) {
+      return (
+        surface: null,
+        caption: body.substring(0, open.start).trim(),
+        pending: true,
+      );
+    }
+    return (surface: null, caption: body, pending: false);
+  }
   try {
     final raw = jsonDecode(m.group(1)!.trim());
-    if (raw is! Map) return (surface: null, caption: body);
+    if (raw is! Map) return (surface: null, caption: body, pending: false);
     final surface = AgUiSurface.fromJson(Map<String, dynamic>.from(raw));
     final caption = body.replaceFirst(m.group(0)!, '').trim();
-    return (surface: surface, caption: caption);
+    return (surface: surface, caption: caption, pending: false);
   } catch (_) {
-    return (surface: null, caption: body);
+    return (surface: null, caption: body, pending: false);
   }
+}
+
+/// Cards that bring their own frame (a question, an approval…): shown alone
+/// the surface does not box them a second time or repeat their title.
+const _framed = {
+  'Question',
+  'Choices',
+  'Confirm',
+  'Form',
+  'Approval',
+  'Secret',
+  'Handover',
+  'Suggestion',
+  'Connect',
+};
+
+bool isFramedRoot(Map<String, dynamic>? root) =>
+    root != null && _framed.contains(typeOf(root));
+
+/// A surface's title when it adds something: not one a card repeats, nor a
+/// type's own name.
+String visibleTitle(AgUiSurface surface) {
+  final title = surface.title.trim();
+  final root = surface.root;
+  if (title.isEmpty || root == null) return title;
+  if (isFramedRoot(root)) return '';
+  final rootTitle = '${propsOf(root)['title'] ?? ''}'.trim();
+  if (rootTitle.isNotEmpty && rootTitle.toLowerCase() == title.toLowerCase()) {
+    return '';
+  }
+  return title;
 }
 
 /// Chart props as the UI kit reads them. AG-UI often sends `points`

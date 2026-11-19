@@ -22,23 +22,38 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080 \
   --dart-define=DEVELOPER_API_BASE=https://api.example.com/v1
 ```
 
-## Signing in to apps
+## Finding and signing in to apps
+
+Apps are found in the **MCP directory** (Glama), read by the node with its own
+key: Add an app (workspace Apps library, a project's Apps, a chat) searches it,
+filters it by sign-in, shows each server's tools and adds one in a tap
+(`features/tools/connect/mcp_directory_view.dart`, `tools.glama_*` /
+`mcp_install`). Glama's licence asks for its credit on the screen and a link to
+each listing; both are shown. Without a key on the node the directory says so
+and an app can still be added by its address.
 
 An app registered with "each person connects" (`auth: user`) asks for the
-person's own account where it is used: when it is added with "Add an app"
-(workspace Apps library or Project → Apps), on its screen, and under
-Project → Apps. Sign-in is OAuth with PKCE run by the
-node (`tools.oauth_prepare` / `oauth_exchange`): the app only opens the
-provider's page and brings the code back, then stores the connection from the
-sign-in (`tools.connection_set` with its `grant`) so the node renews it. On
-the web the page opens in a popup that returns to `/oauth.html`; on Android,
-iOS, macOS and Windows in an in-app web view that stops at the redirect;
-elsewhere in the browser, with the returned address pasted back. A provider
-that will not register Aseman needs an OAuth client: a person can enter one
-in the connect dialog, or an admin saves one per server (Admin → Apps →
-Sign-in client), created with the redirect address shown there. Override that
-address with `--dart-define=OAUTH_REDIRECT_URI=…`. A pasted access token works
-too, without renewal.
+person's own account, once: at its own provider, never through Glama. The node
+runs the sign-in (OAuth 2.1 with PKCE, `tools.mcp_connect_start` /
+`mcp_connect_finish`): the app only opens the provider's page and brings the
+code back, so no token ever reaches it. On the web the page opens in a popup
+that returns to `/oauth.html`; on Android, iOS, macOS and Windows in an in-app
+web view that stops at the redirect; elsewhere in the browser, with the
+returned address pasted back. A provider that will not register Aseman needs an
+OAuth client: a person can enter one in the connect dialog, or an admin saves
+one per server (Admin → Apps → Sign-in client), created with the redirect
+address shown there. Override that address with
+`--dart-define=OAUTH_REDIRECT_URI=…`. An app with no sign-in page takes a key
+or a login (`mcp_connect_token`), checked with the app before it is kept. One
+sign-in serves every space the app is added to.
+
+**Agents add apps as the work needs them** (`mcp_find`, `mcp_add`, `mcp_use`,
+`mcp_list`, `mcp_remove`, served by the node). Whatever needs the person's
+sign-in arrives as a **login card** in the chat: an AG-UI `Connect` surface in
+a room (`agui/governance_cards.dart`, drawn by
+`features/tools/connect/mcp_login_card.dart`) and a `connect` card above the
+composer of the personal chat (`brain_proposals.dart`). The card asks the node
+whether the person is signed in and says so wherever it is read.
 
 ## How the client talks to the server
 

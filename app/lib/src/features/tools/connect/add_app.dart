@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_roles.dart';
@@ -7,6 +9,7 @@ import '../../../shared/widgets/app_form.dart';
 import '../../../shared/widgets/bot_avatar.dart';
 import '../../../shared/widgets/skeleton.dart';
 import 'mcp_connect_dialog.dart';
+import 'mcp_directory_view.dart';
 import 'mcp_sign_in.dart';
 
 /// Adds an app to the space [spaceId]: one from the node's catalog, one the
@@ -20,7 +23,7 @@ Future<bool> showAddApp(BuildContext context, AsemanService service,
         context, AddAppDialog(service: service, spaceId: spaceId)) ==
     true;
 
-/// Whether registering a server failed because the server wants a sign-in.
+/// Whether a server refused because it wants a sign-in.
 bool mcpNeedsSignIn(Object error) =>
     RegExp(r'HTTP 40[13]\b|unauthor|forbidden', caseSensitive: false)
         .hasMatch('$error');
@@ -34,11 +37,11 @@ String mcpAddFailure(Object error) {
   if (RegExp(r'HTTP 30\d').hasMatch(text)) {
     return 'That address redirects somewhere else. Paste the final address.';
   }
-  if (RegExp(r'HTTP 40[56]|no JSON-RPC result|initialization was refused')
+  if (RegExp(r'HTTP 40[56]|no JSON-RPC result|initialization was refused|not as an MCP server')
       .hasMatch(text)) {
     return 'That address answered, but not as an MCP server. Check that it is the server’s MCP endpoint.';
   }
-  if (RegExp(r'not reachable|no such host|timeout|deadline|connection refused',
+  if (RegExp(r'not reachable|could not be reached|no such host|timeout|deadline|connection refused',
           caseSensitive: false)
       .hasMatch(text)) {
     return 'The server could not be reached from here. Check the address, and that it is on the public internet.';
@@ -64,6 +67,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
   String? _step;
   String? _error;
   bool _added = false;
+  Set<String> _directoryKeys = const {};
 
   @override
   void initState() {
@@ -85,6 +89,10 @@ class _AddAppDialogState extends State<AddAppDialog> {
         widget.service.fetchSpaceBots(widget.spaceId),
         // The person's own apps; best-effort, the catalog stands alone.
         widget.service.fetchBots().catchError((_) => const <Bot>[]),
+        // Which servers of the directory the space has; best-effort too.
+        widget.service
+            .directoryKeysIn(widget.spaceId)
+            .catchError((_) => <String>{}),
       ]);
       final inSpace = {for (final b in results[1] as List<Bot>) b.id};
       final catalog =
@@ -92,6 +100,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
       final listed = {for (final t in catalog) t.id};
       if (!mounted) return;
       setState(() {
+        _directoryKeys = results[3] as Set<String>;
         _catalog = [
           for (final t in catalog)
             if (!inSpace.contains(t.id)) t,
@@ -165,6 +174,9 @@ class _AddAppDialogState extends State<AddAppDialog> {
     }
   }
 
+  /// Adds a server by its address: the node asks it what it wants of the
+  /// person first (open, a sign-in page, or a key), records it and adds it
+  /// to the space. A server that is down, or is not MCP, is told at once.
   Future<void> _addServer() async {
     final url = _url.text.trim();
     var name = _name.text.trim();
@@ -179,30 +191,31 @@ class _AddAppDialogState extends State<AddAppDialog> {
       _step = 'Checking the server…';
     });
     try {
-      // A bare address says nothing about sign-in. Many servers are open, so
-      // try it as it is (the node only registers a server that answers) and
-      // ask for each person's sign-in only when the server asks for one.
-      var auth = '';
-      String botId;
-      try {
-        botId = await widget.service.mcpRegister(
-            name: name,
-            url: url,
-            descriptor: {'description': 'An app connected for this space.'});
-      } catch (e) {
-        if (!mcpNeedsSignIn(e)) rethrow;
-        if (mounted) setState(() => _step = 'This app needs you to sign in…');
-        auth = 'user';
-        botId = await widget.service.mcpRegister(
-            name: name,
-            url: url,
-            auth: 'user',
-            descriptor: {
-              'description': 'An app connected for this space.',
-              'mcp_oauth': 'auto'
+      final res = await widget.service
+          .mcpInstall(spaceId: widget.spaceId, url: url, name: name);
+      _added = true;
+      if (!mounted) return;
+      setState(() => _step = null);
+      final next = res.next;
+      if (next.kind != 'done') {
+        final connected = await connectMcpTool(context, widget.service,
+            botId: res.botId,
+            spaceId: widget.spaceId,
+            name: res.name,
+            credential: next.credential,
+            startWithKey: next.kind == 'token');
+        if (!connected) {
+          if (mounted) {
+            setState(() {
+              _busy = null;
+              _error =
+                  '${res.name} was added. Sign in to it from the space’s apps to use it.';
             });
+          }
+          return;
+        }
       }
-      await _attach(botId, name, auth);
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -245,11 +258,24 @@ class _AddAppDialogState extends State<AddAppDialog> {
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(
-                'Apps give this space’s agents and people new abilities. One that runs with each person’s own account asks you to sign in once it is added.',
+                'Apps give this space’s agents and people new abilities. Search the directory, and one that runs with your own account asks you to sign in at its own website, once.',
                 style: TextStyle(
                     fontSize: 14, height: 1.4, color: scheme.onSurfaceVariant)),
             const SizedBox(height: 22),
-            const Text('Apps you can add',
+            const Text('Find an app',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            McpDirectoryView(
+              service: widget.service,
+              spaceId: widget.spaceId,
+              installed: _directoryKeys,
+              onInstalled: () {
+                _added = true;
+                unawaited(_load());
+              },
+            ),
+            const Divider(height: 28),
+            const Text('On this node',
                 style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             if (_loading)
@@ -282,7 +308,7 @@ class _AddAppDialogState extends State<AddAppDialog> {
                           child: const Text('Add')),
                 ),
             const Divider(height: 28),
-            const Text('Or connect an MCP server',
+            const Text('Or connect an MCP server by its address',
                 style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             TextField(

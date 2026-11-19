@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'card_frame.dart';
+
 /// Calls a node action for a card (an approval's answer, a secret, a task).
 typedef AgUiInvoke =
     Future<dynamic> Function(
@@ -21,6 +23,7 @@ class AgUiActions extends InheritedWidget {
     this.roomId = '',
     this.onOpenComputer,
     this.onOpenTasks,
+    this.connectBuilder,
     required super.child,
   });
 
@@ -33,6 +36,11 @@ class AgUiActions extends InheritedWidget {
 
   /// Opens the person's tasks.
   final VoidCallback? onOpenTasks;
+
+  /// Draws a login card (an app asks the person to sign in): the rooms give
+  /// it the node, since signing in is the tools feature's to run.
+  final Widget Function(BuildContext context, Map<String, dynamic> props)?
+  connectBuilder;
 
   static AgUiActions? of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AgUiActions>();
@@ -51,61 +59,8 @@ String _error(Object e) {
   return i > 0 && i < 40 ? text.substring(i + 1).trim() : text;
 }
 
-class _CardFrame extends StatelessWidget {
-  const _CardFrame({
-    required this.icon,
-    required this.title,
-    required this.children,
-    this.tone,
-  });
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-  final Color? tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = tone ?? scheme.primary;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...children,
-      ],
-    );
-  }
-}
-
-Widget _note(BuildContext context, String text, {bool error = false}) {
-  final scheme = Theme.of(context).colorScheme;
-  return Padding(
-    padding: const EdgeInsets.only(top: 6),
-    child: Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        color: error ? scheme.error : scheme.onSurfaceVariant,
-      ),
-    ),
-  );
-}
+Widget _note(BuildContext context, String text, {bool error = false}) =>
+    AgUiNote(text, error: error);
 
 /// An agent action waiting on a person: the exact action, the rule that
 /// asked and, for a message, who gets it and what it says. Allow once,
@@ -127,7 +82,7 @@ class _AgUiApprovalState extends State<AgUiApproval> {
   String error = '';
   Timer? poll;
 
-  String get id => '${widget.props['approval'] ?? ''}';
+  String get id => '${widget.props['approval'] ?? widget.props['id'] ?? ''}';
   String get status => '${approval['status'] ?? 'pending'}';
 
   @override
@@ -206,48 +161,68 @@ class _AgUiApprovalState extends State<AgUiApproval> {
       'canceled' => 'Canceled',
       _ => '',
     };
-    return _CardFrame(
+    final pending = answered.isEmpty;
+    final needsYou = pending && AgUiActions.of(context) != null && canAnswer;
+    final tool = '${p['tool'] ?? ''}';
+    final effect = '${p['effect'] ?? ''}';
+    final shortState = switch (status) {
+      'approved' => 'Allowed',
+      'refused' => 'Refused',
+      'expired' => 'Expired',
+      'canceled' => 'Canceled',
+      _ => needsYou ? 'Needs you' : 'Waiting',
+    };
+    return AgUiCard(
       icon: Icons.verified_user_outlined,
-      tone: scheme.tertiary,
+      tone: pending ? AgUiTone.warning : AgUiTone.info,
       title: '${p['summary'] ?? 'An agent asks to act'}',
+      subtitle: [tool, effect].where((e) => e.isNotEmpty).join(' · '),
+      status: shortState,
+      statusTone: switch (status) {
+        'approved' => AgUiTone.success,
+        'refused' => AgUiTone.danger,
+        'pending' => AgUiTone.warning,
+        _ => AgUiTone.neutral,
+      },
       children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            if ('${p['tool'] ?? ''}'.isNotEmpty)
-              Chip(label: Text('${p['tool']}')),
-            if ('${p['effect'] ?? ''}'.isNotEmpty)
-              Chip(
-                label: Text('${p['effect']}'),
-                avatar: const Icon(Icons.bolt, size: 14),
-              ),
-          ],
-        ),
         if (recipients.isNotEmpty)
-          _note(context, 'To: ${recipients.join(', ')}'),
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(fontSize: 13),
+              children: [
+                const TextSpan(text: 'To '),
+                TextSpan(
+                  text: recipients.join(', '),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
         if (text.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 6),
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
             decoration: BoxDecoration(
               color: scheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(10),
+              border: Border(
+                left: BorderSide(color: scheme.outlineVariant, width: 3),
+              ),
             ),
-            child: SelectableText(text, style: const TextStyle(fontSize: 13)),
+            child: SelectableText(
+              text,
+              style: const TextStyle(fontSize: 13, height: 1.35),
+            ),
           ),
         if ('${p['rule'] ?? ''}'.isNotEmpty)
           _note(context, 'Asked by the rule ${p['rule']}'),
-        const SizedBox(height: 8),
         if (answered.isNotEmpty)
-          Text(answered, style: const TextStyle(fontWeight: FontWeight.w600))
-        else if (AgUiActions.of(context) == null || !canAnswer)
+          AgUiAnswered(prefix: answered)
+        else if (!needsYou)
           _note(context, 'Waiting on the person this agent works for.')
         else
           Wrap(
             spacing: 8,
-            runSpacing: 6,
+            runSpacing: 8,
             children: [
               FilledButton(
                 onPressed: busy ? null : () => _answer('once'),
@@ -258,6 +233,7 @@ class _AgUiApprovalState extends State<AgUiApproval> {
                 child: const Text('Always allow'),
               ),
               TextButton(
+                style: TextButton.styleFrom(foregroundColor: scheme.error),
                 onPressed: busy ? null : () => _answer('refuse'),
                 child: const Text('Refuse'),
               ),
@@ -301,7 +277,7 @@ class _AgUiSecretState extends State<AgUiSecret> {
       error = '';
     });
     try {
-      final request = '${widget.props['request']}';
+      final request = '${widget.props['request'] ?? widget.props['id'] ?? ''}';
       await actions.invoke(
         'governance',
         decline ? 'secret_decline' : 'secret_submit',
@@ -321,15 +297,20 @@ class _AgUiSecretState extends State<AgUiSecret> {
   Widget build(BuildContext context) {
     final p = widget.props;
     final site = '${p['site'] ?? ''}';
-    return _CardFrame(
+    return AgUiCard(
       icon: Icons.key_rounded,
       title: 'An agent needs ${p['name'] ?? 'a credential'}',
+      subtitle: site.isEmpty ? '' : 'For $site',
+      status: done,
+      statusTone: done == 'Declined' ? AgUiTone.neutral : AgUiTone.success,
       children: [
-        if ('${p['reason'] ?? ''}'.isNotEmpty) Text('${p['reason']}'),
-        if (site.isNotEmpty) _note(context, 'For $site'),
-        const SizedBox(height: 8),
+        if ('${p['reason'] ?? ''}'.isNotEmpty)
+          Text(
+            '${p['reason']}',
+            style: const TextStyle(fontSize: 13, height: 1.35),
+          ),
         if (done.isNotEmpty)
-          Text(done, style: const TextStyle(fontWeight: FontWeight.w600))
+          const SizedBox.shrink()
         else if (AgUiActions.of(context) == null)
           _note(context, 'Open this conversation in the app to answer.')
         else ...[
@@ -341,7 +322,11 @@ class _AgUiSecretState extends State<AgUiSecret> {
             onSubmitted: (_) => _send(),
             decoration: InputDecoration(
               isDense: true,
-              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               labelText: '${p['name'] ?? 'Secret'}',
               suffixIcon: IconButton(
                 tooltip: hidden ? 'Show' : 'Hide',
@@ -354,7 +339,6 @@ class _AgUiSecretState extends State<AgUiSecret> {
             context,
             'The agent never sees it: it is sealed in this node\'s vault.',
           ),
-          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
@@ -449,27 +433,42 @@ class _AgUiHandoverState extends State<AgUiHandover> {
   Widget build(BuildContext context) {
     final p = widget.props;
     final a = AgUiActions.of(context);
-    return _CardFrame(
+    final held = status == 'controlled';
+    return AgUiCard(
       icon: Icons.back_hand_outlined,
+      tone: held ? AgUiTone.success : AgUiTone.info,
       title: 'Your turn on the project computer',
+      status: held
+          ? 'You have it'
+          : status == 'released'
+          ? 'Handed back'
+          : '',
+      statusTone: held ? AgUiTone.success : AgUiTone.neutral,
       children: [
-        if ('${p['reason'] ?? ''}'.isNotEmpty) Text('${p['reason']}'),
+        if ('${p['reason'] ?? ''}'.isNotEmpty)
+          Text(
+            '${p['reason']}',
+            style: const TextStyle(fontSize: 13, height: 1.35),
+          ),
         if ('${p['url'] ?? ''}'.isNotEmpty) _note(context, '${p['url']}'),
-        const SizedBox(height: 8),
         if (a == null || a.spaceId.isEmpty)
           _note(context, 'Open this project in the app to take over.')
-        else if (status == 'controlled') ...[
+        else if (held) ...[
           TextField(
             controller: note,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
-              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               hintText: 'What you did (optional)',
             ),
           ),
-          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 6,
             children: [
               FilledButton.icon(
                 onPressed: busy ? null : () => _run('control_release'),
@@ -484,15 +483,15 @@ class _AgUiHandoverState extends State<AgUiHandover> {
             ],
           ),
         ] else if (status == 'released')
-          const Text(
-            'Handed back: the agents continue.',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          )
+          _note(context, 'The agents continue.')
         else
-          FilledButton.icon(
-            onPressed: busy ? null : () => _run('control_take'),
-            icon: const Icon(Icons.mouse_outlined, size: 18),
-            label: const Text('Take control'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: busy ? null : () => _run('control_take'),
+              icon: const Icon(Icons.mouse_outlined, size: 18),
+              label: const Text('Take control'),
+            ),
           ),
         if (error.isNotEmpty) _note(context, error, error: true),
       ],
@@ -522,7 +521,9 @@ class _AgUiSuggestionState extends State<AgUiSuggestion> {
       error = '';
     });
     try {
-      await a.invoke('proactive', action, {'id': '${widget.props['task']}'});
+      await a.invoke('proactive', action, {
+        'id': '${widget.props['task'] ?? widget.props['id'] ?? ''}',
+      });
       if (mounted)
         setState(() => done = action == 'task_start' ? 'Started' : 'Hidden');
     } catch (e) {
@@ -536,23 +537,27 @@ class _AgUiSuggestionState extends State<AgUiSuggestion> {
   Widget build(BuildContext context) {
     final p = widget.props;
     final a = AgUiActions.of(context);
-    return _CardFrame(
+    return AgUiCard(
       icon: Icons.lightbulb_outline_rounded,
       title: '${p['title'] ?? 'A suggestion'}',
+      status: done,
+      statusTone: done == 'Started' ? AgUiTone.success : AgUiTone.neutral,
       children: [
-        if ('${p['detail'] ?? ''}'.isNotEmpty) Text('${p['detail']}'),
-        const SizedBox(height: 8),
+        if ('${p['detail'] ?? ''}'.isNotEmpty)
+          Text(
+            '${p['detail']}',
+            style: const TextStyle(fontSize: 13, height: 1.35),
+          ),
         if (done.isNotEmpty)
-          Row(
-            children: [
-              Text(done, style: const TextStyle(fontWeight: FontWeight.w600)),
-              if (a?.onOpenTasks != null)
-                TextButton(
-                  onPressed: a!.onOpenTasks,
-                  child: const Text('Tasks'),
-                ),
-            ],
-          )
+          (a?.onOpenTasks != null && done == 'Started')
+              ? Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: a!.onOpenTasks,
+                    child: const Text('See it in Tasks'),
+                  ),
+                )
+              : const SizedBox.shrink()
         else if (a != null)
           Wrap(
             spacing: 8,
@@ -568,6 +573,26 @@ class _AgUiSuggestionState extends State<AgUiSuggestion> {
             ],
           ),
         if (error.isNotEmpty) _note(context, error, error: true),
+      ],
+    );
+  }
+}
+
+/// A login card: an app the person needs asks them to sign in, here in the
+/// chat. The card carries no credential; signing in is the tools feature's.
+class AgUiConnect extends StatelessWidget {
+  const AgUiConnect({super.key, required this.props});
+  final Map<String, dynamic> props;
+
+  @override
+  Widget build(BuildContext context) {
+    final build = AgUiActions.of(context)?.connectBuilder;
+    if (build != null) return build(context, props);
+    return AgUiCard(
+      icon: Icons.login_rounded,
+      title: 'Sign in to ${props['name'] ?? 'an app'}',
+      children: [
+        _note(context, 'Open this conversation in the app to sign in.'),
       ],
     );
   }

@@ -10,6 +10,7 @@ import '../../desk/presentation/compact_summary.dart';
 import '../../desk/presentation/desk_controller.dart';
 import '../../desk/presentation/desk_report_view.dart';
 import '../../desk/presentation/floating_desk.dart';
+import '../../desk/presentation/free_desk.dart';
 import '../../desk/presentation/frontend_presentation.dart';
 import '../../files/presentation/file_viewer.dart';
 import '../../rooms/presentation/widgets/shared_file_viewer.dart';
@@ -124,6 +125,16 @@ class DmDeskPanel extends StatelessWidget {
     // Surface stays full-bleed; bottomInset clears the floating home tab bar.
     final desk = LayoutBuilder(
       builder: (context, box) {
+        // A desk wider than a small tablet is a free whiteboard.
+        if (board && box.maxWidth >= freeDeskWidth) {
+          return FreeDesk(
+            controller: controller,
+            topInset: topInset,
+            windowContent: _windowContent,
+            pinPreview: _pinPreview,
+            emptyState: _empty(context),
+          );
+        }
         final widgets = board || box.maxWidth < compactDeskWidth;
         return widgets
             ? CompactDesk(

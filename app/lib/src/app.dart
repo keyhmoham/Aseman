@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_dependencies.dart';
 import 'core/deferred/deferred_loader.dart';
+import 'core/layout/split_pane.dart';
 import 'core/platform/platform_mode.dart';
 import 'core/settings/app_settings.dart';
 import 'core/theme/app_theme.dart';
@@ -79,6 +80,7 @@ class _AsemanAppState extends State<AsemanApp> {
       // Drop orphan palette ids after a pack swap or store install.
       settings.syncPaletteToPack(themePacks.pack);
       unawaited(HaloRingCache.restore());
+      unawaited(PaneLayout.restore());
     } finally {
       WidgetsBinding.instance.allowFirstFrame();
     }

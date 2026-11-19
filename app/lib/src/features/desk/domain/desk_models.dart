@@ -6,6 +6,7 @@ library;
 import 'dart:ui';
 
 import '../../tools/domain/tool_models.dart';
+import 'desk_board.dart';
 
 /// Geometry every client and the node share (spaces/desktop.go).
 abstract final class DeskGeometry {
@@ -355,6 +356,7 @@ class DeskState {
     this.viewport = Size.zero,
     this.windows = const [],
     this.pins = const [],
+    this.items = const [],
   });
 
   factory DeskState.fromJson(Map<String, dynamic> j) => DeskState(
@@ -369,6 +371,10 @@ class DeskState {
           for (final p in (j['pins'] as List?) ?? const [])
             if (p is Map) DeskPin.fromJson(p.cast<String, dynamic>())
         ],
+        items: [
+          for (final i in (j['items'] as List?) ?? const [])
+            if (i is Map) DeskItem.fromJson(i.cast<String, dynamic>())
+        ],
       );
 
   static const empty = DeskState();
@@ -377,6 +383,9 @@ class DeskState {
   final Size viewport;
   final List<DeskWindow> windows;
   final List<DeskPin> pins;
+
+  /// The free desk's notes, shapes, text, arrows and drawings.
+  final List<DeskItem> items;
 
   /// The tools with open windows, in the order their first window opened,
   /// with how many each has.
@@ -403,10 +412,15 @@ class DeskState {
     return [for (final e in indexed) e.$2];
   }
 
-  DeskState copyWith({List<DeskWindow>? windows, List<DeskPin>? pins}) =>
-      DeskState(
-          version: version,
-          viewport: viewport,
-          windows: windows ?? this.windows,
-          pins: pins ?? this.pins);
+  DeskState copyWith({
+    List<DeskWindow>? windows,
+    List<DeskPin>? pins,
+    List<DeskItem>? items,
+  }) => DeskState(
+    version: version,
+    viewport: viewport,
+    windows: windows ?? this.windows,
+    pins: pins ?? this.pins,
+    items: items ?? this.items,
+  );
 }

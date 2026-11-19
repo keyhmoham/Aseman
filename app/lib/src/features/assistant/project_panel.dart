@@ -180,7 +180,7 @@ class _DemonstrationsViewState extends State<DemonstrationsView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Do a task once on the project computer while Aseman records it; an agent drafts a skill you review, then does it for you.',
+          'Do a task once on the project computer while the Decillion assistant records it; an agent drafts a skill you review, then does it for you.',
         ),
         const SizedBox(height: 8),
         if (recording.isEmpty)

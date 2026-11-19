@@ -35,6 +35,7 @@ class CardWindow extends StatefulWidget {
     this.onMaximize,
     this.onSwapCompact,
     this.showPin = true,
+    this.showMaximize = true,
     this.closeTooltip = 'Close',
     this.chromeOverlayTooltip = true,
   });
@@ -65,6 +66,9 @@ class CardWindow extends StatefulWidget {
 
   /// The pin control. Surfaces that are not the room desk turn it off.
   final bool showPin;
+
+  /// The maximize control (the free desk has no maximized window).
+  final bool showMaximize;
 
   /// The close control's name (`Remove` on the feed desk).
   final String closeTooltip;
@@ -226,6 +230,7 @@ class _CardWindowState extends State<CardWindow>
                 icon: Icons.minimize_rounded,
                 onPressed: widget.onMinimize,
               ),
+              if (widget.showMaximize)
               WindowChromeButton(
                 overlayTooltip: widget.chromeOverlayTooltip,
                 tooltip: widget.maximized ? 'Restore' : 'Maximize',

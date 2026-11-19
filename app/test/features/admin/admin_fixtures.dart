@@ -255,9 +255,17 @@ Map<String, dynamic> adminFixtures() {
       ]
     },
     'bots.agent_samples': {'samples': <Map<String, dynamic>>[]},
-    'tools.mcp_samples': {
-      'samples': [
-        {'id': 's1'}
+    'tools.mcp_directory_list': {
+      'enabled': true,
+      'servers': [
+        {
+          'bot_id': 's1',
+          'name': 'Sentry',
+          'key': 'dev.sentry.mcp/sentry',
+          'auth': 'user',
+          'connected': 2,
+          'client': false
+        }
       ]
     },
     'talent.list_mine': {'talent': <Map<String, dynamic>>[]},

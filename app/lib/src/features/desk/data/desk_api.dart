@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import '../../../data/services/aseman_service.dart';
 import '../../tools/data/tools_api.dart' show ActionCall;
+import '../domain/desk_board.dart';
 import '../domain/desk_models.dart';
 
 /// A room's desk on the node (spaces.desktop_get / desktop_update). [room]
@@ -92,6 +93,30 @@ abstract final class DeskOps {
       {'op': 'close_tool', 'tool': tool};
   static Map<String, dynamic> pin(String id) => {'op': 'pin', 'id': id};
   static Map<String, dynamic> unpin(String id) => {'op': 'unpin', 'id': id};
-  static Map<String, dynamic> viewport(Size s) =>
-      {'op': 'viewport', 'w': s.width, 'h': s.height};
+  /// [free]: the desk is wide enough to show as the free whiteboard.
+  static Map<String, dynamic> viewport(Size s, {bool free = false}) => {
+    'op': 'viewport',
+    'w': s.width,
+    'h': s.height,
+    if (free) 'args': {'free': true},
+  };
+
+  /// A new whiteboard item (its own id when it has one: undo puts an item
+  /// back under the id it had).
+  static Map<String, dynamic> itemAdd(DeskItem item) => {
+    'op': 'item_add',
+    'id': item.id,
+    'item': item.toJson(),
+  };
+
+  /// Changes only the fields [patch] names (null clears one).
+  static Map<String, dynamic> itemUpdate(
+    String id,
+    Map<String, dynamic> patch,
+  ) => {'op': 'item_update', 'id': id, 'item': patch};
+
+  static Map<String, dynamic> itemRemove(String id) =>
+      {'op': 'item_remove', 'id': id};
+  static Map<String, dynamic> itemFront(String id) =>
+      {'op': 'item_front', 'id': id};
 }

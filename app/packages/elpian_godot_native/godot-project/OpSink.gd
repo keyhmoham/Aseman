@@ -130,14 +130,18 @@ func _summarize() -> String:
 #   {"release": <surface>}    the surface's widget went away
 func _apply(m: Dictionary) -> void:
 	if m.has("mount"):
-		var h := int(m["mount"])
+		# `mount` is the surface id and `node` the handle to bind (older hosts
+		# sent the handle as `mount`).
+		var h := int(m.get("node", m["mount"]))
 		if not _seeded.has(h):
 			_seeded[h] = true
 			# The host allocates the mount handle and creates its subtree eagerly,
 			# so the node and its children already exist here — just re-parent it
 			# into the scene so it renders. Creating it again would orphan the
-			# host's subtree.
-			_sink.call("exec_op_json", JSON.stringify({"ref": SELF_HANDLE, "method": "add_child", "args": [{"ref": h}]}))
+			# host's subtree. The sink itself (SELF_HANDLE, what a Scene3D
+			# mounts) is already in the tree: nothing to re-parent.
+			if h != SELF_HANDLE:
+				_sink.call("exec_op_json", JSON.stringify({"ref": SELF_HANDLE, "method": "add_child", "args": [{"ref": h}]}))
 	elif m.has("release"):
 		# The surface is gone; forget its seed so a remount re-parents cleanly.
 		_seeded.erase(int(m["release"]))

@@ -182,7 +182,7 @@ class _ThemesStoreScreenState extends State<ThemesStoreScreen> {
               icon: Icons.storefront_outlined,
               title: 'No published themes yet',
               message:
-                  'Create one in Theme Studio, or ask Aseman to design one.',
+                  'Create one in Theme Studio, or ask the Decillion assistant to design one.',
             )
           else
             LayoutBuilder(

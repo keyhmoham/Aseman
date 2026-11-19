@@ -4,6 +4,7 @@ import 'package:aseman/src/data/models/bot.dart';
 import 'package:aseman/src/features/tools/connect/mcp_connect_dialog.dart';
 import 'package:aseman/src/features/tools/connect/mcp_sign_in.dart';
 import 'package:aseman/src/features/tools/data/tools_api.dart';
+import 'package:aseman/src/features/tools/domain/mcp_directory.dart';
 import 'package:aseman/src/features/tools/presentation/tool_frontend_view.dart';
 
 import '../../fake_aseman_service.dart';
@@ -11,68 +12,77 @@ import '../../fake_aseman_service.dart';
 /// Plays the node's side of an MCP sign-in.
 class _Service extends FakeAsemanService {
   bool needsClient = true;
-  final prepared = <Map<String, String>>[];
-  final exchanged = <String>[];
-  final connections = <Map<String, String>>[];
+  String noPage = ''; // a credential name: the server has no sign-in page
+  final started = <Map<String, String>>[];
+  final finished = <String>[];
+  final tokens = <Map<String, String>>[];
 
   @override
-  Future<Map<String, dynamic>> mcpOAuthPrepare(
-      {String url = '',
-      String bot = '',
+  Future<ConnectStart> mcpConnectStart(
+      {required String botId,
+      required String spaceId,
       required String redirectUri,
       String clientId = '',
-      String clientSecret = ''}) async {
-    prepared.add({'bot': bot, 'redirect': redirectUri, 'client': clientId});
-    if (needsClient && clientId.isEmpty) {
-      return {
-        'needs_client': true,
-        'redirect_uri': redirectUri,
-        'error': 'Create an OAuth client.'
-      };
+      String clientSecret = '',
+      bool reconnect = false,
+      bool freshClient = false}) async {
+    started.add({
+      'bot': botId,
+      'space': spaceId,
+      'redirect': redirectUri,
+      'client': clientId,
+      'fresh': '$freshClient',
+    });
+    if (noPage.isNotEmpty) {
+      return ConnectStart('needs_token', credential: noPage);
     }
-    return {
-      'authorization_url':
-          'https://login.example.com/authorize?client_id=$clientId&state=s1',
-      'state': 's1',
-    };
+    if (needsClient && clientId.isEmpty) {
+      return ConnectStart('needs_client',
+          redirectUri: redirectUri, error: 'Create an OAuth client.');
+    }
+    return ConnectStart('authorize',
+        authorizationUrl:
+            'https://login.example.com/authorize?client_id=$clientId&state=s1',
+        state: 's1');
   }
 
   @override
-  Future<Map<String, dynamic>> mcpOAuthExchange(
-      String state, String code) async {
-    exchanged.add('$state:$code');
-    return {'access_token': 'at-1'};
+  Future<void> mcpConnectFinish(String state, String code) async {
+    finished.add('$state:$code');
   }
 
   @override
-  Future<bool> setToolConnection(String botId, String spaceId,
-      {String token = '', String grant = ''}) async {
-    connections
-        .add({'bot': botId, 'space': spaceId, 'token': token, 'grant': grant});
-    return true;
+  Future<void> mcpConnectToken(String botId, String spaceId, String token,
+      {String username = '', String header = ''}) async {
+    tokens.add({
+      'bot': botId,
+      'space': spaceId,
+      'token': token,
+      'username': username,
+      'header': header
+    });
   }
 }
 
 void main() {
-  testWidgets('signing in exchanges the code and connects from the sign-in',
+  testWidgets('signing in brings the code back and the node keeps the connection',
       (tester) async {
     final service = _Service()..needsClient = false;
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     final context = tester.element(find.byType(SizedBox));
     String? opened;
-    await McpSignIn(service).connect(context,
+    final out = await McpSignIn(service).connect(context,
         botId: 'bot-gh',
         spaceId: 'space-1', open: (url, redirect, state) async {
       opened = url;
       return '$redirect?code=c1&state=$state';
     });
+    expect(out.connected, isTrue);
     expect(opened, startsWith('https://login.example.com/authorize'));
-    expect(service.prepared.single['bot'], 'bot-gh');
-    expect(service.prepared.single['redirect'], endsWith('/oauth.html'));
-    expect(service.exchanged, ['s1:c1']);
-    // The connection is made from the sign-in, so the node can renew it.
-    expect(service.connections.single,
-        {'bot': 'bot-gh', 'space': 'space-1', 'token': '', 'grant': 's1'});
+    expect(service.started.single['bot'], 'bot-gh');
+    expect(service.started.single['redirect'], endsWith('/oauth.html'));
+    // The node trades the code and keeps the connection: no token returns here.
+    expect(service.finished, ['s1:c1']);
   });
 
   testWidgets('a provider error or another attempt\'s state is refused',
@@ -93,8 +103,7 @@ void main() {
             spaceId: 's',
             open: (_, redirect, __) async => '$redirect?code=c&state=other'),
         throwsA(predicate((e) => '$e'.contains('different attempt'))));
-    expect(service.exchanged, isEmpty);
-    expect(service.connections, isEmpty);
+    expect(service.finished, isEmpty);
   });
 
   testWidgets(
@@ -131,8 +140,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign in with Linear'));
     await tester.pumpAndSettle();
-    expect(service.prepared.last['client'], 'client-123');
-    expect(service.connections.single['grant'], 's1');
+    expect(service.started.last['client'], 'client-123');
+    expect(service.finished, ['s1:c2']);
     expect(await result, isTrue);
   });
 
@@ -150,14 +159,45 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Use an access token instead'));
+    await tester.tap(find.text('Use a key or token instead'));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.widgetWithText(TextField, 'Access token'), ' secret-token ');
-    await tester.tap(find.text('Save connection'));
+        find.widgetWithText(TextField, 'Token'), ' secret-token ');
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
     await tester.pumpAndSettle();
-    expect(service.connections.single['token'], 'secret-token');
-    expect(service.prepared, isEmpty);
+    expect(service.tokens.single['token'], 'secret-token');
+    expect(service.started, isEmpty);
+    expect(await result, isTrue);
+  });
+
+  testWidgets(
+      'a server with no sign-in page asks for its key, named as the app names it',
+      (tester) async {
+    final service = _Service()..noPage = 'api_key';
+    late Future<bool> result;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => FilledButton(
+          onPressed: () => result = connectMcpTool(context, service,
+              botId: 'bot-k', spaceId: 'space-1', name: 'Keyed'),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in with Keyed'));
+    await tester.pumpAndSettle();
+    // The node said there is no sign-in page: the key field takes its place.
+    expect(find.widgetWithText(TextField, 'API key'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Header (optional)'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'API key'), 'k-123');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Header (optional)'), 'X-Api-Key');
+    await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
+    await tester.pumpAndSettle();
+    expect(service.tokens.single,
+        {'bot': 'bot-k', 'space': 'space-1', 'token': 'k-123', 'username': '', 'header': 'X-Api-Key'});
     expect(await result, isTrue);
   });
 

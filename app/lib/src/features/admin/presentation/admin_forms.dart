@@ -69,13 +69,6 @@ Future<Map<String, dynamic>?> showAdminActionForm(
         message:
             'Adds the Agency Agents catalogue (hundreds of specialists with their skills) to this node. Existing agents are left as they are.',
         submit: 'Import'),
-    'tools.mcp_import_samples' => _ConfirmForm(
-        initial: body,
-        icon: Icons.download_rounded,
-        title: 'Import the app catalog?',
-        message:
-            'Adds the sample MCP servers to this node. Servers already registered are skipped.',
-        submit: 'Import'),
     'spaces.computer' => _computerForm(body),
     'finance.wallet_mint' => _GrantForm(initial: body),
     'finance.budget_set' => _BudgetForm(initial: body),
@@ -123,7 +116,6 @@ String adminActionDone(String namespace, String action) =>
       'bots.bot_edit': 'Agent saved',
       'bots.bot_delete': 'Agent deleted',
       'bots.agent_import_samples': 'Agency agents imported',
-      'tools.mcp_import_samples': 'App catalog imported',
       'tools.mcp_register': 'Server added',
       'tools.mcp_update': 'Server saved',
       'tools.mcp_delete': 'Deleted',

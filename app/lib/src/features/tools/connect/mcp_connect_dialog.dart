@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../data/services/aseman_service.dart';
 import '../../../shared/widgets/overlay_panels.dart';
+import '../domain/mcp_directory.dart';
 import 'mcp_sign_in.dart';
 
 /// Asks the person to connect their own account to the tool [botId] in the
@@ -19,6 +20,8 @@ Future<bool> connectMcpTool(
   required String name,
   bool reconnect = false,
   OAuthOpener? open,
+  String credential = '',
+  bool startWithKey = false,
 }) async {
   // A connector app (Google, a broker) connects an account of the person's
   // own, the same for every project, rather than an MCP sign-in.
@@ -39,6 +42,8 @@ Future<bool> connectMcpTool(
           name: name,
           reconnect: reconnect,
           open: open,
+          credential: credential,
+          startWithKey: startWithKey,
         ),
       ) ==
       true;
@@ -141,6 +146,8 @@ class McpConnectDialog extends StatefulWidget {
     required this.name,
     this.reconnect = false,
     this.open,
+    this.credential = '',
+    this.startWithKey = false,
   });
 
   final McpSignIn sign;
@@ -150,16 +157,25 @@ class McpConnectDialog extends StatefulWidget {
   final bool reconnect;
   final OAuthOpener? open;
 
+  /// What the server's key is called (api_key, basic), when known.
+  final String credential;
+
+  /// Opens on the key field: the server has no sign-in page.
+  final bool startWithKey;
+
   @override
   State<McpConnectDialog> createState() => _McpConnectDialogState();
 }
 
 class _McpConnectDialogState extends State<McpConnectDialog> {
   final _token = TextEditingController();
+  final _username = TextEditingController();
+  final _header = TextEditingController();
   final _clientId = TextEditingController();
   final _clientSecret = TextEditingController();
   bool _busy = false;
-  bool _tokenMode = false;
+  late bool _tokenMode = widget.startWithKey;
+  late String _credential = widget.credential;
   String? _error;
 
   /// Set when the provider wants an OAuth client: the redirect to create it with.
@@ -168,6 +184,8 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
   @override
   void dispose() {
     _token.dispose();
+    _username.dispose();
+    _header.dispose();
     _clientId.dispose();
     _clientSecret.dispose();
     super.dispose();
@@ -185,15 +203,26 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
       _error = null;
     });
     try {
-      await widget.sign.connect(
+      final out = await widget.sign.connect(
         context,
         botId: widget.botId,
         spaceId: widget.spaceId,
         clientId: _clientId.text.trim(),
         clientSecret: _clientSecret.text.trim(),
+        reconnect: widget.reconnect,
         open: widget.open,
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      if (out.needsToken) {
+        // No sign-in page: the person pastes the key the app takes.
+        setState(() {
+          _busy = false;
+          _tokenMode = true;
+          _credential = out.credential;
+        });
+        return;
+      }
+      Navigator.of(context).pop(true);
     } on McpNeedsClient catch (e) {
       if (mounted) {
         setState(() {
@@ -213,8 +242,12 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
   }
 
   Future<void> _saveToken() async {
-    if (_token.text.trim().isEmpty) {
-      setState(() => _error = 'Paste a token first.');
+    final fields = credentialFields(_credential);
+    if (_token.text.trim().isEmpty ||
+        (fields.username && _username.text.trim().isEmpty)) {
+      setState(() => _error = fields.username
+          ? 'Enter the username and password first.'
+          : 'Paste the key first.');
       return;
     }
     setState(() {
@@ -226,6 +259,8 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
         widget.botId,
         widget.spaceId,
         _token.text,
+        username: fields.username ? _username.text.trim() : '',
+        header: fields.header ? _header.text.trim() : '',
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -336,40 +371,79 @@ class _McpConnectDialogState extends State<McpConnectDialog> {
                             _tokenMode = true;
                             _error = null;
                           }),
-                    child: const Text('Use an access token instead'),
+                    child: const Text('Use a key or token instead'),
                   ),
                 ),
               ] else ...[
-                TextField(
-                  controller: _token,
-                  obscureText: true,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Access token',
-                    helperText:
-                        'A personal token from the provider. It is stored encrypted on the node.',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                Builder(builder: (context) {
+                  final fields = credentialFields(_credential);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fields.username
+                            ? 'Use the login ${widget.name} gave you.'
+                            : 'This app has no sign-in page: it takes a key from its settings.',
+                        style: TextStyle(color: scheme.onSurface),
+                      ),
+                      const SizedBox(height: 10),
+                      if (fields.username) ...[
+                        TextField(
+                          controller: _username,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Username',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      TextField(
+                        controller: _token,
+                        obscureText: true,
+                        autofocus: !fields.username,
+                        decoration: InputDecoration(
+                          labelText: fields.label,
+                          hintText: fields.hint,
+                          helperText:
+                              'It is checked with the app, then kept encrypted on the node, for your account only.',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      if (fields.header) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _header,
+                          decoration: const InputDecoration(
+                            labelText: 'Header (optional)',
+                            hintText: 'Authorization',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                }),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _busy ? null : _saveToken,
-                    child: const Text('Save connection'),
+                    child: Text(_busy ? 'Checking…' : 'Connect'),
                   ),
                 ),
-                Center(
-                  child: TextButton(
-                    onPressed: _busy
-                        ? null
-                        : () => setState(() {
-                            _tokenMode = false;
-                            _error = null;
-                          }),
-                    child: const Text('Sign in instead'),
+                if (!widget.startWithKey)
+                  Center(
+                    child: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                              _tokenMode = false;
+                              _error = null;
+                            }),
+                      child: const Text('Sign in instead'),
+                    ),
                   ),
-                ),
               ],
               if (_error != null) ...[
                 const SizedBox(height: 8),

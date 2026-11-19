@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aseman/src/data/models/bot.dart';
 import 'package:aseman/src/features/tools/connect/add_app.dart';
+import 'package:aseman/src/features/tools/domain/mcp_directory.dart';
 
 import '../../fake_aseman_service.dart';
 
 /// A node with one catalog app that needs each person's account, and a
 /// server that only answers once it is registered for per-person sign-in.
 class _Service extends FakeAsemanService {
-  final registered = <Map<String, Object>>[];
   final added = <String>[];
   final removed = <String>[];
 
@@ -48,16 +48,32 @@ class _Service extends FakeAsemanService {
             status: 'running'),
       ];
 
+  /// The directory is off here: these tests are about the node's own catalog
+  /// and servers added by address (the directory has its own tests).
   @override
-  Future<String> mcpRegister(
-      {required String name,
-      required String url,
-      String auth = '',
-      String token = '',
-      Map<String, dynamic> descriptor = const {}}) async {
-    registered.add({'name': name, 'auth': auth, 'descriptor': descriptor});
-    if (auth.isEmpty) throw Exception('MCP provider returned HTTP 401');
-    return 'bot-new';
+  Future<bool> glamaEnabled() async => false;
+
+  @override
+  Future<Set<String>> directoryKeysIn(String spaceId) async => <String>{};
+
+  final byAddress = <Map<String, String>>[];
+
+  /// A server added by address: this one wants a sign-in at its own provider.
+  @override
+  Future<McpInstalled> mcpInstall(
+      {required String spaceId,
+      String key = '',
+      String url = '',
+      String name = '',
+      Map<String, String> headers = const {}}) async {
+    byAddress.add({'space': spaceId, 'key': key, 'url': url, 'name': name});
+    added.add('$spaceId/bot-new');
+    return McpInstalled(
+        botId: 'bot-new',
+        name: name,
+        status: 'needs_auth',
+        method: 'oauth',
+        auth: 'user');
   }
 
   @override
@@ -79,6 +95,15 @@ Future<void> _pumpDialogs(WidgetTester tester) async {
   for (var i = 0; i < 5; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+/// Taps the n-th "Add" of the node's catalog (the dialog scrolls: the
+/// directory above it pushes the list down).
+Future<void> _tapAdd(WidgetTester tester, int n) async {
+  final button = find.widgetWithText(FilledButton, 'Add').at(n);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
 }
 
 Future<Future<bool>> _open(WidgetTester tester, _Service service) async {
@@ -105,6 +130,8 @@ void main() {
         mcpNeedsSignIn(Exception('MCP provider returned HTTP 404')), isFalse);
     expect(mcpAddFailure(Exception('MCP provider returned HTTP 404')),
         contains('/mcp'));
+    expect(mcpAddFailure(Exception('that address answered, but not as an MCP server')),
+        contains('not as an MCP server'));
   });
 
   testWidgets('adding a catalog app that needs an account asks to sign in',
@@ -114,7 +141,7 @@ void main() {
     expect(find.text('Add an app'), findsOneWidget);
     expect(find.text('Sign in with your own account'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Add').first);
+    await _tapAdd(tester, 0);
     await _pumpDialogs(tester);
     expect(service.added, ['space-1/bot-gh']);
     expect(find.text('Connect GitHub'), findsOneWidget);
@@ -140,7 +167,7 @@ void main() {
     expect(find.widgetWithText(ListTile, 'My Chart'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'GitHub'), findsOneWidget);
     expect(find.text('Helper'), findsNothing);
-    await tester.tap(find.widgetWithText(FilledButton, 'Add').at(2));
+    await _tapAdd(tester, 2);
     await tester.pumpAndSettle();
     expect(service.added, ['space-1/bot-mine']);
   });
@@ -149,7 +176,7 @@ void main() {
       (tester) async {
     final service = _Service();
     final result = await _open(tester, service);
-    await tester.tap(find.widgetWithText(FilledButton, 'Add').at(1));
+    await _tapAdd(tester, 1);
     await tester.pumpAndSettle();
     expect(service.added, ['space-1/bot-wx']);
     expect(find.textContaining('Connect '), findsNothing);
@@ -157,7 +184,7 @@ void main() {
   });
 
   testWidgets(
-      'a server that wants a sign-in is registered per person and asks to sign in',
+      'a server added by address is installed in one call and asks to sign in when it wants to',
       (tester) async {
     final service = _Service();
     await _open(tester, service);
@@ -168,8 +195,10 @@ void main() {
     await tester.tap(find.text('Add server'));
     await _pumpDialogs(tester);
 
-    expect(service.registered.map((r) => r['auth']), ['', 'user']);
-    expect((service.registered.last['descriptor'] as Map)['mcp_oauth'], 'auto');
+    // One call: the node asks the server what it wants, records it and adds it.
+    expect(service.byAddress, [
+      {'space': 'space-1', 'key': '', 'url': 'https://mcp.linear.app/mcp', 'name': 'Linear'}
+    ]);
     expect(service.added, ['space-1/bot-new']);
     expect(find.text('Connect Linear'), findsOneWidget);
   });

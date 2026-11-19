@@ -531,7 +531,7 @@ Widget _buildVoicePage(_AppPageContentState state) {
             title: 'Live voice',
             icon: Icons.record_voice_over_rounded,
             subtitle:
-                'Powers Talk on the home Aseman sheet: mic → transcription → Aseman → speech. Run deploy/voice (Parakeet V3 + Kokoro) as an OpenAI-compatible provider, mark its models Speech / Transcription, then enable the roles below.',
+                'Powers Talk on the home Decillion assistant sheet: mic → transcription → Decillion assistant → speech. Run deploy/voice (Parakeet V3 + Kokoro) as an OpenAI-compatible provider, mark its models Speech / Transcription, then enable the roles below.',
             child: Text(
               providers.isEmpty
                   ? 'No enabled LLM provider with an API key yet. Add one under AI › Providers first.'
@@ -547,7 +547,7 @@ Widget _buildVoicePage(_AppPageContentState state) {
             title: 'Transcription (STT)',
             icon: Icons.mic_none_rounded,
             subtitle:
-                'Turns the person\'s spoken audio into text before Aseman answers. Mark a model "Transcription" on the Models page (e.g. parakeet-tdt-0.6b-v3).',
+                'Turns the person\'s spoken audio into text before the Decillion assistant answers. Mark a model "Transcription" on the Models page (e.g. parakeet-tdt-0.6b-v3).',
             roles: roles,
             providers: providers,
             showVoiceName: false,

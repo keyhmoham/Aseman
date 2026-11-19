@@ -35,7 +35,7 @@ const pricingBlurb =
 
 const howItWorksBlurb =
     'Create a project, add agents and apps, and work in rooms and chats. '
-    'Your personal Aseman lives in the Aseman chat. Invite people, share files, '
+    'Your personal Decillion assistant has a chat of its own. Invite people, share files, '
     'and let agents handle research and routine work with your approval.';
 
 /// Compact text links for the signed-out auth shell.

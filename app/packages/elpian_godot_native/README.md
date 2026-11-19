@@ -59,14 +59,29 @@ seam a Godot runtime is attached through; see `ios/README.md`.
 
 ## Web
 
-Not on by default. The page glue `web/elpian_godot_web.js` announces a live
-engine as soon as it loads, so it is only added together with an HTML5 export
-of `godot-project/` (the GDExtension built for wasm32 and the
-extensions-support export template):
+Not on by default: `Scene3D` is a live viewport on the web only where the page
+ships an HTML5 export of `godot-project/` (the GDExtension built for wasm32
+and the extensions-support, no-threads export template).
 
-1. Put the export's files in `app/web/`, beside `index.html` (the glue loads
-   them from the page's own directory), and copy the glue there too.
-2. Add `<script src="elpian_godot_web.js"></script>` to `app/web/index.html`,
-   before Flutter boots.
+```sh
+tool/build-web-export.sh [OUT_DIR]            # builds the export, in Docker (default OUT_DIR: web-export/)
+tool/install-web-export.sh OUT_DIR ../../web  # Aseman: installs it beside index.html
+```
+
+`build-web-export.sh` needs only Docker and curl. It pins Godot 4.3-stable
+(checking the editor against Godot's published sums) and builds the extension
+with emscripten 3.1.62. Downloads are cached in `~/.cache/elpian-godot`
+(`ELPIAN_GODOT_CACHE`). Of Godot's 1 GB export-templates archive only the web
+templates are fetched, by HTTP range requests (`tool/fetch_zip_members.py`).
+
+`install-web-export.sh` copies the export and the glue `web/elpian_godot_web.js`
+into the web directory — `web/` before `flutter build web`, or `build/web`
+after it — and adds `<script src="elpian_godot_web.js">` before
+`flutter_bootstrap.js` (the glue announces a live engine as soon as it loads,
+so it is only added together with an export). The large files are git-ignored.
+
+The Expo client takes the same export: `ELPIAN_GODOT_EXPORT=OUT_DIR` at its
+`npm run build:elpian`, or the files in `elpian-engine/vendor/godot` (which
+also covers its phones, as they load that page in a WebView).
 
 One `Scene3D` per page on the web: a Godot web export drives a single canvas.

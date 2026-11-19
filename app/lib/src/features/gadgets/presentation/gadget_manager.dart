@@ -233,7 +233,7 @@ class _GadgetManagerState extends State<GadgetManager> {
           icon: Icons.auto_awesome_rounded,
           title: 'No gadgets yet',
           body:
-              'Ask your Aseman, or an agent in a workspace, to make you one — '
+              'Ask your Decillion assistant, or an agent in a workspace, to make you one — '
               'a tracker, a board, a dashboard. It shows up here, ready to '
               'float on screen or tuck away.',
         )

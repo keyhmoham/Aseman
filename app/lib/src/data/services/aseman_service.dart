@@ -1267,17 +1267,22 @@ class AsemanService implements BackendService {
   }
 
   /// Sends a direct message (`users.dm_send`).
+  ///
+  /// [voice] marks what a person said aloud in a live voice chat: the node
+  /// answers it at once and briefly, as someone waits to hear it.
   Future<RoomMessage> sendDirectMessage(
     String peer,
     String body, {
     List<String> attachments = const [],
     String replyTo = '',
+    bool voice = false,
   }) async {
     final resp = await client.call('users', 'dm_send', body: {
       'to': peer,
       'body': body,
       if (replyTo.isNotEmpty) 'reply_to': replyTo,
       if (attachments.isNotEmpty) 'attachments': attachments,
+      if (voice) 'voice': true,
     });
     final m = resp.body as Map<String, dynamic>;
     return RoomMessage(
@@ -2835,26 +2840,35 @@ class AsemanService implements BackendService {
     return actionMap('users', 'brain_memory_set', body: {'notes': notes});
   }
 
+  /// A direct conversation as the node sends it (`users.dm_list`), unparsed:
+  /// messages, proposals and `agents_working`.
+  Future<Map<String, dynamic>> dmList(String peer, {int limit = 40}) =>
+      actionMap('users', 'dm_list', body: {'peer': peer, 'limit': limit});
+
   /// Saved-messages / self DM thread (brain proposals + agents_working).
-  Future<Map<String, dynamic>> dmListSelf({int limit = 40}) {
-    final me = session?.accountId ?? '';
-    return actionMap('users', 'dm_list',
-        body: {'peer': me, 'limit': limit});
-  }
+  Future<Map<String, dynamic>> dmListSelf({int limit = 40}) =>
+      dmList(session?.accountId ?? '', limit: limit);
 
   /// Which live-voice roles the node has on ({speech, transcription, live}).
   Future<Map<String, dynamic>> voiceConfig() =>
       actionMap('users', 'voice_config');
 
-  /// One spoken turn: mic audio in, transcript + reply + TTS audio out.
-  Future<Map<String, dynamic>> voiceTurn({
+  /// One short piece of a live voice turn, turned into text by the node's
+  /// transcription model (`users.voice_transcribe_chunk` → `{text}`). It
+  /// neither answers nor speaks: that happens once, for the whole turn.
+  Future<Map<String, dynamic>> voiceTranscribeChunk({
     required List<int> audio,
     required String mime,
   }) =>
-      actionMap('users', 'voice_turn', body: {
-        'audio': base64Encode(audio),
-        'mime': mime,
-      });
+      actionMap('users', 'voice_transcribe_chunk',
+          body: {'audio': base64Encode(audio), 'mime': mime},
+          timeout: const Duration(seconds: 20));
+
+  /// Text said aloud by the node's speech model (`users.voice_speak` →
+  /// `{audio, mime}`: base64 WAV or MP3 to play).
+  Future<Map<String, dynamic>> voiceSpeak(String text) =>
+      actionMap('users', 'voice_speak',
+          body: {'text': text}, timeout: const Duration(seconds: 45));
 
   // ── credits / admin misc ─────────────────────────────────────────────
 

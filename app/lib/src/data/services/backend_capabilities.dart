@@ -516,7 +516,7 @@ abstract final class BackendCapabilities {
       'unfollow',
       'voice_config',
       'voice_speak',
-      'voice_turn',
+      'voice_transcribe_chunk',
     ],
   };
 

@@ -24,7 +24,6 @@ import '../../../shared/widgets/overlay_panels.dart';
 import '../../../shared/widgets/segmented_tab_bar.dart';
 import '../../../shared/widgets/sky_ui.dart';
 import '../../brain/brain_avatar.dart';
-import '../../brain/brain_voice.dart';
 import '../../calls/call_page.dart' deferred as call_page;
 import '../../desk/data/desk_api.dart';
 import '../../desk/presentation/desk_controller.dart';
@@ -33,6 +32,9 @@ import '../../home/presentation/workspace_screen.dart';
 import '../../rooms/presentation/widgets/room_chat.dart';
 import '../../tools/connect/add_app.dart';
 import '../../tools/connect/mcp_connect_dialog.dart';
+import '../../voice/live/live_voice_backend.dart';
+import '../../voice/live/live_voice_controller.dart';
+import '../../voice/live/live_voice_model.dart';
 import 'dm_desk_panel.dart' deferred as dm_desk;
 import 'report_dialog.dart';
 import 'widgets/brain_proposals.dart';
@@ -159,7 +161,7 @@ class _ChatPageState extends State<ChatPage> {
   double _avatarCollapse = 0;
 
   BrainAvatarPrefs _avatarPrefs = const BrainAvatarPrefs();
-  BrainVoiceClient? _voice;
+  LiveVoiceController? _voice;
 
   ChatSummary get chat => _chat;
 
@@ -206,7 +208,9 @@ class _ChatPageState extends State<ChatPage> {
     // Both read the same desk, so bind it whenever this direct chat has one.
     _bindDesk();
     if (_isAiChat) {
-      _voice = BrainVoiceClient(_service)..addListener(_onVoice);
+      _voice = LiveVoiceController(
+        backend: ServiceLiveVoiceBackend(_service, peer: _peerId),
+      )..addListener(_onVoice);
       unawaited(_bootAvatar());
     }
     await Future.wait([_load(), _loadAgents()]);
@@ -933,9 +937,12 @@ class _ChatPageState extends State<ChatPage> {
     card: card,
   );
 
+  /// Talks with this chat's Aseman or agent aloud: listening starts as the
+  /// sheet opens, and closing it ends the call.
   Future<void> _openVoiceSheet() async {
     final voice = _voice;
     if (voice == null) return;
+    unawaited(voice.start());
     await showFloatingPanel(
       context,
       _AgentVoiceSheet(
@@ -951,6 +958,7 @@ class _ChatPageState extends State<ChatPage> {
       maxHeight: 640,
       barrierLabel: 'Close voice call',
     );
+    await voice.end();
   }
 
   bool _onScroll(ScrollNotification n) {
@@ -1007,7 +1015,7 @@ class _ChatPageState extends State<ChatPage> {
         platform: chat.peer?.humanoid,
         prefs: _avatarPrefs,
         radius: size / 2,
-        listening: _voice?.state.status == BrainVoiceStatus.listening,
+        listening: _voice?.state == LiveState.listening,
       );
     }
     return ChatAvatar(chat: chat, radius: size / 2, userId: _me);
@@ -1225,10 +1233,7 @@ class _ChatPageState extends State<ChatPage> {
                           bottom:
                               _voiceFabBottom + (embedded ? bottomInset : 0),
                           child: _VoiceFab(
-                            active:
-                                (_voice?.state.status ??
-                                    BrainVoiceStatus.idle) !=
-                                BrainVoiceStatus.idle,
+                            active: _voice?.active ?? false,
                             onPressed: _openVoiceSheet,
                           ),
                         ),
@@ -1364,8 +1369,7 @@ class _ChatPageState extends State<ChatPage> {
               // that band (+ gap) so the FAB floats above the message bar.
               bottom: _voiceFabBottom + (embedded ? bottomInset : 0),
               child: _VoiceFab(
-                active: (_voice?.state.status ?? BrainVoiceStatus.idle) !=
-                    BrainVoiceStatus.idle,
+                active: _voice?.active ?? false,
                 onPressed: _openVoiceSheet,
               ),
             ),
@@ -1554,7 +1558,7 @@ class _AgentVoiceSheet extends StatelessWidget {
   });
 
   final String title;
-  final BrainVoiceClient voice;
+  final LiveVoiceController voice;
   final BrainAvatarPrefs avatarPrefs;
   final String picture;
   final AgentHumanoid? platform;
@@ -1567,14 +1571,9 @@ class _AgentVoiceSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: voice,
       builder: (context, _) {
-        final st = voice.state;
-        final inCall = st.status != BrainVoiceStatus.idle;
-        final label = switch (st.status) {
-          BrainVoiceStatus.listening => 'Listening',
-          BrainVoiceStatus.thinking => 'Thinking',
-          BrainVoiceStatus.speaking => 'Speaking',
-          BrainVoiceStatus.idle => 'Idle',
-        };
+        final state = voice.state;
+        final proposal = voice.proposal;
+        final failed = state == LiveState.error || voice.setupNeeded;
         return Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -1605,7 +1604,7 @@ class _AgentVoiceSheet extends StatelessWidget {
                     platform: platform,
                     prefs: avatarPrefs,
                     radius: 54,
-                    listening: st.status == BrainVoiceStatus.listening,
+                    listening: state == LiveState.listening,
                   ),
                   const SizedBox(height: 14),
                   Text(
@@ -1616,13 +1615,19 @@ class _AgentVoiceSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    label,
+                    liveCaptions[state] ?? '',
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
-                  if (st.error.isNotEmpty) ...[
+                  if (voice.notice.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Text(st.error,
-                        style: TextStyle(color: scheme.error, fontSize: 13)),
+                    Text(
+                      voice.notice,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: failed ? scheme.error : scheme.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 16),
                   Expanded(
@@ -1630,15 +1635,25 @@ class _AgentVoiceSheet extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (st.heard.isNotEmpty)
-                            Text('You: ${st.heard}',
+                          if (voice.heard.isNotEmpty)
+                            Text('You: ${voice.heard}',
                                 style: const TextStyle(fontSize: 14)),
-                          if (st.reply.isNotEmpty) ...[
+                          if (voice.said.isNotEmpty) ...[
                             const SizedBox(height: 10),
-                            Text('$title: ${st.reply}',
+                            Text('$title: ${voice.said}',
                                 style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600)),
+                          ],
+                          if (proposal != null) ...[
+                            const SizedBox(height: 12),
+                            _VoiceProposal(
+                              title: title,
+                              proposal: proposal,
+                              busy: voice.confirming,
+                              onConfirm: (approve) =>
+                                  voice.confirm(approve: approve),
+                            ),
                           ],
                         ],
                       ),
@@ -1647,31 +1662,33 @@ class _AgentVoiceSheet extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      if (inCall)
-                        IconButton.filledTonal(
-                          tooltip: 'Interrupt',
-                          onPressed: voice.interrupt,
-                          icon: const Icon(Icons.stop_rounded),
-                        ),
+                      FilledButton.tonalIcon(
+                        onPressed:
+                            state == LiveState.starting ? null : voice.tap,
+                        icon: Icon(switch (state) {
+                          LiveState.listening => Icons.check_rounded,
+                          LiveState.thinking ||
+                          LiveState.speaking =>
+                            Icons.stop_rounded,
+                          _ => Icons.graphic_eq_rounded,
+                        }),
+                        label: Text(switch (state) {
+                          LiveState.listening => 'Done',
+                          LiveState.thinking ||
+                          LiveState.speaking =>
+                            'Interrupt',
+                          _ => 'Talk',
+                        }),
+                      ),
                       const Spacer(),
                       FilledButton.icon(
-                        onPressed: () async {
-                          if (inCall) {
-                            await voice.stop();
-                          } else {
-                            await voice.startCall();
-                          }
-                        },
-                        icon: Icon(inCall
-                            ? Icons.call_end_rounded
-                            : Icons.graphic_eq_rounded),
-                        label: Text(inCall ? 'End' : 'Talk'),
-                        style: inCall
-                            ? FilledButton.styleFrom(
-                                backgroundColor: scheme.error,
-                                foregroundColor: scheme.onError,
-                              )
-                            : null,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.call_end_rounded),
+                        label: const Text('End'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: scheme.error,
+                          foregroundColor: scheme.onError,
+                        ),
                       ),
                     ],
                   ),
@@ -1681,6 +1698,61 @@ class _AgentVoiceSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// What the assistant proposed to do, waiting for a tap: a spoken "yes" never
+/// confirms it.
+class _VoiceProposal extends StatelessWidget {
+  const _VoiceProposal({
+    required this.title,
+    required this.proposal,
+    required this.busy,
+    required this.onConfirm,
+  });
+
+  final String title;
+  final LiveProposal proposal;
+  final bool busy;
+  final void Function(bool approve) onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$title proposes',
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            for (final step in proposal.steps)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('· $step',
+                    style: TextStyle(
+                        fontSize: 13, color: scheme.onSurfaceVariant)),
+              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton(
+                  onPressed: busy ? null : () => onConfirm(false),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: busy ? null : () => onConfirm(true),
+                  child: const Text('Confirm'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

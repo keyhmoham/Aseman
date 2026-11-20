@@ -1,0 +1,212 @@
+{
+ "name": "no results offers the agent, and says what a service needs",
+ "viewport": "desk",
+ "mocks": [
+  {
+   "path": "api/info",
+   "json": {
+    "platform": "Peyda",
+    "signed_in": true,
+    "services": 61,
+    "sites": [
+     "Digikala"
+    ],
+    "extractor": {
+     "ready": true,
+     "engine": "gliner2"
+    },
+    "max_rounds": 3
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "chats": []
+   }
+  },
+  {
+   "path": "api/search",
+   "json": {
+    "frame": {
+     "text": "گوشی سامسونگ",
+     "domains": [
+      {
+       "name": "shopping",
+       "score": 0.9
+      }
+     ],
+     "intent": "cheapest",
+     "slots": {
+      "product": "گوشی",
+      "brand": "سامسونگ",
+      "price_max_toman": 20000000
+     },
+     "assumptions": []
+    },
+    "total": 0,
+    "score": 0,
+    "ms": 300,
+    "gaps": [
+     {
+      "service": "mrbilit",
+      "missing": [
+       "date"
+      ]
+     }
+    ],
+    "services": [
+     {
+      "id": "mrbilit",
+      "title": "MrBilit",
+      "status": "skipped",
+      "count": 0,
+      "ms": 10,
+      "reason": "mb_search_flights needs date",
+      "missing": [
+       "date"
+      ],
+      "hits": []
+     }
+    ]
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "id": "c1",
+    "title": "New chat"
+   }
+  },
+  {
+   "path": "api/chats/*/messages",
+   "status": 202,
+   "json": {
+    "run": "r1",
+    "message": {
+     "id": "u1",
+     "role": "user",
+     "text": "x"
+    }
+   }
+  },
+  {
+   "path": "api/runs/*",
+   "json": {
+    "id": "r1",
+    "chat": "c1",
+    "status": "done",
+    "error": "",
+    "next": 4,
+    "events": [
+     {
+      "i": 0,
+      "type": "stage",
+      "name": "extract",
+      "round": 1,
+      "query": "q"
+     },
+     {
+      "i": 1,
+      "type": "service",
+      "round": 1,
+      "id": "digikala",
+      "title": "Digikala",
+      "status": "ok",
+      "count": 2,
+      "ms": 400,
+      "reason": ""
+     },
+     {
+      "i": 2,
+      "type": "stage",
+      "name": "answer",
+      "round": 2
+     },
+     {
+      "i": 3,
+      "type": "done"
+     }
+    ],
+    "message": {
+     "id": "a1",
+     "role": "assistant",
+     "text": "Which day do you want to fly?",
+     "payload": {
+      "cards": [
+       {
+        "service": "digikala",
+        "tool": "t",
+        "title": "Samsung Galaxy A55",
+        "url": "https://example.com/x",
+        "price_toman": 18500000,
+        "detail": "Digikala seller",
+        "ref": "digikala:0",
+        "source": "Digikala"
+       }
+      ],
+      "suggestions": [],
+      "rounds": [
+       {
+        "n": 1,
+        "query": "cheap samsung",
+        "total": 3,
+        "score": 9,
+        "verdict": "refine",
+        "reason": "too broad"
+       },
+       {
+        "n": 2,
+        "query": "samsung galaxy under 20 million toman",
+        "total": 3,
+        "score": 11,
+        "verdict": "satisfied",
+        "reason": "good spread"
+       }
+      ],
+      "degraded": false
+     }
+    }
+   }
+  }
+ ],
+ "steps": [
+  {
+   "do": "type",
+   "target": {
+    "key": "q"
+   },
+   "text": "flight tehran to mashhad"
+  },
+  {
+   "do": "tap",
+   "target": {
+    "type": "Button",
+    "text": "Search"
+   }
+  },
+  {
+   "expect": {
+    "text": [
+     "Nothing found",
+     "Some services need more detail",
+     "date"
+    ]
+   }
+  },
+  {
+   "do": "fire",
+   "target": {
+    "type": "EmptyState",
+    "text": "Nothing found"
+   },
+   "event": "action"
+  },
+  {
+   "expect": {
+    "text": [
+     "Which day do you want to fly?"
+    ]
+   }
+  }
+ ]
+}

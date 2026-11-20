@@ -1,0 +1,198 @@
+{
+ "name": "a visitor searches and reads the results",
+ "viewport": "phone",
+ "mocks": [
+  {
+   "path": "api/info",
+   "json": {
+    "platform": "Peyda",
+    "signed_in": true,
+    "services": 61,
+    "sites": [
+     "Digikala"
+    ],
+    "extractor": {
+     "ready": true,
+     "engine": "gliner2"
+    },
+    "max_rounds": 3
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "chats": []
+   }
+  },
+  {
+   "path": "api/search",
+   "json": {
+    "frame": {
+     "text": "گوشی سامسونگ",
+     "domains": [
+      {
+       "name": "shopping",
+       "score": 0.9
+      }
+     ],
+     "intent": "cheapest",
+     "slots": {
+      "product": "گوشی",
+      "brand": "سامسونگ",
+      "price_max_toman": 20000000
+     },
+     "assumptions": []
+    },
+    "total": 3,
+    "score": 9.5,
+    "ms": 800,
+    "gaps": [],
+    "services": [
+     {
+      "id": "digikala",
+      "title": "Digikala",
+      "status": "ok",
+      "count": 2,
+      "ms": 400,
+      "reason": "",
+      "missing": [],
+      "hits": [
+       {
+        "service": "digikala",
+        "tool": "t",
+        "title": "Samsung Galaxy A55",
+        "url": "https://example.com/x",
+        "price_toman": 18500000,
+        "detail": "Digikala seller"
+       },
+       {
+        "service": "digikala",
+        "tool": "t",
+        "title": "Samsung Galaxy A35",
+        "url": "https://example.com/x",
+        "price_toman": 14900000,
+        "detail": ""
+       }
+      ]
+     },
+     {
+      "id": "torob",
+      "title": "Torob",
+      "status": "ok",
+      "count": 1,
+      "ms": 500,
+      "reason": "",
+      "missing": [],
+      "hits": [
+       {
+        "service": "torob",
+        "tool": "t",
+        "title": "Samsung Galaxy A25",
+        "url": "",
+        "price_toman": 11800000,
+        "detail": ""
+       }
+      ]
+     },
+     {
+      "id": "emalls",
+      "title": "Emalls",
+      "status": "error",
+      "count": 0,
+      "ms": 3000,
+      "reason": "timed out",
+      "missing": [],
+      "hits": []
+     }
+    ]
+   }
+  }
+ ],
+ "steps": [
+  {
+   "expect": {
+    "text": [
+     "Peyda",
+     "Agentic search"
+    ],
+    "noText": "Samsung Galaxy"
+   }
+  },
+  {
+   "do": "type",
+   "target": {
+    "key": "q"
+   },
+   "text": "گوشی سامسونگ زیر ۲۰ میلیون"
+  },
+  {
+   "do": "tap",
+   "target": {
+    "type": "Button",
+    "text": "Search"
+   }
+  },
+  {
+   "expect": {
+    "text": [
+     "Samsung Galaxy A55",
+     "18,500,000 Toman",
+     "Digikala",
+     "Torob",
+     "Understood as"
+    ],
+    "request": {
+     "method": "POST",
+     "path": "api/search"
+    }
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Digikala 2"
+  },
+  {
+   "expect": {
+    "text": "Samsung Galaxy A35",
+    "noText": "Samsung Galaxy A25"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Torob 1"
+  },
+  {
+   "expect": {
+    "text": "Samsung Galaxy A25",
+    "noText": "Samsung Galaxy A55"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "All"
+  },
+  {
+   "expect": {
+    "text": "Samsung Galaxy A55"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "1 service had nothing"
+  },
+  {
+   "expect": {
+    "text": "timed out"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Back to search"
+  },
+  {
+   "expect": {
+    "text": "Search the Iranian web"
+   }
+  }
+ ]
+}

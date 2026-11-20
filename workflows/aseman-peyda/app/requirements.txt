@@ -1,0 +1,6 @@
+# The server (installed after a CPU build of torch; see scripts/install.sh).
+fastapi>=0.115,<1
+uvicorn>=0.30
+pydantic>=2.7,<3
+mcp>=1.9,<3   # the client; the servers (requirements-services.txt) live in their own environment
+gliner2[local]

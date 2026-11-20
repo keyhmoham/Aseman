@@ -1,0 +1,1274 @@
+{
+ "lead": {
+  "shopping": [
+   "digikala",
+   "torob",
+   "emalls"
+  ],
+  "classifieds": [
+   "divar",
+   "sheypoor"
+  ],
+  "food": [
+   "snapp",
+   "tapsifood"
+  ],
+  "travel_tickets": [
+   "mrbilit",
+   "alibaba",
+   "flytoday"
+  ],
+  "health": [
+   "paziresh24",
+   "doctoreto"
+  ],
+  "prices": [
+   "tgju",
+   "iran_gold"
+  ]
+ },
+ "services": [
+  {
+   "id": "digikala",
+   "package": "digikala-mcp",
+   "version": "0.6.3",
+   "title": "Digikala",
+   "site": "https://www.digikala.com",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "dk_find_cheapest",
+     "needs": []
+    }
+   ],
+   "proxy_env": "DIGIKALA_MCP_PROXY",
+   "tool_count": 23
+  },
+  {
+   "id": "torob",
+   "package": "torob-mcp",
+   "version": "0.2.3",
+   "title": "Torob",
+   "site": "https://torob.com",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "tb_cheapest",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TOROB_MCP_PROXY",
+   "tool_count": 26
+  },
+  {
+   "id": "emalls",
+   "package": "emalls-ir-mcp",
+   "version": "0.2.1",
+   "title": "Emalls Price Comparison",
+   "site": "https://emalls.ir",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "em_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "EMALLS_MCP_PROXY",
+   "tool_count": 10
+  },
+  {
+   "id": "snappshop",
+   "package": "snappshop-mcp",
+   "version": "0.2.2",
+   "title": "Snapp! Shop",
+   "site": "https://snappshop.ir",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "ss_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "SNAPPSHOP_MCP_PROXY",
+   "tool_count": 13
+  },
+  {
+   "id": "technolife",
+   "package": "technolife-mcp",
+   "version": "0.5.3",
+   "title": "Technolife",
+   "site": "https://www.technolife.com",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "tl_find_cheapest",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TECHNOLIFE_MCP_PROXY",
+   "tool_count": 19
+  },
+  {
+   "id": "basalam",
+   "package": "basalam-mcp",
+   "version": "0.2.2",
+   "title": "Basalam",
+   "site": "https://basalam.com",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "bs_find_cheapest",
+     "needs": []
+    }
+   ],
+   "proxy_env": "BASALAM_MCP_PROXY",
+   "tool_count": 7
+  },
+  {
+   "id": "mobile",
+   "package": "mobile-ir-mcp",
+   "version": "0.2.2",
+   "title": "Mobile.ir Phones",
+   "site": "https://www.mobile.ir",
+   "domains": [
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "mi_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "MOBILE_IR_MCP_PROXY",
+   "tool_count": 17,
+   "hint": "phones"
+  },
+  {
+   "id": "zoomit",
+   "package": "zoomit-mcp",
+   "version": "0.2.2",
+   "title": "Zoomit Products",
+   "site": "https://www.zoomit.ir",
+   "domains": [
+    "shopping",
+    "news"
+   ],
+   "tools": [
+    {
+     "name": "zm_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "ZOOMIT_MCP_PROXY",
+   "tool_count": 12,
+   "hint": "phones, laptops, GPUs"
+  },
+  {
+   "id": "divar",
+   "package": "divar-mcp",
+   "version": "0.3.2",
+   "title": "Divar",
+   "site": "https://divar.ir",
+   "domains": [
+    "classifieds",
+    "real_estate",
+    "cars"
+   ],
+   "tools": [
+    {
+     "name": "dv_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "DIVAR_MCP_PROXY",
+   "tool_count": 31
+  },
+  {
+   "id": "sheypoor",
+   "package": "sheypoor-mcp",
+   "version": "0.2.2",
+   "title": "Sheypoor Classifieds",
+   "site": "https://www.sheypoor.com",
+   "domains": [
+    "classifieds",
+    "real_estate",
+    "cars"
+   ],
+   "tools": [
+    {
+     "name": "sp_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "SHEYPOOR_MCP_PROXY",
+   "tool_count": 11
+  },
+  {
+   "id": "kilid",
+   "package": "kilid-mcp",
+   "version": "0.1.2",
+   "title": "Kilid Real Estate",
+   "site": "https://kilid.com",
+   "domains": [
+    "real_estate"
+   ],
+   "tools": [
+    {
+     "name": "kl_search_listings",
+     "needs": []
+    }
+   ],
+   "proxy_env": "KILID_MCP_PROXY",
+   "tool_count": 8,
+   "resolve": "kl_cities"
+  },
+  {
+   "id": "bama",
+   "package": "bama-ir-mcp",
+   "version": "0.2.1",
+   "title": "Bama Cars",
+   "site": "https://bama.ir",
+   "domains": [
+    "cars"
+   ],
+   "tools": [
+    {
+     "name": "ba_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "BAMA_MCP_PROXY",
+   "tool_count": 12
+  },
+  {
+   "id": "khodro45",
+   "package": "khodro45-mcp",
+   "version": "0.1.1",
+   "title": "Khodro45 Used Cars",
+   "site": "https://khodro45.com",
+   "domains": [
+    "cars"
+   ],
+   "tools": [
+    {
+     "name": "k45_cars",
+     "needs": []
+    }
+   ],
+   "proxy_env": "KHODRO45_MCP_PROXY",
+   "tool_count": 10
+  },
+  {
+   "id": "snapp",
+   "package": "snapp-mcp",
+   "version": "0.4.2",
+   "title": "Snappfood & SnappMarket",
+   "site": "https://snappfood.ir",
+   "domains": [
+    "food"
+   ],
+   "tools": [
+    {
+     "name": "food_find_cheapest",
+     "needs": []
+    }
+   ],
+   "proxy_env": "SNAPP_MCP_PROXY",
+   "tool_count": 21,
+   "geocode": "find_location"
+  },
+  {
+   "id": "tapsifood",
+   "package": "tapsifood-mcp",
+   "version": "0.2.2",
+   "title": "Tapsi Food",
+   "site": "https://tapsi.food",
+   "domains": [
+    "food"
+   ],
+   "tools": [
+    {
+     "name": "tf_search_dishes",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TAPSIFOOD_MCP_PROXY",
+   "tool_count": 11,
+   "geocode": "tf_find_location"
+  },
+  {
+   "id": "okala",
+   "package": "okala-mcp",
+   "version": "0.4.2",
+   "title": "Okala",
+   "site": "https://okala.com",
+   "domains": [
+    "food",
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "ok_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "OKALA_MCP_PROXY",
+   "tool_count": 16,
+   "geocode": "ok_locate"
+  },
+  {
+   "id": "mrbilit",
+   "package": "mrbilit-mcp",
+   "version": "0.5.2",
+   "title": "MrBilit",
+   "site": "https://mrbilit.com",
+   "domains": [
+    "travel_tickets"
+   ],
+   "tools": [
+    {
+     "name": "mb_search_flights",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "پرواز",
+      "هواپیما",
+      "flight",
+      "fly",
+      "airfare"
+     ],
+     "default": true,
+     "resolve_args": {
+      "mode": "flight"
+     }
+    },
+    {
+     "name": "mb_search_trains",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "قطار",
+      "train",
+      "rail"
+     ],
+     "resolve_args": {
+      "mode": "train"
+     }
+    },
+    {
+     "name": "mb_search_buses",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "اتوبوس",
+      "bus"
+     ],
+     "resolve_args": {
+      "mode": "bus"
+     }
+    }
+   ],
+   "proxy_env": "MRBILIT_MCP_PROXY",
+   "tool_count": 22,
+   "resolve": "mb_find_place"
+  },
+  {
+   "id": "flytoday",
+   "package": "flytoday-mcp",
+   "version": "0.4.2",
+   "title": "Flytoday",
+   "site": "https://www.flytoday.ir",
+   "domains": [
+    "travel_tickets"
+   ],
+   "tools": [
+    {
+     "name": "ft_search_flights",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "پرواز",
+      "هواپیما",
+      "flight",
+      "fly",
+      "airfare"
+     ],
+     "default": true
+    }
+   ],
+   "proxy_env": "FLYTODAY_MCP_PROXY",
+   "tool_count": 22,
+   "resolve": "ft_find_airport"
+  },
+  {
+   "id": "alibaba",
+   "package": "alibaba-ir-mcp",
+   "version": "0.2.1",
+   "title": "Alibaba Travel",
+   "site": "https://www.alibaba.ir",
+   "domains": [
+    "travel_tickets"
+   ],
+   "tools": [
+    {
+     "name": "al_flights_cheapest",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "پرواز",
+      "هواپیما",
+      "flight",
+      "fly",
+      "airfare"
+     ],
+     "default": true
+    },
+    {
+     "name": "al_trains_cheapest",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "قطار",
+      "train",
+      "rail"
+     ]
+    }
+   ],
+   "proxy_env": "ALIBABA_IR_MCP_PROXY",
+   "tool_count": 14,
+   "resolve": "al_cities"
+  },
+  {
+   "id": "raja",
+   "package": "raja-mcp",
+   "version": "0.1.2",
+   "title": "Raja Train Tickets",
+   "site": "https://www.raja.ir",
+   "domains": [
+    "travel_tickets"
+   ],
+   "tools": [
+    {
+     "name": "rj_search_trains",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "قطار",
+      "train",
+      "rail"
+     ]
+    }
+   ],
+   "proxy_env": "RAJA_MCP_PROXY",
+   "tool_count": 5,
+   "resolve": "rj_stations"
+  },
+  {
+   "id": "bus",
+   "package": "iran-bus-mcp",
+   "version": "0.1.2",
+   "title": "Iran Bus Tickets",
+   "site": "https://safar724.com",
+   "domains": [
+    "travel_tickets"
+   ],
+   "tools": [
+    {
+     "name": "bus_cheapest",
+     "needs": [
+      "origin",
+      "destination"
+     ],
+     "kw": [
+      "اتوبوس",
+      "bus"
+     ]
+    }
+   ],
+   "proxy_env": "IRAN_BUS_MCP_PROXY",
+   "tool_count": 5,
+   "resolve": "bus_cities"
+  },
+  {
+   "id": "snapptrip",
+   "package": "snapptrip-mcp",
+   "version": "0.1.2",
+   "title": "SnappTrip Hotels and Flights",
+   "site": "https://www.snapptrip.com",
+   "domains": [
+    "stays"
+   ],
+   "tools": [
+    {
+     "name": "st_hotel_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "SNAPPTRIP_MCP_PROXY",
+   "tool_count": 10,
+   "resolve": "st_hotel_places"
+  },
+  {
+   "id": "jabama",
+   "package": "jabama-mcp",
+   "version": "0.5.2",
+   "title": "Jabama",
+   "site": "https://www.jabama.com",
+   "domains": [
+    "stays"
+   ],
+   "tools": [
+    {
+     "name": "jb_search_stays",
+     "needs": []
+    }
+   ],
+   "proxy_env": "JABAMA_MCP_PROXY",
+   "tool_count": 21
+  },
+  {
+   "id": "otaghak",
+   "package": "otaghak-mcp",
+   "version": "0.4.2",
+   "title": "Otaghak",
+   "site": "https://www.otaghak.com",
+   "domains": [
+    "stays"
+   ],
+   "tools": [
+    {
+     "name": "ot_search_rooms",
+     "needs": []
+    }
+   ],
+   "proxy_env": "OTAGHAK_MCP_PROXY",
+   "tool_count": 15
+  },
+  {
+   "id": "eghamat24",
+   "package": "eghamat24-mcp",
+   "version": "0.2.1",
+   "title": "Eghamat24 Hotels",
+   "site": "https://www.eghamat24.com",
+   "domains": [
+    "stays"
+   ],
+   "tools": [
+    {
+     "name": "eg_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "EGHAMAT24_MCP_PROXY",
+   "tool_count": 14
+  },
+  {
+   "id": "neshan",
+   "package": "neshan-mcp",
+   "version": "0.2.2",
+   "title": "Neshan Maps",
+   "site": "https://neshan.org",
+   "domains": [
+    "maps"
+   ],
+   "tools": [
+    {
+     "name": "ns_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "NESHAN_MCP_PROXY",
+   "tool_count": 11
+  },
+  {
+   "id": "balad",
+   "package": "balad-mcp",
+   "version": "0.2.2",
+   "title": "Balad Maps",
+   "site": "https://balad.ir",
+   "domains": [
+    "maps"
+   ],
+   "tools": [
+    {
+     "name": "bl_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "BALAD_MCP_PROXY",
+   "tool_count": 9
+  },
+  {
+   "id": "paziresh24",
+   "package": "paziresh24-mcp",
+   "version": "0.5.2",
+   "title": "Paziresh24",
+   "site": "https://www.paziresh24.com",
+   "domains": [
+    "health"
+   ],
+   "tools": [
+    {
+     "name": "pz_search_doctors",
+     "needs": []
+    }
+   ],
+   "proxy_env": "PAZIRESH24_MCP_PROXY",
+   "tool_count": 12,
+   "resolve": "pz_suggest",
+   "resolve_specialty": "pz_suggest"
+  },
+  {
+   "id": "doctoreto",
+   "package": "doctoreto-mcp",
+   "version": "0.5.2",
+   "title": "Doctoreto",
+   "site": "https://doctoreto.com",
+   "domains": [
+    "health"
+   ],
+   "tools": [
+    {
+     "name": "dt_search_doctors",
+     "needs": []
+    }
+   ],
+   "proxy_env": "DOCTORETO_MCP_PROXY",
+   "tool_count": 14,
+   "resolve": "dt_cities",
+   "resolve_specialty": "dt_suggest"
+  },
+  {
+   "id": "exiryab",
+   "package": "exiryab-mcp",
+   "version": "0.1.0",
+   "title": "ExirYab",
+   "site": "https://exiryab.com",
+   "domains": [
+    "health"
+   ],
+   "tools": [
+    {
+     "name": "ey_search_doctors",
+     "needs": []
+    }
+   ],
+   "proxy_env": "EXIRYAB_MCP_PROXY",
+   "tool_count": 3
+  },
+  {
+   "id": "darukade",
+   "package": "darukade-mcp",
+   "version": "0.2.1",
+   "title": "Darukade Pharmacy",
+   "site": "https://darukade.com",
+   "domains": [
+    "health",
+    "shopping"
+   ],
+   "tools": [
+    {
+     "name": "dr_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "DARUKADE_MCP_PROXY",
+   "tool_count": 12
+  },
+  {
+   "id": "taaghche",
+   "package": "taaghche-mcp",
+   "version": "0.4.2",
+   "title": "Taaghche",
+   "site": "https://taaghche.com",
+   "domains": [
+    "books"
+   ],
+   "tools": [
+    {
+     "name": "tg_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TAAGHCHE_MCP_PROXY",
+   "tool_count": 12
+  },
+  {
+   "id": "fidibo",
+   "package": "fidibo-mcp",
+   "version": "0.4.2",
+   "title": "Fidibo",
+   "site": "https://fidibo.com",
+   "domains": [
+    "books"
+   ],
+   "tools": [
+    {
+     "name": "fd_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "FIDIBO_MCP_PROXY",
+   "tool_count": 11
+  },
+  {
+   "id": "iranketab",
+   "package": "iranketab-mcp",
+   "version": "0.2.2",
+   "title": "Iranketab Books",
+   "site": "https://www.iranketab.ir",
+   "domains": [
+    "books"
+   ],
+   "tools": [
+    {
+     "name": "ik_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRANKETAB_MCP_PROXY",
+   "tool_count": 13
+  },
+  {
+   "id": "30book",
+   "package": "30book-mcp",
+   "version": "0.4.2",
+   "title": "30book",
+   "site": "https://www.30book.com",
+   "domains": [
+    "books"
+   ],
+   "tools": [
+    {
+     "name": "sb_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "SIBOOK_MCP_PROXY",
+   "tool_count": 14
+  },
+  {
+   "id": "maktabkhooneh",
+   "package": "maktabkhooneh-mcp",
+   "version": "0.2.2",
+   "title": "Maktabkhooneh",
+   "site": "https://maktabkhooneh.org",
+   "domains": [
+    "courses"
+   ],
+   "tools": [
+    {
+     "name": "mkh_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "MAKTABKHOONEH_MCP_PROXY",
+   "tool_count": 12
+  },
+  {
+   "id": "faradars",
+   "package": "faradars-mcp",
+   "version": "0.2.2",
+   "title": "Faradars Courses",
+   "site": "https://faradars.org",
+   "domains": [
+    "courses"
+   ],
+   "tools": [
+    {
+     "name": "fr_search_courses",
+     "needs": []
+    }
+   ],
+   "proxy_env": "FARADARS_MCP_PROXY",
+   "tool_count": 16
+  },
+  {
+   "id": "iran_jobs",
+   "package": "iran-jobs-mcp",
+   "version": "0.2.1",
+   "title": "Iran Jobs (IranTalent + Jobinja + Jobvision)",
+   "site": "https://www.irantalent.com",
+   "domains": [
+    "jobs"
+   ],
+   "tools": [
+    {
+     "name": "job_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_JOBS_MCP_PROXY",
+   "tool_count": 37
+  },
+  {
+   "id": "ponisha",
+   "package": "ponisha-mcp",
+   "version": "0.2.1",
+   "title": "Ponisha Freelance",
+   "site": "https://ponisha.ir",
+   "domains": [
+    "freelance"
+   ],
+   "tools": [
+    {
+     "name": "pn_search_projects",
+     "needs": []
+    }
+   ],
+   "proxy_env": "PONISHA_MCP_PROXY",
+   "tool_count": 14
+  },
+  {
+   "id": "karlancer",
+   "package": "karlancer-mcp",
+   "version": "0.2.2",
+   "title": "Karlancer Freelance",
+   "site": "https://www.karlancer.com",
+   "domains": [
+    "freelance"
+   ],
+   "tools": [
+    {
+     "name": "kl_projects",
+     "needs": []
+    }
+   ],
+   "proxy_env": "KARLANCER_MCP_PROXY",
+   "tool_count": 14
+  },
+  {
+   "id": "iran_apps",
+   "package": "iran-apps-mcp",
+   "version": "0.2.2",
+   "title": "Iran Apps",
+   "site": "https://cafebazaar.ir",
+   "domains": [
+    "software"
+   ],
+   "tools": [
+    {
+     "name": "ap_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_APPS_MCP_PROXY",
+   "tool_count": 6
+  },
+  {
+   "id": "iran_downloads",
+   "package": "iran-downloads-mcp",
+   "version": "0.2.2",
+   "title": "Iran Software Downloads",
+   "site": "https://soft98.ir",
+   "domains": [
+    "software"
+   ],
+   "tools": [
+    {
+     "name": "dl_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_DOWNLOADS_MCP_PROXY",
+   "tool_count": 4
+  },
+  {
+   "id": "tgju",
+   "package": "tgju-mcp",
+   "version": "0.2.2",
+   "title": "TGJU Prices",
+   "site": "https://www.tgju.org",
+   "domains": [
+    "prices"
+   ],
+   "tools": [
+    {
+     "name": "tj_get_prices",
+     "symbols": {
+      "دلار": "price_dollar_rl",
+      "dollar": "price_dollar_rl",
+      "usd": "price_dollar_rl",
+      "یورو": "price_eur",
+      "euro": "price_eur",
+      "پوند": "price_gbp",
+      "pound": "price_gbp",
+      "طلا": "geram18",
+      "طلای": "geram18",
+      "gold": "geram18",
+      "سکه": "sekee",
+      "coin": "sekee",
+      "نیم سکه": "nim",
+      "ربع سکه": "rob",
+      "انس": "ons",
+      "ounce": "ons"
+     },
+     "default_symbols": [
+      "price_dollar_rl",
+      "price_eur",
+      "geram18",
+      "sekee"
+     ],
+     "needs": []
+    }
+   ],
+   "proxy_env": "TGJU_MCP_PROXY",
+   "tool_count": 6
+  },
+  {
+   "id": "iran_gold",
+   "package": "iran-gold-mcp",
+   "version": "0.4.2",
+   "title": "Iran Gold Prices",
+   "site": "https://milli.gold",
+   "domains": [
+    "prices"
+   ],
+   "tools": [
+    {
+     "name": "gold_prices",
+     "args": {},
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_GOLD_MCP_PROXY",
+   "tool_count": 3
+  },
+  {
+   "id": "iran_crypto",
+   "package": "iran-crypto-mcp",
+   "version": "0.5.2",
+   "title": "Iran Crypto Exchanges",
+   "site": "https://nobitex.ir",
+   "domains": [
+    "prices"
+   ],
+   "tools": [
+    {
+     "name": "ic_compare_price",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_CRYPTO_MCP_PROXY",
+   "tool_count": 12
+  },
+  {
+   "id": "tsetmc",
+   "package": "tsetmc-mcp",
+   "version": "0.2.2",
+   "title": "TSETMC Tehran Stock Exchange",
+   "site": "https://tsetmc.com",
+   "domains": [
+    "stocks"
+   ],
+   "tools": [
+    {
+     "name": "ts_search_symbols",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TSETMC_MCP_PROXY",
+   "tool_count": 8
+  },
+  {
+   "id": "codal",
+   "package": "codal-mcp",
+   "version": "0.2.3",
+   "title": "Codal (کدال) Disclosures",
+   "site": "https://codal.ir",
+   "domains": [
+    "stocks"
+   ],
+   "tools": [
+    {
+     "name": "cd_search_letters",
+     "needs": []
+    }
+   ],
+   "proxy_env": "CODAL_MCP_PROXY",
+   "tool_count": 5
+  },
+  {
+   "id": "fipiran",
+   "package": "fipiran-mcp",
+   "version": "0.2.1",
+   "title": "Fipiran Funds",
+   "site": "https://fipiran.ir",
+   "domains": [
+    "stocks"
+   ],
+   "tools": [
+    {
+     "name": "fp_search_funds",
+     "needs": []
+    }
+   ],
+   "proxy_env": "FIPIRAN_MCP_PROXY",
+   "tool_count": 11
+  },
+  {
+   "id": "iran_news",
+   "package": "iran-news-mcp",
+   "version": "0.3.2",
+   "title": "Iran News RSS",
+   "site": "https://www.mehrnews.com",
+   "domains": [
+    "news"
+   ],
+   "tools": [
+    {
+     "name": "nw_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_NEWS_MCP_PROXY",
+   "tool_count": 6
+  },
+  {
+   "id": "iran_vod",
+   "package": "iran-vod-mcp",
+   "version": "0.2.1",
+   "title": "Filimo and Namava",
+   "site": "https://www.filimo.com",
+   "domains": [
+    "media"
+   ],
+   "tools": [
+    {
+     "name": "vod_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_VOD_MCP_PROXY",
+   "tool_count": 13
+  },
+  {
+   "id": "aparat",
+   "package": "aparat-mcp",
+   "version": "0.1.2",
+   "title": "Aparat Videos",
+   "site": "https://www.aparat.com",
+   "domains": [
+    "media"
+   ],
+   "tools": [
+    {
+     "name": "apr_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "APARAT_MCP_PROXY",
+   "tool_count": 8
+  },
+  {
+   "id": "cinematicket",
+   "package": "cinematicket-mcp",
+   "version": "0.1.2",
+   "title": "Cinematicket Tickets",
+   "site": "https://cinematicket.org",
+   "domains": [
+    "media"
+   ],
+   "tools": [
+    {
+     "name": "ct_now_showing",
+     "args": {},
+     "needs": []
+    }
+   ],
+   "proxy_env": "CINEMATICKET_MCP_PROXY",
+   "tool_count": 10
+  },
+  {
+   "id": "tiwall",
+   "package": "tiwall-mcp",
+   "version": "0.1.2",
+   "title": "Tiwall Events",
+   "site": "https://www.tiwall.com",
+   "domains": [
+    "media"
+   ],
+   "tools": [
+    {
+     "name": "tw_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "TIWALL_MCP_PROXY",
+   "tool_count": 9
+  },
+  {
+   "id": "weather",
+   "package": "iran-weather-mcp",
+   "version": "0.1.1",
+   "title": "Iran Weather",
+   "site": "https://www.irimo.ir",
+   "domains": [
+    "weather_time"
+   ],
+   "tools": [
+    {
+     "name": "wx_cities",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_WEATHER_MCP_PROXY",
+   "tool_count": 9
+  },
+  {
+   "id": "time_ir",
+   "package": "time-ir-mcp",
+   "version": "0.2.2",
+   "title": "Time.ir Calendar",
+   "site": "https://www.time.ir",
+   "domains": [
+    "weather_time"
+   ],
+   "tools": [
+    {
+     "name": "ti_today",
+     "args": {},
+     "needs": []
+    }
+   ],
+   "proxy_env": "TIME_IR_MCP_PROXY",
+   "tool_count": 13
+  },
+  {
+   "id": "dictionary",
+   "package": "iran-dictionary-mcp",
+   "version": "0.1.2",
+   "title": "Iran Dictionary (Abadis + Vajehyab)",
+   "site": "https://abadis.ir",
+   "domains": [
+    "reference"
+   ],
+   "tools": [
+    {
+     "name": "dic_lookup",
+     "needs": []
+    }
+   ],
+   "proxy_env": "IRAN_DICTIONARY_MCP_PROXY",
+   "tool_count": 7
+  },
+  {
+   "id": "wikipedia",
+   "package": "persian-wikipedia-mcp",
+   "version": "0.1.0",
+   "title": "Persian Wikipedia",
+   "site": "https://fa.wikipedia.org",
+   "domains": [
+    "reference"
+   ],
+   "tools": [
+    {
+     "name": "wiki_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "PERSIAN_WIKIPEDIA_MCP_PROXY",
+   "tool_count": 9
+  },
+  {
+   "id": "virgool",
+   "package": "virgool-mcp",
+   "version": "0.1.0",
+   "title": "Virgool Blog",
+   "site": "https://virgool.io",
+   "domains": [
+    "reference",
+    "news"
+   ],
+   "tools": [
+    {
+     "name": "vg_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "VIRGOOL_MCP_PROXY",
+   "tool_count": 11
+  },
+  {
+   "id": "qavanin",
+   "package": "qavanin-mcp",
+   "version": "0.2.3",
+   "title": "Qavanin",
+   "site": "https://qavanin.ir",
+   "domains": [
+    "law"
+   ],
+   "tools": [
+    {
+     "name": "qv_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "QAVANIN_MCP_PROXY",
+   "tool_count": 7
+  },
+  {
+   "id": "rrk",
+   "package": "rrk-mcp",
+   "version": "0.2.1",
+   "title": "Official Gazette of Iran",
+   "site": "https://rrk.ir",
+   "domains": [
+    "law"
+   ],
+   "tools": [
+    {
+     "name": "rk_search_laws",
+     "needs": []
+    }
+   ],
+   "proxy_env": "RRK_MCP_PROXY",
+   "tool_count": 5
+  },
+  {
+   "id": "varzesh3",
+   "package": "varzesh3-mcp",
+   "version": "0.2.2",
+   "title": "Varzesh3 Sports",
+   "site": "https://www.varzesh3.com",
+   "domains": [
+    "sports"
+   ],
+   "tools": [
+    {
+     "name": "v3_scores",
+     "args": {},
+     "needs": []
+    }
+   ],
+   "proxy_env": "VARZESH3_MCP_PROXY",
+   "tool_count": 18
+  }
+ ]
+}

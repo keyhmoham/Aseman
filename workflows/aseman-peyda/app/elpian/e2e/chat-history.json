@@ -1,0 +1,147 @@
+{
+ "name": "earlier chats can be reopened, started fresh and deleted",
+ "viewport": "phone",
+ "mocks": [
+  {
+   "path": "api/info",
+   "json": {
+    "platform": "Peyda",
+    "signed_in": true,
+    "services": 61,
+    "sites": [
+     "Digikala"
+    ],
+    "extractor": {
+     "ready": true,
+     "engine": "gliner2"
+    },
+    "max_rounds": 3
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "chats": [
+     {
+      "id": "c1",
+      "title": "cheap samsung phone"
+     },
+     {
+      "id": "c2",
+      "title": "doctor in isfahan"
+     }
+    ]
+   }
+  },
+  {
+   "path": "api/chats/c1",
+   "json": {
+    "id": "c1",
+    "title": "cheap samsung phone",
+    "messages": [
+     {
+      "id": "u1",
+      "role": "user",
+      "text": "cheap samsung phone",
+      "payload": {}
+     },
+     {
+      "id": "a1",
+      "role": "assistant",
+      "text": "I found phones.",
+      "payload": {
+       "cards": [],
+       "suggestions": [],
+       "rounds": [],
+       "degraded": false
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "api/chats/c2",
+   "method": "DELETE",
+   "json": {
+    "ok": true
+   }
+  }
+ ],
+ "steps": [
+  {
+   "do": "tap",
+   "target": "Chat history"
+  },
+  {
+   "expect": {
+    "text": [
+     "Chat history",
+     "cheap samsung phone",
+     "doctor in isfahan"
+    ]
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "key": "del_c2"
+   }
+  },
+  {
+   "expect": {
+    "noText": "doctor in isfahan",
+    "request": {
+     "method": "DELETE",
+     "path": "api/chats/c2"
+    }
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Back"
+  },
+  {
+   "expect": {
+    "text": "Search the Iranian web"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Chat history"
+  },
+  {
+   "do": "tap",
+   "target": "cheap samsung phone"
+  },
+  {
+   "expect": {
+    "text": [
+     "cheap samsung phone",
+     "I found phones."
+    ]
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Chat history"
+  },
+  {
+   "do": "tap",
+   "target": "New chat"
+  },
+  {
+   "expect": {
+    "text": "Ask about anything in Iran"
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Back to search"
+  },
+  {
+   "expect": {
+    "text": "Search the Iranian web"
+   }
+  }
+ ]
+}

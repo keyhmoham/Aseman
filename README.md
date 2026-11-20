@@ -5,7 +5,8 @@ agents, apps, billing) talking to a **Decillion** node as its API.
 
 ```
 Aseman/
-└── app/   # Aseman Flutter client (web, iOS, Android, desktop) — see app/README.md
+├── app/        # Aseman Flutter client (web, iOS, Android, desktop) — see app/README.md
+└── workflows/  # Decillion workflow installers; aseman-peyda/ builds the Peyda search platform
 ```
 
 ## Quickstart (Docker)

@@ -27,9 +27,15 @@ Future<void> _ensure() async {
 
 Future<void> _importModule(String url) async {
   // Dynamic import via eval keeps us on dart:js_interop without package:web.
+  // `import()` takes a URL or a specifier starting with "./", "../" or "/": a
+  // path like "assets/assets/elpian/…" is a bare specifier and the browser
+  // rejects it ("was not remapped to anything"). So the page-relative [url]
+  // is resolved against the document's base URI (the `<base href>` Flutter
+  // writes) into a full URL first, which also holds when the app is served
+  // from a sub-path.
   final promise = globalContext.callMethod(
     'eval'.toJS,
-    'import(${_jsString(url)})'.toJS,
+    'import(new URL(${_jsString(url)}, document.baseURI).href)'.toJS,
   );
   if (promise == null || !promise.isA<JSPromise>()) {
     throw StateError('Failed to start dynamic import for $url');

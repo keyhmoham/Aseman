@@ -1,0 +1,155 @@
+{
+ "name": "a failed search says so and can be retried",
+ "viewport": "phone",
+ "mocks": [
+  {
+   "path": "api/info",
+   "json": {
+    "platform": "Peyda",
+    "signed_in": true,
+    "services": 61,
+    "sites": [
+     "Digikala"
+    ],
+    "extractor": {
+     "ready": true,
+     "engine": "gliner2"
+    },
+    "max_rounds": 3
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "chats": []
+   }
+  },
+  {
+   "path": "api/search",
+   "status": 502,
+   "error": "bad gateway"
+  }
+ ],
+ "steps": [
+  {
+   "do": "type",
+   "target": {
+    "key": "q"
+   },
+   "text": "gold price"
+  },
+  {
+   "do": "tap",
+   "target": {
+    "type": "Button",
+    "text": "Search"
+   }
+  },
+  {
+   "expect": {
+    "text": [
+     "The search did not go through",
+     "Try again"
+    ],
+    "errorBanner": false
+   }
+  },
+  {
+   "do": "mock",
+   "mocks": [
+    {
+     "path": "api/search",
+     "json": {
+      "frame": {
+       "text": "گوشی سامسونگ",
+       "domains": [
+        {
+         "name": "shopping",
+         "score": 0.9
+        }
+       ],
+       "intent": "cheapest",
+       "slots": {
+        "product": "گوشی",
+        "brand": "سامسونگ",
+        "price_max_toman": 20000000
+       },
+       "assumptions": []
+      },
+      "total": 3,
+      "score": 9.5,
+      "ms": 800,
+      "gaps": [],
+      "services": [
+       {
+        "id": "digikala",
+        "title": "Digikala",
+        "status": "ok",
+        "count": 2,
+        "ms": 400,
+        "reason": "",
+        "missing": [],
+        "hits": [
+         {
+          "service": "digikala",
+          "tool": "t",
+          "title": "Samsung Galaxy A55",
+          "url": "https://example.com/x",
+          "price_toman": 18500000,
+          "detail": "Digikala seller"
+         },
+         {
+          "service": "digikala",
+          "tool": "t",
+          "title": "Samsung Galaxy A35",
+          "url": "https://example.com/x",
+          "price_toman": 14900000,
+          "detail": ""
+         }
+        ]
+       },
+       {
+        "id": "torob",
+        "title": "Torob",
+        "status": "ok",
+        "count": 1,
+        "ms": 500,
+        "reason": "",
+        "missing": [],
+        "hits": [
+         {
+          "service": "torob",
+          "tool": "t",
+          "title": "Samsung Galaxy A25",
+          "url": "",
+          "price_toman": 11800000,
+          "detail": ""
+         }
+        ]
+       },
+       {
+        "id": "emalls",
+        "title": "Emalls",
+        "status": "error",
+        "count": 0,
+        "ms": 3000,
+        "reason": "timed out",
+        "missing": [],
+        "hits": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "do": "tap",
+   "target": "Try again"
+  },
+  {
+   "expect": {
+    "text": "Samsung Galaxy A55"
+   }
+  }
+ ]
+}

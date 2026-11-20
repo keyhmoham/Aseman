@@ -3,7 +3,7 @@
 # --dart-define (see app/lib/src/app_dependencies.dart).
 #
 # Build-time settings, each overridable without editing this file:
-#   API_BASE_URL         the run's input → repository variable API_BASE_URL → http://pixelar.games:3000
+#   API_BASE_URL         the run's input → repository variable API_BASE_URL → https://preview.decillionai.com
 #   DEVELOPER_API_BASE   repository variable (optional), shown in Profile → Developer API
 #   OAUTH_REDIRECT_URI   repository variable (optional), see app/README.md
 #
@@ -26,7 +26,7 @@ on:
       api_base_url:
         description: Server the app connects to
         required: false
-        default: http://pixelar.games:3000
+        default: https://preview.decillionai.com
 
 concurrency:
   group: android-${{ github.ref }}
@@ -39,7 +39,7 @@ jobs:
     permissions:
       contents: read
     env:
-      API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL || 'http://pixelar.games:3000' }}
+      API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL || 'https://preview.decillionai.com' }}
       DEVELOPER_API_BASE: ${{ vars.DEVELOPER_API_BASE }}
       OAUTH_REDIRECT_URI: ${{ vars.OAUTH_REDIRECT_URI }}
     defaults:

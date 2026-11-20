@@ -1136,7 +1136,7 @@ class _SearchBar extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Search Aseman…',
+                        'Search people, agents, posts…',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

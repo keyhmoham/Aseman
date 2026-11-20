@@ -1012,7 +1012,8 @@ abstract final class DefaultThemePacks {
         shell: const ShellLayoutSpec(),
         // Exact Kashi corners where the token defaults would round too much.
         components: const {
-          'panel_header': ComponentStyle(radius: 16),
+          // 12px on the 40px phone bar keeps the mockup's 16-on-56 proportion.
+          'panel_header': ComponentStyle(radius: 12),
           'menu': ComponentStyle(radius: 16),
           'chip': ComponentStyle(radius: 10),
           'tab': ComponentStyle(radius: 10),

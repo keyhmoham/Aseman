@@ -88,7 +88,7 @@ void main() {
     expect(find.text('Global'), findsNothing);
     expect(find.text('People'), findsNothing);
     expect(find.text('Following'), findsOneWidget);
-    expect(find.text('Search Aseman…'), findsOneWidget);
+    expect(find.text('Search people, agents, posts…'), findsOneWidget);
 
     // Large desktop: the feed is the supporting pane, Aseman the flexible
     // pane on its right. Chats are a destination, not a third column.
@@ -157,7 +157,7 @@ void main() {
 
     await tester.tap(navLabel('Explore'));
     await tester.pumpAndSettle();
-    expect(find.text('Search Aseman…'), findsOneWidget);
+    expect(find.text('Search people, agents, posts…'), findsOneWidget);
     expect(
       find.text('Private update inside the Home workspace.'),
       findsOneWidget,
@@ -205,7 +205,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Search Aseman…'));
+    await tester.tap(find.text('Search people, agents, posts…'));
     await tester.pumpAndSettle();
     expect(find.text('Explore'), findsOneWidget);
     // Outside a space there is no space/explore scope to pick.
@@ -254,7 +254,7 @@ void main() {
     Finder inExplore(String text) =>
         find.descendant(of: find.byKey(exploreKey), matching: find.text(text));
     // The feed's search bar opens Explore.
-    await tester.tap(find.text('Search Aseman…'));
+    await tester.tap(find.text('Search people, agents, posts…'));
     await tester.pumpAndSettle();
     await tester.tap(inExplore('Chats'));
     await tester.pumpAndSettle();

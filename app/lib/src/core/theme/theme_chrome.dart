@@ -85,6 +85,10 @@ extension AsemanThemeX on BuildContext {
     final tokens = maybeAsemanTokens;
     final half = size / 2;
     if (half <= 0) return BorderRadius.zero;
+    // Kashi: people and agents are always round.
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      return BorderRadius.circular(half);
+    }
 
     final avatar = tokens?.control('avatar');
     final chip = tokens?.control('chip');
@@ -183,6 +187,13 @@ extension AsemanThemeX on BuildContext {
   }) {
     final scheme = Theme.of(this).colorScheme;
     final a = accent ?? scheme.primary;
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      // Kashi: a borderless tinted tile, ~30% corner.
+      return BoxDecoration(
+        color: Color.alphaBlend(a.withValues(alpha: .12), scheme.surface),
+        borderRadius: BorderRadius.circular((size * .3).roundToDouble()),
+      );
+    }
     final chip = chipRecipe;
     final r = chip.shape == ShapeKind.stadium
         ? size / 2
@@ -213,6 +224,16 @@ extension AsemanThemeX on BuildContext {
     final scheme = Theme.of(this).colorScheme;
     final color = accent ?? scheme.onSurfaceVariant;
     final chip = chipRecipe;
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      // Kashi: paper fill with a hairline, the label carries the colour.
+      return ShapeDecoration(
+        color: scheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(chip.radius),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      );
+    }
     final side = chip.borderWidth > 0
         ? color.withValues(alpha: chip.borderAlpha)
         : color.withValues(alpha: chip.fill == FillKind.outline ? .55 : 0);

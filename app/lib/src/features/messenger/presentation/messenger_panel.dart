@@ -963,7 +963,14 @@ class _SpaceChatTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (space.rooms.length > 1) ...[
+                          if (ThemeChrome.isKashi(context)) ...[
+                            const SizedBox(width: 6),
+                            _TypeTag(
+                              space.rooms.length > 1
+                                  ? '${space.rooms.length} ROOMS'
+                                  : 'ROOM',
+                            ),
+                          ] else if (space.rooms.length > 1) ...[
                             const SizedBox(width: 6),
                             _Tag('${space.rooms.length}', scheme.primary),
                           ],
@@ -1034,6 +1041,16 @@ class _SpaceChatTile extends StatelessWidget {
                         ),
                         backgroundColor: scheme.primary,
                         textColor: scheme.onPrimary,
+                      )
+                    else if (_chatPreview(latest, me) == 'No messages yet')
+                      // An empty room: the next step, not a dead end.
+                      Text(
+                        'Say hi',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary,
+                        ),
                       )
                     else
                       const SizedBox(height: 16),
@@ -1219,7 +1236,9 @@ class _ChatTile extends StatelessWidget {
                               !chat.isAseman &&
                               (chat.peer?.isAgent ?? false)) ...[
                             const SizedBox(width: 6),
-                            _Tag('AI', scheme.tertiary),
+                            ThemeChrome.isKashi(context)
+                                ? const _TypeTag('AGENT')
+                                : _Tag('AI', scheme.tertiary),
                           ],
                           if (!chat.direct && !topic) ...[
                             const SizedBox(width: 6),
@@ -1356,6 +1375,33 @@ String _chatWhen(DateTime? t) {
   return '${t.day}/${t.month}/${t.year % 100}';
 }
 
+/// Kashi kind label (AGENT, ROOM): neutral mono caps on a sunken pill.
+class _TypeTag extends StatelessWidget {
+  const _TypeTag(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: ThemeChrome.numeric(context).copyWith(
+          fontSize: 9.5,
+          letterSpacing: .8,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
 class _Tag extends StatelessWidget {
   const _Tag(this.text, this.color);
   final String text;
@@ -1437,17 +1483,10 @@ class _MessengerChrome extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _titleRow(context, scheme),
-        SizedBox(height: dense ? 4 : 6),
-        Text(
-          subtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: dense ? 11.5 : 13,
-                height: 1.35,
-                color: scheme.onSurfaceVariant,
-              ),
-        ),
+        if (!composeInTitle) ...[
+          SizedBox(height: dense ? 4 : 6),
+          _subtitle(context, scheme),
+        ],
         SizedBox(height: gap),
         _SearchComposeBar(
           dense: dense,
@@ -1491,7 +1530,20 @@ class _MessengerChrome extends StatelessWidget {
     );
   }
 
+  Widget _subtitle(BuildContext context, ColorScheme scheme) => Text(
+    subtitle,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontSize: dense ? 11.5 : 13,
+      height: 1.35,
+      color: scheme.onSurfaceVariant,
+    ),
+  );
+
   Widget _titleRow(BuildContext context, ColorScheme scheme) {
+    // Kashi drops the accent rule under the title.
+    final rule = !ThemeChrome.isKashi(context);
     final titleStyle = (dense
             ? Theme.of(context).textTheme.titleLarge
             : Theme.of(context).textTheme.headlineSmall)
@@ -1501,13 +1553,16 @@ class _MessengerChrome extends StatelessWidget {
           height: 1.05,
         );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: composeInTitle
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+              if (rule) ...[
               const SizedBox(height: 8),
               Container(
                 width: dense ? 28 : 36,
@@ -1527,6 +1582,11 @@ class _MessengerChrome extends StatelessWidget {
                         ),
                 ),
               ),
+              ],
+              if (composeInTitle) ...[
+                SizedBox(height: rule ? 8 : 4),
+                _subtitle(context, scheme),
+              ],
             ],
           ),
         ),
@@ -2139,7 +2199,7 @@ class _FilterSegments extends StatelessWidget {
                         children: [
                           TextSpan(text: names[i]),
                           TextSpan(
-                            text: '  ${counts[i]}',
+                            text: ' ${counts[i]}',
                             style: ThemeChrome.numeric(context).copyWith(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w500,

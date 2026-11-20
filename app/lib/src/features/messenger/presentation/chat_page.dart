@@ -11,6 +11,7 @@ import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_chrome.dart';
 import '../../../core/theme/theme_roles.dart';
 import '../../../core/theme/halo_ring_cache.dart';
@@ -1785,7 +1786,11 @@ class ChatAvatar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final peer = chat.peer;
     final size = radius * 2;
-    final corners = context.avatarBorderRadius(size);
+    final kashi = ThemeChrome.isKashi(context);
+    // Kashi: people and agents are round, rooms and spaces are tiles.
+    final corners = kashi
+        ? BorderRadius.circular(chat.direct ? radius : size * .3)
+        : context.avatarBorderRadius(size);
     if (chat.isAseman) {
       return HaloRing(
         identity: HaloRingCache.agent('aseman'),
@@ -1833,6 +1838,8 @@ class ChatAvatar extends StatelessWidget {
       }
       final name = peer?.displayName.replaceFirst('@', '') ?? '';
       final picture = Avatars.of(peer?.avatar);
+      // Kashi: initials on a per-person tint from the pack colours.
+      final tone = kashi ? _kashiTone(context, peer?.id ?? name) : null;
       return HaloRing(
         identity: HaloRingCache.person(peer?.id ?? ''),
         accent: scheme.secondary,
@@ -1842,13 +1849,18 @@ class ChatAvatar extends StatelessWidget {
           borderRadius: corners,
           foregroundImage: picture,
           onImageError: picture == null ? null : (_, __) {},
-          backgroundColor: ThemeRoles.wellFill(context),
+          backgroundColor: tone == null
+              ? ThemeRoles.wellFill(context)
+              : Color.alphaBlend(
+                  tone.withValues(alpha: .16),
+                  scheme.surface,
+                ),
           child: Text(
             _avatarInitial(name),
             style: TextStyle(
               fontSize: radius * .8,
               fontWeight: FontWeight.w800,
-              color: ThemeRoles.wellInk(context),
+              color: tone ?? ThemeRoles.wellInk(context),
             ),
           ),
         ),
@@ -1950,4 +1962,21 @@ class _DeferredDmDeskPanelState extends State<_DeferredDmDeskPanel> {
       board: widget.board,
     );
   }
+}
+
+
+/// A stable Kashi tone for [identity]: lapis, firoozeh, saffron or anar.
+Color _kashiTone(BuildContext context, String identity) {
+  final scheme = Theme.of(context).colorScheme;
+  final tones = [
+    scheme.primary,
+    AppColors.successOf(context),
+    AppColors.warningOf(context),
+    AppColors.dangerOf(context),
+  ];
+  var h = 0;
+  for (final c in identity.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return tones[h % tones.length];
 }

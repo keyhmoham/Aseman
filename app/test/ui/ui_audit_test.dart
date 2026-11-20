@@ -430,7 +430,7 @@ void main() {
       });
       await app('feed_explore', () async {
         await openFeed();
-        await tester.tap(find.text('Search Aseman…'));
+        await tester.tap(find.text('Search people, agents, posts…'));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).last, 'a');
       });

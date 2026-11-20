@@ -355,7 +355,10 @@ class ProfileMenuBody extends StatelessWidget {
               child: FeatureStageCard(
                 title: 'Store',
                 eyebrow: 'Decillion Store',
-                subtitle: 'Agents, apps, and themes in one storefront',
+                // Kashi keeps the Store card compact: eyebrow, title, chips.
+                subtitle: ThemeChrome.isKashi(context)
+                    ? ''
+                    : 'Agents, apps, and themes in one storefront',
                 icon: Icons.storefront_rounded,
                 accent: scheme.primary,
                 secondary: scheme.tertiary,
@@ -382,7 +385,7 @@ class ProfileMenuBody extends StatelessWidget {
                 accent: scheme.primary,
                 secondary: scheme.tertiary,
                 badges: const [
-                  FeatureStageBadge(Icons.payments_outlined, 'Credits'),
+                  FeatureStageBadge(Icons.add_rounded, 'Top up', primary: true),
                   FeatureStageBadge(Icons.query_stats_rounded, 'Usage'),
                 ],
                 onTap: () => onSelect(ProfileAction.wallet),
@@ -477,7 +480,8 @@ class _IdentityMasthead extends StatelessWidget {
             service: dependencies.service,
             avatar: dependencies.sessionController.avatar,
             initials: initials,
-            filled: true,
+            // Kashi: initials on a lapis tint rather than a solid disc.
+            filled: !ThemeChrome.isKashi(context),
             radius: 24,
             subject: 'profile picture',
             enabled: loggedIn,
@@ -545,6 +549,15 @@ class _IdentityMasthead extends StatelessWidget {
             IconButton.filledTonal(
               tooltip: 'Settings',
               onPressed: onOpenSettings,
+              style: ThemeChrome.isKashi(context)
+                  ? IconButton.styleFrom(
+                      backgroundColor: scheme.surfaceContainerHigh,
+                      foregroundColor: scheme.onSurfaceVariant,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    )
+                  : null,
               icon: const Icon(Icons.settings_outlined, size: 20),
             ),
         ],

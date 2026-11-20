@@ -849,14 +849,16 @@ class FeatureStageCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm - 2),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-          ),
+          if (subtitle.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm - 2),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+            ),
+          ],
           if (badges.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Wrap(
@@ -961,26 +963,33 @@ extension on FeatureStageCard {
                         for (final badge in badges)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
+                              horizontal: 12,
+                              vertical: 7,
                             ),
                             decoration: BoxDecoration(
-                              borderRadius: AppShape.borderRadius(context, 10),
-                              border: Border.all(
-                                color: ink.withValues(alpha: .35),
-                              ),
+                              color: badge.primary ? ink : null,
+                              borderRadius: AppShape.borderRadius(context, 12),
+                              border: badge.primary
+                                  ? null
+                                  : Border.all(
+                                      color: ink.withValues(alpha: .35),
+                                    ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(badge.icon, size: 13),
+                                Icon(
+                                  badge.icon,
+                                  size: 15,
+                                  color: badge.primary ? fill : ink,
+                                ),
                                 const SizedBox(width: 5),
                                 Text(
                                   badge.label,
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: ink,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: badge.primary ? fill : ink,
                                   ),
                                 ),
                               ],
@@ -1000,9 +1009,12 @@ extension on FeatureStageCard {
 }
 
 class FeatureStageBadge {
-  const FeatureStageBadge(this.icon, this.label);
+  const FeatureStageBadge(this.icon, this.label, {this.primary = false});
   final IconData icon;
   final String label;
+
+  /// Drawn as the card's main action (solid) on a filled card.
+  final bool primary;
 }
 
 /// Accent-gradient "you're here" / callout strip with optional halo.
@@ -1139,8 +1151,13 @@ class QuietTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final ink = danger ? AppColors.dangerOf(context) : scheme.onSurface;
-    final accentColor =
-        danger ? AppColors.dangerOf(context) : (accent ?? scheme.primary);
+    // Kashi keeps list icons neutral; colour is for status, not decoration.
+    final accentColor = danger
+        ? AppColors.dangerOf(context)
+        : (accent ??
+              (ThemeChrome.isKashi(context)
+                  ? scheme.onSurfaceVariant
+                  : scheme.primary));
     final tokens = AsemanTokens.maybeOf(context);
     final inkKind = tokens?.control('button').ink ??
         tokens?.language.interaction.ink ??

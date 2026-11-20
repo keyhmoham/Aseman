@@ -155,10 +155,28 @@ class _HomeAssistantState extends State<HomeAssistant>
               child: ExpansionTile(
                 initiallyExpanded: briefOpen,
                 onExpansionChanged: (v) => briefOpen = v,
-                leading: Icon(
-                  Icons.wb_sunny_outlined,
-                  color: scheme.onSurfaceVariant,
-                ),
+                leading: ThemeChrome.isKashi(context)
+                    // Kashi: the sun sits in a saffron tile.
+                    ? Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            AppColors.warningOf(context).withValues(alpha: .16),
+                            scheme.surface,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.wb_sunny_outlined,
+                          size: 19,
+                          color: AppColors.warningOf(context),
+                        ),
+                      )
+                    : Icon(
+                        Icons.wb_sunny_outlined,
+                        color: scheme.onSurfaceVariant,
+                      ),
                 title: Text(
                   'Today\'s brief',
                   style: TextStyle(

@@ -1,218 +1,263 @@
 <!doctype html><html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=block" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,300..500,0..1,0&display=block" rel="stylesheet">
 <style>
-:root{--ink:#11121A;--ink2:#4A4C5C;--ink3:#8A8C9C;--paper:#F7F5F0;--card:#FFFFFF;--line:rgba(17,18,26,.08);
---indigo:#4B3FE0;--indigo2:#7A6CFF;--coral:#FF7A59;--sun:#FFC56B;--mint:#2DBE8C;--sky1:#BFD9FF;--sky2:#E9E2FF;}
+/* ---------- Aseman colour system: "Kashi" (Persian tilework) ---------- */
+:root{
+ --paper:#F4F1EA; --surface:#FBFAF6; --sunken:#ECE8DE; --line:#DDD8CC; --line-2:#E8E4DA;
+ --ink:#15171C; --ink-2:#4A4E58; --ink-3:#686B74;
+ --lapis:#23409A; --lapis-hi:#1A3280; --lapis-tint:#E2E7F4; --on-lapis:#FFFFFF;
+ --firoozeh:#0B6B66; --firoozeh-tint:#D9EEEB;
+ --saffron:#7E5000; --saffron-fill:#E6A21A; --saffron-tint:#F8EBCF;
+ --anar:#B0362C; --anar-tint:#F6E0DC;
+}
+.dark{
+ --paper:#0F1114; --surface:#171A1F; --sunken:#1F232A; --line:#2B3038; --line-2:#22262D;
+ --ink:#ECE8DF; --ink-2:#B3B0A8; --ink-3:#85837D;
+ --lapis:#9DB0F2; --lapis-hi:#B8C7F7; --lapis-tint:#1E2744; --on-lapis:#0F1114;
+ --firoozeh:#5CC6BE; --firoozeh-tint:#14302F;
+ --saffron:#F0B24A; --saffron-fill:#F0B24A; --saffron-tint:#33280F;
+ --anar:#F08A7E; --anar-tint:#3A1D1A;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#E7E4DD;font-family:Manrope,sans-serif;color:var(--ink);padding:40px;display:flex;gap:40px;flex-wrap:wrap}
-.ms{font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 450;display:inline-block}
-.fill{font-variation-settings:'FILL' 1,'wght' 500}
-.phone{width:390px;height:844px;border-radius:48px;overflow:hidden;position:relative;background:var(--paper);box-shadow:0 30px 60px -20px rgba(20,20,40,.35)}
-.status{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 30px 0 34px;font-weight:700;font-size:15px;position:relative;z-index:5}
-.status .r{display:flex;gap:6px;align-items:center}.status .ms{font-size:17px}
-.serif{font-family:'Instrument Serif',serif;font-weight:400}
-.mono{font-family:'JetBrains Mono',monospace}
-/* dock */
-.dock{position:absolute;left:16px;right:16px;bottom:22px;height:68px;display:flex;gap:10px;z-index:10}
-.nav{flex:1;background:rgba(17,18,26,.92);backdrop-filter:blur(20px);border-radius:34px;display:flex;align-items:center;padding:6px;gap:4px;box-shadow:0 12px 30px -8px rgba(17,18,26,.5)}
-.nav a{flex:1;height:56px;border-radius:28px;display:flex;align-items:center;justify-content:center;gap:8px;color:rgba(255,255,255,.55);font-weight:700;font-size:14px;position:relative}
-.nav a.on{background:#fff;color:var(--ink);flex:1.6}
-.nav .badge{position:absolute;top:12px;right:22px;width:8px;height:8px;border-radius:50%;background:var(--coral);border:2px solid #1b1c26}
-.orb{width:68px;height:68px;border-radius:50%;background:radial-gradient(circle at 30% 25%,#fff 0,#FFD9A8 18%,#FF7A59 45%,#4B3FE0 100%);box-shadow:0 0 0 4px rgba(255,255,255,.7),0 14px 30px -6px rgba(75,63,224,.6);display:flex;align-items:center;justify-content:center;color:#fff}
-.orb .ms{font-size:28px}
-.pad{padding:0 20px}
-.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:17px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:13px;color:var(--ink2)}
-.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;flex:none}
-.card{background:var(--card);border-radius:28px;border:1px solid var(--line)}
-.label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
-.caption{width:390px;margin-top:16px;font-size:14px;color:#4A4C5C;line-height:1.5}
-.caption b{color:#11121A;font-size:16px;display:block;margin-bottom:4px}
-.wrap{display:flex;flex-direction:column}
+body{background:#D9D5CB;font-family:Vazirmatn,sans-serif;color:var(--ink);padding:48px;display:flex;gap:44px;flex-wrap:wrap;align-items:flex-start;-webkit-font-smoothing:antialiased}
+.i{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 400,'opsz' 24;display:inline-block;flex:none}
+.f{font-variation-settings:'FILL' 1,'wght' 400,'opsz' 24}
+.mono{font-family:'IBM Plex Mono',monospace;font-feature-settings:'zero' 1}
+.phone{width:390px;height:844px;border-radius:44px;overflow:hidden;position:relative;background:var(--paper);color:var(--ink);box-shadow:0 1px 0 rgba(0,0,0,.04),0 24px 48px -24px rgba(30,25,15,.35);border:8px solid #15171C}
+.status{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-weight:600;font-size:15px}
+.status span:last-child{display:flex;gap:5px}.status .i{font-size:17px}
+.pad{padding:0 16px}
+.h1{font-size:28px;font-weight:800;letter-spacing:-.3px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;padding:0 16px;margin:22px 0 8px}
+.sec b{font-size:13px;font-weight:700;color:var(--ink-2)}
+.sec a{font-size:13px;font-weight:600;color:var(--lapis)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.row{display:flex;align-items:center;gap:12px}
+.ib{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.sq{border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.t-l{background:var(--lapis-tint);color:var(--lapis)}.t-f{background:var(--firoozeh-tint);color:var(--firoozeh)}.t-s{background:var(--saffron-tint);color:var(--saffron)}.t-a{background:var(--anar-tint);color:var(--anar)}.t-n{background:var(--sunken);color:var(--ink-2)}
+.pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.sub{font-size:13px;color:var(--ink-3)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:var(--surface);border-top:1px solid var(--line);display:flex;padding:8px 8px 0}
+.tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:600;color:var(--ink-3);position:relative}
+.tabbar a .ic{width:56px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center}
+.tabbar a.on{color:var(--ink)}.tabbar a.on .ic{background:var(--lapis-tint);color:var(--lapis)}
+.tabbar a.ask .ic{background:var(--ink);color:var(--paper);border-radius:12px;width:48px}
+.tabbar .n{position:absolute;top:0;left:calc(50% + 6px);min-width:16px;height:16px;border-radius:8px;background:var(--lapis);color:var(--on-lapis);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.btn{height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:14px;padding:0 16px}
+.b-ink{background:var(--ink);color:var(--paper)}.b-out{border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.cap{width:390px;margin-top:18px;font-size:14px;line-height:1.55;color:#3E4149}
+.cap b{display:block;color:#15171C;font-size:15px;margin-bottom:4px}
+.w{display:flex;flex-direction:column}
 </style></head><body>
 
-<!-- ============ 1. TODAY (day) ============ -->
-<div class="wrap"><div class="phone" id="s1">
- <div style="position:absolute;inset:0 0 auto 0;height:430px;background:radial-gradient(120% 70% at 85% 0%,#FFE3B8 0,rgba(255,227,184,0) 45%),linear-gradient(180deg,#B9D3FF 0%,#DCE6FF 45%,#F7F5F0 100%)"></div>
- <div style="position:absolute;right:-40px;top:20px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,#FFF4DC 0,rgba(255,236,200,.6) 35%,rgba(255,236,200,0) 70%)"></div>
- <div class="status"><span>19:57</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_5_bar</span></span></div>
- <div class="pad" style="position:relative;display:flex;align-items:center;justify-content:space-between;margin-top:6px">
-  <div style="display:flex;align-items:center;gap:10px"><div class="av" style="width:38px;height:38px;background:linear-gradient(135deg,#4B3FE0,#9A7BFF)">D</div><span class="serif" style="font-size:24px;font-style:italic">aseman</span></div>
-  <div style="display:flex;gap:8px"><div style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center"><span class="ms">search</span></div><div style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;position:relative"><span class="ms">notifications</span><i style="position:absolute;top:10px;right:11px;width:8px;height:8px;border-radius:50%;background:var(--coral)"></i></div></div>
+<!-- ===================== 01 HOME ===================== -->
+<div class="w"><div class="phone" id="s1">
+ <div class="status"><span>19:57</span><span><i class="i">signal_cellular_alt</i><i class="i">wifi</i><i class="i">battery_5_bar</i></span></div>
+ <div class="pad row" style="justify-content:space-between;margin-top:6px">
+  <div class="row" style="gap:8px"><span style="font-size:22px;font-weight:800;letter-spacing:-.4px">aseman</span><span style="font-size:15px;color:var(--ink-3);font-weight:500">آسمان</span></div>
+  <div class="row" style="gap:4px"><span class="ib"><i class="i">search</i></span><span class="ib" style="position:relative"><i class="i">notifications</i><i class="dot" style="position:absolute;top:9px;right:10px;background:var(--saffron-fill);border:2px solid var(--paper);width:10px;height:10px"></i></span></div>
  </div>
- <div class="pad" style="position:relative;margin-top:30px">
-  <div style="font-size:13px;font-weight:700;color:#3d4a7a">FRIDAY · NOVEMBER 20</div>
-  <div class="serif" style="font-size:46px;line-height:1.02;margin-top:6px;letter-spacing:-.5px">Good evening,<br><i>the sky is clear.</i></div>
- </div>
- <!-- agent constellation -->
- <div class="pad" style="position:relative;margin-top:22px">
-  <div class="card" style="padding:16px 18px;background:rgba(255,255,255,.75);backdrop-filter:blur(16px);display:flex;align-items:center;gap:14px">
-   <div style="display:flex">
-    <div class="av" style="width:36px;height:36px;background:#4B3FE0;border:3px solid #fff;font-size:13px">Dc</div>
-    <div class="av" style="width:36px;height:36px;background:#2DBE8C;border:3px solid #fff;margin-left:-10px;font-size:13px">Py</div>
-    <div class="av" style="width:36px;height:36px;background:#FF7A59;border:3px solid #fff;margin-left:-10px;font-size:13px">Gl</div>
-   </div>
-   <div style="flex:1"><div style="font-weight:800;font-size:15px">3 agents resting</div><div style="font-size:12.5px;color:var(--ink2)">Nothing needs you · 4 tasks done today</div></div>
-   <span class="ms" style="color:var(--ink3)">chevron_right</span>
-  </div>
- </div>
- <!-- brief -->
- <div class="pad" style="margin-top:14px;position:relative">
-  <div class="card" style="padding:18px">
-   <div style="display:flex;justify-content:space-between;align-items:center"><span class="label">Tonight's brief</span>
-    <span style="display:flex;align-items:center;gap:6px;background:#11121A;color:#fff;border-radius:16px;height:32px;padding:0 12px 0 8px;font-size:12.5px;font-weight:700"><span class="ms fill" style="font-size:18px">play_arrow</span>Listen · 0:48</span></div>
-   <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.35">
-    <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:var(--indigo);margin-top:7px;flex:none"></span><span><b>laboratory</b> wrapped a thread with decillion — no reply needed.</span></div>
-    <div style="display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;background:var(--mint);margin-top:7px;flex:none"></span><span><b>Peyda</b> room is ready. Start it with a search workflow?</span></div>
-   </div>
-  </div>
- </div>
- <!-- feed -->
- <div class="pad" style="margin-top:22px;display:flex;align-items:baseline;justify-content:space-between"><span class="serif" style="font-size:28px">Following</span><span style="font-size:13px;font-weight:700;color:var(--indigo)">See all</span></div>
- <div class="pad" style="margin-top:10px">
-  <div class="card" style="padding:16px">
-   <div style="display:flex;gap:12px;align-items:center"><div class="av" style="width:42px;height:42px;background:linear-gradient(135deg,#4B3FE0,#FF7A59)">D</div><div style="flex:1"><div style="font-weight:800;font-size:15px">Decillion AI <span class="ms fill" style="font-size:16px;color:var(--indigo);vertical-align:-3px">verified</span></div><div style="font-size:12.5px;color:var(--ink3)">@decillionai · 7d</div></div><span class="ms" style="color:var(--ink3)">more_horiz</span></div>
-   <div style="font-size:16px;margin-top:10px">Good morning! 🌄🌞</div>
-  </div>
- </div>
- <div class="dock"><div class="nav"><a><span class="ms">forum</span><i class="badge"></i></a><a class="on"><span class="ms fill">wb_twilight</span>Today</a><a><span class="ms">person</span></a></div><div class="orb"><span class="ms fill">auto_awesome</span></div></div>
-</div><div class="caption"><b>01 · Today (replaces Explore)</b>The screen opens on a live sky that follows the time of day. The empty "0 idle" ring becomes one line of agent presence, the brief can be played as audio, and the floating dock no longer covers content. The ✦ orb opens the assistant from every tab.</div></div>
+ <div class="pad" style="margin-top:6px"><div class="sub" style="font-weight:600">Friday, 20 November</div></div>
 
-<!-- ============ 2. CHATS ============ -->
-<div class="wrap"><div class="phone" id="s2">
- <div class="status"><span>19:57</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_5_bar</span></span></div>
- <div class="pad" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-  <span class="serif" style="font-size:44px;letter-spacing:-.5px">Chats</span>
-  <div style="display:flex;gap:8px"><div style="width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center"><span class="ms">search</span></div><div style="width:44px;height:44px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center"><span class="ms">edit_square</span></div></div>
- </div>
- <!-- presence rail -->
- <div style="display:flex;gap:16px;padding:18px 20px 4px;overflow:hidden">
-  <div style="text-align:center;width:62px"><div style="width:62px;height:62px;border-radius:50%;padding:3px;background:conic-gradient(#FF7A59,#FFC56B,#4B3FE0,#FF7A59)"><div class="av" style="width:100%;height:100%;background:#4B3FE0;border:3px solid var(--paper)">Dc</div></div><div style="font-size:11.5px;font-weight:700;margin-top:6px">decillion</div><div style="font-size:10.5px;color:var(--coral);font-weight:700">thinking…</div></div>
-  <div style="text-align:center;width:62px"><div style="width:62px;height:62px;border-radius:50%;padding:3px;background:var(--mint)"><div class="av" style="width:100%;height:100%;background:#1E9E73;border:3px solid var(--paper)">Py</div></div><div style="font-size:11.5px;font-weight:700;margin-top:6px">Peyda</div><div style="font-size:10.5px;color:var(--mint);font-weight:700">ready</div></div>
-  <div style="text-align:center;width:62px"><div style="width:62px;height:62px;border-radius:50%;padding:3px;background:#DDD9D0"><div class="av" style="width:100%;height:100%;background:#E2683F;border:3px solid var(--paper)">Gl</div></div><div style="font-size:11.5px;font-weight:700;margin-top:6px">Glama</div><div style="font-size:10.5px;color:var(--ink3);font-weight:600">idle</div></div>
-  <div style="text-align:center;width:62px"><div style="width:62px;height:62px;border-radius:50%;padding:3px;background:#DDD9D0"><div class="av" style="width:100%;height:100%;background:#2F3142;border:3px solid var(--paper)"><span class="ms" style="font-size:22px">draw</span></div></div><div style="font-size:11.5px;font-weight:700;margin-top:6px">Whiteboard</div><div style="font-size:10.5px;color:var(--ink3);font-weight:600">app</div></div>
-  <div style="text-align:center;width:62px"><div style="width:62px;height:62px;border-radius:50%;border:2px dashed #BDB8AE;display:flex;align-items:center;justify-content:center;color:var(--ink2)"><span class="ms">add</span></div><div style="font-size:11.5px;font-weight:700;margin-top:6px;color:var(--ink2)">Hire</div></div>
- </div>
- <div class="pad" style="display:flex;gap:8px;margin-top:14px"><span class="chip on">All</span><span class="chip">People</span><span class="chip">Agents</span><span class="chip">Rooms · 2</span></div>
- <div class="pad" style="margin-top:18px"><span class="label">Pinned</span></div>
- <div class="pad" style="margin-top:10px">
-  <div class="card" style="padding:14px;display:flex;gap:12px;align-items:center">
-   <div style="width:54px;height:54px;border-radius:18px;background:linear-gradient(135deg,#4B3FE0,#7A6CFF);display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><span class="ms fill" style="font-size:26px">science</span></div>
-   <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between"><span style="font-weight:800;font-size:15.5px">laboratory</span><span style="font-size:12px;color:var(--ink3);font-weight:600">Tue</span></div>
-    <div style="font-size:13.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px"><b style="color:var(--indigo)">decillion</b> I'm doing well, thanks for asking…</div>
-    <div style="display:flex;gap:6px;margin-top:8px"><span style="font-size:11px;font-weight:700;background:#EEEBFF;color:var(--indigo);padding:3px 8px;border-radius:8px">3 members</span><span style="font-size:11px;font-weight:700;background:#F1EEE8;color:var(--ink2);padding:3px 8px;border-radius:8px">1 agent</span></div></div>
-  </div>
- </div>
- <div class="pad" style="margin-top:18px"><span class="label">Recent</span></div>
+ <div class="sec"><b>Needs you</b></div>
+ <div class="pad"><div class="box row" style="padding:14px">
+  <span class="sq t-f" style="width:36px;height:36px;border-radius:10px"><i class="i" style="font-size:20px">done_all</i></span>
+  <div style="flex:1"><div style="font-weight:700;font-size:15px">Nothing to approve</div><div class="sub" style="line-height:1.35">Agents ask here before they send, spend or delete.</div></div>
+ </div></div>
+
+ <div class="sec"><b>Agents</b><a>Manage</a></div>
+ <div class="pad"><div class="box">
+  <div class="row" style="padding:12px 14px">
+   <span class="sq t-l" style="width:36px;height:36px;font-size:14px">Dc</span>
+   <div style="flex:1"><div style="font-weight:700;font-size:15px">decillion</div><div class="sub">Assistant · last run 2h ago</div></div>
+   <span class="pill t-n"><i class="dot" style="background:var(--ink-3)"></i>Idle</span></div>
+  <div style="height:1px;background:var(--line-2);margin-left:62px"></div>
+  <div class="row" style="padding:12px 14px">
+   <span class="sq t-f" style="width:36px;height:36px;font-size:14px">Py</span>
+   <div style="flex:1"><div style="font-weight:700;font-size:15px">Peyda</div>
+    <div class="row" style="gap:8px;margin-top:5px"><div style="flex:1;height:4px;border-radius:2px;background:var(--sunken)"><div style="width:62%;height:100%;border-radius:2px;background:var(--firoozeh)"></div></div><span class="mono" style="font-size:11.5px;color:var(--ink-2)">62%</span></div></div>
+   <span class="pill t-f"><i class="dot" style="background:var(--firoozeh)"></i>Indexing</span></div>
+  <div style="height:1px;background:var(--line-2);margin-left:62px"></div>
+  <div class="row" style="padding:12px 14px">
+   <span class="sq t-s" style="width:36px;height:36px;font-size:14px">Gl</span>
+   <div style="flex:1"><div style="font-weight:700;font-size:15px">Glama</div><div class="sub">Out of credits for this run</div></div>
+   <span class="pill t-s"><i class="dot" style="background:var(--saffron-fill)"></i>Paused</span></div>
+ </div></div>
+
+ <div class="sec"><b>Brief</b><a>Listen</a></div>
+ <div class="pad"><div class="box" style="padding:14px;font-size:14.5px;line-height:1.5;color:var(--ink-2)">
+  <span style="color:var(--ink);font-weight:700">laboratory</span> closed its thread with decillion. <span style="color:var(--ink);font-weight:700">Peyda</span> is new and empty; it finishes indexing around 02:40.
+ </div></div>
+
+ <div class="sec"><b>Following</b><a>All posts</a></div>
+ <div class="pad"><div class="box" style="padding:14px">
+  <div class="row"><span class="sq t-l" style="width:36px;height:36px;border-radius:50%;font-size:14px">D</span><div style="flex:1"><div style="font-weight:700;font-size:14.5px">Decillion AI</div><div class="sub" style="font-size:12.5px">@decillionai · 7d</div></div></div>
+  <div style="font-size:15px;margin-top:8px">Good morning!</div>
+ </div></div>
+
+ <div class="tabbar"><a class="on"><span class="ic"><i class="i f">home</i></span>Home</a><a><span class="ic"><i class="i">chat_bubble</i></span>Chats<span class="n">3</span></a><a class="ask"><span class="ic"><i class="i">keyboard_command_key</i></span>Ask</a><a><span class="ic"><i class="i">person</i></span>You</a></div>
+</div><div class="cap"><b>01 · Home</b>Sections are ordered by urgency: what needs approval, then what agents are doing, then reading. The empty "0 idle" ring becomes one honest line. Agent state is shown with words plus colour (Idle, Indexing, Paused), never colour alone.</div></div>
+
+<!-- ===================== 02 CHATS ===================== -->
+<div class="w"><div class="phone" id="s2">
+ <div class="status"><span>19:57</span><span><i class="i">signal_cellular_alt</i><i class="i">wifi</i><i class="i">battery_5_bar</i></span></div>
+ <div class="pad row" style="justify-content:space-between;margin-top:6px"><span class="h1">Chats</span><div class="row" style="gap:4px"><span class="ib"><i class="i">search</i></span><span class="ib" style="background:var(--ink);color:var(--paper)"><i class="i">edit_square</i></span></div></div>
+ <div class="row" style="gap:22px;padding:0 16px;margin-top:14px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;color:var(--ink-3)">
+  <span style="color:var(--ink);padding-bottom:10px;border-bottom:2px solid var(--ink);margin-bottom:-1px">All <span class="mono" style="font-size:12px;color:var(--ink-3)">6</span></span><span style="padding-bottom:10px">People</span><span style="padding-bottom:10px">Agents</span><span style="padding-bottom:10px">Rooms <span class="mono" style="font-size:12px">2</span></span></div>
  <div class="pad" style="margin-top:4px">
-  <div style="display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line)">
-   <div style="width:50px;height:50px;border-radius:17px;background:#D7F3E8;display:flex;align-items:center;justify-content:center;color:#1E9E73;flex:none"><span class="ms fill">travel_explore</span></div>
-   <div style="flex:1"><div style="font-weight:800;font-size:15px">Peyda</div><div style="font-size:13px;color:var(--ink3)">New room · nothing here yet</div></div>
-   <span style="font-size:12.5px;font-weight:800;color:#1E9E73;background:#D7F3E8;padding:7px 12px;border-radius:14px">Say hi</span>
-  </div>
-  <div style="display:flex;gap:12px;align-items:center;padding:12px 2px">
-   <div style="width:50px;height:50px;border-radius:50%;background:#4B3FE0;display:flex;align-items:center;justify-content:center;color:#fff;flex:none;font-weight:800">Dc</div>
-   <div style="flex:1"><div style="font-weight:800;font-size:15px">decillion <span style="font-size:10.5px;font-weight:800;color:var(--indigo);background:#EEEBFF;padding:2px 6px;border-radius:6px;vertical-align:2px">AGENT</span></div><div style="font-size:13px;color:var(--coral);font-weight:600">● drafting a summary…</div></div>
-   <span style="width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">1</span>
-  </div>
+  <!-- approval row -->
+  <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line-2)">
+   <span class="sq t-l" style="width:48px;height:48px;font-size:16px;border-radius:50%">Dc</span>
+   <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><span style="font-weight:700;font-size:15.5px">decillion <span class="pill t-n" style="font-size:10.5px;padding:1px 6px;margin-left:2px">AGENT</span></span><span class="mono" style="font-size:12px;color:var(--ink-3)">19:41</span></div>
+    <div class="row" style="justify-content:space-between;margin-top:2px"><span style="font-size:13.5px;color:var(--ink-2)">Draft ready for laboratory</span><span class="pill t-s">Review</span></div></div></div>
+  <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line-2)">
+   <span class="sq t-n" style="width:48px;height:48px"><i class="i">science</i></span>
+   <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><span style="font-weight:700;font-size:15.5px">laboratory</span><span class="mono" style="font-size:12px;color:var(--lapis);font-weight:600">Tue</span></div>
+    <div class="row" style="justify-content:space-between;margin-top:2px;gap:10px"><span style="font-size:13.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="color:var(--ink);font-weight:600">decillion:</span> I'm doing well, thanks for asking…</span><span style="min-width:20px;height:20px;border-radius:10px;background:var(--lapis);color:var(--on-lapis);font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center">2</span></div></div></div>
+  <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line-2)">
+   <span class="sq t-f" style="width:48px;height:48px;border-radius:50%;font-size:16px">NR</span>
+   <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><span style="font-weight:700;font-size:15.5px">Nima Rahimi</span><span class="mono" style="font-size:12px;color:var(--ink-3)">Mon</span></div>
+    <div style="font-size:13.5px;color:var(--ink-3);margin-top:2px">You: Sent the workflow file</div></div></div>
+  <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line-2)">
+   <span class="sq t-s" style="width:48px;height:48px;border-radius:50%;font-size:16px">Gl</span>
+   <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><span style="font-weight:700;font-size:15.5px">Glama <span class="pill t-n" style="font-size:10.5px;padding:1px 6px;margin-left:2px">AGENT</span></span><span class="mono" style="font-size:12px;color:var(--ink-3)">Sun</span></div>
+    <div style="font-size:13.5px;color:var(--ink-3);margin-top:2px">Paused · top up to continue</div></div></div>
+  <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line-2)">
+   <span class="sq t-n" style="width:48px;height:48px"><i class="i">travel_explore</i></span>
+   <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15.5px">Peyda</div><div style="font-size:13.5px;color:var(--ink-3);margin-top:2px">Room · no messages yet</div></div>
+   <span class="btn b-out" style="height:32px;font-size:13px;padding:0 12px">Open</span></div>
+  <div class="row" style="padding:12px 0">
+   <span class="sq t-a" style="width:48px;height:48px;border-radius:50%;font-size:16px">LO</span>
+   <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><span style="font-weight:700;font-size:15.5px">Lena Ortiz</span><span class="mono" style="font-size:12px;color:var(--ink-3)">12 Nov</span></div>
+    <div style="font-size:13.5px;color:var(--ink-3);margin-top:2px">Voice message · 0:42</div></div></div>
  </div>
- <div class="dock"><div class="nav"><a class="on"><span class="ms fill">forum</span>Chats</a><a><span class="ms">wb_twilight</span></a><a><span class="ms">person</span></a></div><div class="orb"><span class="ms fill">auto_awesome</span></div></div>
-</div><div class="caption"><b>02 · Chats</b>A presence rail shows agents like people, with a ring for each state (thinking, ready, idle) and a "Hire" slot. Filters show counts. Rooms get icons and member/agent tags instead of a lone letter, and an empty room offers a next step ("Say hi") instead of "No messages yet".</div></div>
+ <div class="tabbar"><a><span class="ic"><i class="i">home</i></span>Home</a><a class="on"><span class="ic"><i class="i f">chat_bubble</i></span>Chats</a><a class="ask"><span class="ic"><i class="i">keyboard_command_key</i></span>Ask</a><a><span class="ic"><i class="i">person</i></span>You</a></div>
+</div><div class="cap"><b>02 · Chats</b>People, agents and rooms share one list ranked by recency and urgency, with an underline filter that shows counts. Rooms use a squared avatar and people a round one, so you can tell them apart at a glance. Agents carry a neutral AGENT tag; the only saffron on the screen is the one thing waiting for review.</div></div>
 
-<!-- ============ 3. YOU ============ -->
-<div class="wrap"><div class="phone" id="s3">
- <div class="status"><span>19:58</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_5_bar</span></span></div>
- <div class="pad" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="serif" style="font-size:44px">You</span><div style="width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center"><span class="ms">settings</span></div></div>
- <!-- sky pass -->
- <div class="pad" style="margin-top:12px">
-  <div style="border-radius:30px;padding:20px;color:#fff;position:relative;overflow:hidden;background:radial-gradient(90% 90% at 100% 0%,#FF9A6E 0,rgba(255,154,110,0) 55%),linear-gradient(150deg,#2A2470 0%,#4B3FE0 60%,#7A6CFF 100%)">
-   <div style="position:absolute;inset:0;background-image:radial-gradient(#fff 1px,transparent 1.2px);background-size:22px 22px;opacity:.12"></div>
-   <div style="position:relative;display:flex;gap:14px;align-items:center">
-    <div class="av" style="width:64px;height:64px;border-radius:22px;background:rgba(255,255,255,.18);font-size:26px;border:1px solid rgba(255,255,255,.35)">D</div>
-    <div style="flex:1"><div style="font-weight:800;font-size:20px">@decillionai</div><div class="mono" style="font-size:12.5px;opacity:.75;margin-top:3px">684afa…ef55 <span class="ms" style="font-size:14px;vertical-align:-2px">content_copy</span></div></div>
-    <div style="width:46px;height:46px;border-radius:14px;background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center"><span class="ms">qr_code_2</span></div>
-   </div>
-   <div style="position:relative;margin-top:22px;display:flex;align-items:flex-end;justify-content:space-between">
-    <div><div style="font-size:11px;letter-spacing:.14em;font-weight:800;opacity:.7">BALANCE</div><div style="font-size:38px;font-weight:800;letter-spacing:-1px;line-height:1.1">1,240 <span style="font-size:15px;font-weight:600;opacity:.75">credits</span></div><div style="font-size:12.5px;opacity:.8">−86 this week · laboratory used most</div></div>
-    <svg width="96" height="40" viewBox="0 0 96 40"><path d="M2 30 L16 26 L30 31 L44 18 L58 22 L72 10 L94 14" fill="none" stroke="#FFC56B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="94" cy="14" r="4" fill="#FFC56B"/></svg>
-   </div>
-   <div style="position:relative;display:flex;gap:8px;margin-top:16px"><span style="flex:1;height:44px;border-radius:22px;background:#fff;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:14px"><span class="ms">add</span>Top up</span><span style="flex:1;height:44px;border-radius:22px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:14px"><span class="ms">monitoring</span>Usage</span></div>
+<!-- ===================== 03 ROOM ===================== -->
+<div class="w"><div class="phone" id="s3">
+ <div class="status"><span>19:42</span><span><i class="i">signal_cellular_alt</i><i class="i">wifi</i><i class="i">battery_5_bar</i></span></div>
+ <div class="row" style="padding:4px 8px 10px;border-bottom:1px solid var(--line)">
+  <span class="ib"><i class="i">arrow_back</i></span>
+  <span class="sq t-n" style="width:36px;height:36px;border-radius:10px"><i class="i" style="font-size:20px">science</i></span>
+  <div style="flex:1"><div style="font-weight:700;font-size:15.5px">laboratory</div><div class="sub" style="font-size:12px">3 members · decillion is in this room</div></div>
+  <span class="ib"><i class="i">more_vert</i></span></div>
+ <div class="pad" style="padding-top:14px;display:flex;flex-direction:column;gap:10px">
+  <div style="text-align:center"><span class="mono" style="font-size:11px;color:var(--ink-3)">TUESDAY</span></div>
+  <div class="row" style="align-items:flex-end;gap:8px"><span class="sq t-f" style="width:28px;height:28px;border-radius:50%;font-size:11px">NR</span>
+   <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:9px 12px;max-width:260px;font-size:14.5px"><div style="font-size:12px;font-weight:700;color:var(--firoozeh)">Nima</div>How's everyone doing?</div></div>
+  <div class="row" style="align-items:flex-end;gap:8px"><span class="sq t-l" style="width:28px;height:28px;border-radius:50%;font-size:11px">Dc</span>
+   <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:9px 12px;max-width:270px;font-size:14.5px;line-height:1.4"><div style="font-size:12px;font-weight:700;color:var(--lapis)">decillion · agent</div>I'm doing well, thanks for asking. Want a summary of this week's changes?</div></div>
+  <div style="text-align:center;margin-top:4px"><span class="mono" style="font-size:11px;color:var(--ink-3)">TODAY 19:38</span></div>
+  <div style="align-self:flex-end;background:var(--lapis);color:var(--on-lapis);border-radius:16px 16px 4px 16px;padding:9px 12px;max-width:260px;font-size:14.5px;line-height:1.4">Yes, and draft an update for the team.</div>
+  <!-- agent work + checkpoint -->
+  <div class="box" style="padding:12px 14px;border-color:var(--line)">
+   <div class="row" style="gap:8px;font-size:12.5px;color:var(--ink-2)"><i class="i" style="font-size:18px;color:var(--firoozeh)">check_circle</i>Read 42 messages<span style="color:var(--line)">·</span><i class="i" style="font-size:18px;color:var(--firoozeh)">check_circle</i>Wrote draft<span class="mono" style="margin-left:auto;color:var(--ink-3);font-size:11.5px">0:14</span></div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--saffron-fill);border-radius:12px;padding:12px 14px">
+   <div class="row" style="justify-content:space-between"><span style="font-size:12.5px;font-weight:700;color:var(--saffron)">WAITING FOR YOU</span><span class="sub" style="font-size:12px">posts to 3 members</span></div>
+   <div style="font-size:14px;line-height:1.5;margin-top:6px;color:var(--ink)">This week: voice fixes landed, the whiteboard app is live, and Glama is connected. Next up is the Peyda search workflow.</div>
+   <div class="row" style="gap:8px;margin-top:12px"><span class="btn b-out" style="flex:1">Edit</span><span class="btn b-ink" style="flex:1.3">Post to room</span></div>
   </div>
  </div>
- <!-- bento -->
- <div class="pad" style="margin-top:14px;display:grid;grid-template-columns:1.25fr 1fr;gap:10px">
-  <div class="card" style="padding:16px;grid-row:span 2;display:flex;flex-direction:column;background:#FFF3E8;border-color:#F6DFC8">
-   <div style="width:42px;height:42px;border-radius:14px;background:#FF7A59;color:#fff;display:flex;align-items:center;justify-content:center"><span class="ms fill">storefront</span></div>
-   <div style="font-weight:800;font-size:18px;margin-top:12px">Store</div><div style="font-size:12.5px;color:var(--ink2)">Agents, apps & themes</div>
-   <div style="display:flex;flex-direction:column;gap:6px;margin-top:auto;padding-top:12px">
-    <span style="font-size:13px;font-weight:700;display:flex;justify-content:space-between">My bots<b style="color:#E2683F">3</b></span>
-    <span style="font-size:13px;font-weight:700;display:flex;justify-content:space-between">Market<span class="ms" style="font-size:16px">north_east</span></span>
-    <span style="font-size:13px;font-weight:700;display:flex;justify-content:space-between">Themes<span class="ms" style="font-size:16px">north_east</span></span></div>
-  </div>
-  <div class="card" style="padding:14px"><span class="ms" style="color:var(--indigo)">devices</span><div style="font-weight:800;font-size:15px;margin-top:6px">Devices</div><div style="font-size:12px;color:var(--mint);font-weight:700">● 2 active</div></div>
-  <div class="card" style="padding:14px"><span class="ms" style="color:var(--indigo)">api</span><div style="font-weight:800;font-size:15px;margin-top:6px">Developer API</div><div style="font-size:12px;color:var(--ink3);font-weight:600">2 keys</div></div>
- </div>
- <div class="pad" style="margin-top:10px"><div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><span class="ms" style="color:var(--ink2)">admin_panel_settings</span><span style="flex:1;font-weight:800;font-size:15px">Admin console</span><span style="font-size:11px;font-weight:800;background:#F1EEE8;padding:4px 8px;border-radius:8px;color:var(--ink2)">OWNER</span><span class="ms" style="color:var(--ink3)">chevron_right</span></div></div>
- <div class="pad" style="margin-top:14px;text-align:center"><span style="font-size:13.5px;font-weight:700;color:#C4472B">Sign out</span></div>
- <div class="dock"><div class="nav"><a><span class="ms">forum</span><i class="badge"></i></a><a><span class="ms">wb_twilight</span></a><a class="on"><span class="ms fill">person</span>You</a></div><div class="orb"><span class="ms fill">auto_awesome</span></div></div>
-</div><div class="caption"><b>03 · You</b>Identity and wallet become one "sky pass" card: handle, key, QR, and the balance with this week's spend. Store, Devices and API sit in a bento grid with live counts. Sign out moves from beside the nav bar to a quiet line at the bottom.</div></div>
+ <div style="position:absolute;left:0;right:0;bottom:0;padding:10px 12px 26px;background:var(--surface);border-top:1px solid var(--line)" class="row">
+  <span class="ib" style="background:var(--sunken);border-radius:50%"><i class="i">add</i></span>
+  <div style="flex:1;height:42px;border-radius:21px;border:1px solid var(--line);background:var(--paper);display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--ink-3)">Message laboratory</div>
+  <span class="ib" style="background:var(--ink);color:var(--paper);border-radius:50%"><i class="i">mic</i></span></div>
+</div><div class="cap"><b>03 · Room with an agent</b>Agent work shows up in the conversation as a compact log of steps. Anything that posts, pays or deletes stops at a checkpoint marked with a saffron left edge, which says who it will reach and has a single main button. Your own messages are the only lapis bubbles.</div></div>
 
-<!-- ============ 4. ASSISTANT / ORB OPEN ============ -->
-<div class="wrap"><div class="phone" id="s4" style="background:#0E0F1A;color:#fff">
- <div style="position:absolute;inset:0;background:radial-gradient(80% 50% at 50% 100%,rgba(255,122,89,.45) 0,rgba(75,63,224,.35) 40%,rgba(14,15,26,0) 75%)"></div>
- <div class="status" style="color:#fff"><span>20:04</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_5_bar</span></span></div>
- <div class="pad" style="position:relative;display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center"><span class="ms">close</span></span><span style="font-size:13px;font-weight:700;opacity:.7">Assistant board</span><span style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center"><span class="ms">history</span></span></div>
- <div class="pad" style="position:relative;margin-top:18px"><div class="serif" style="font-size:34px;line-height:1.05">Summarize <i style="color:#FFC56B">laboratory</i> and draft a reply to everyone.</div></div>
- <!-- plan -->
- <div class="pad" style="position:relative;margin-top:20px">
-  <div style="border-radius:26px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:16px">
-   <div style="display:flex;align-items:center;gap:10px"><div class="av" style="width:30px;height:30px;background:#4B3FE0;font-size:11px">Dc</div><span style="font-weight:800;font-size:14px;flex:1">decillion is working</span><span class="mono" style="font-size:12px;opacity:.6">00:14</span></div>
-   <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px;font-size:14px">
-    <div style="display:flex;gap:10px;align-items:center"><span class="ms fill" style="color:#2DBE8C;font-size:20px">check_circle</span><span style="opacity:.75">Read 42 messages in laboratory</span></div>
-    <div style="display:flex;gap:10px;align-items:center"><span class="ms fill" style="color:#2DBE8C;font-size:20px">check_circle</span><span style="opacity:.75">Found 3 open questions</span></div>
-    <div style="display:flex;gap:10px;align-items:center"><span style="width:20px;height:20px;border-radius:50%;border:2.5px solid #FFC56B;border-right-color:transparent;flex:none"></span><span style="font-weight:700">Drafting the reply…</span></div>
-    <div style="display:flex;gap:10px;align-items:center;opacity:.4"><span class="ms" style="font-size:20px">pan_tool</span><span>Wait for your OK before sending</span></div>
-   </div>
-  </div>
- </div>
- <!-- checkpoint -->
- <div class="pad" style="position:relative;margin-top:12px">
-  <div style="border-radius:26px;background:#fff;color:var(--ink);padding:16px">
-   <div style="display:flex;justify-content:space-between;align-items:center"><span class="label" style="color:#E2683F">Needs your OK</span><span style="font-size:12px;font-weight:700;color:var(--ink3)">sends to 3 people</span></div>
-   <div style="font-size:14.5px;line-height:1.45;margin-top:10px;padding:12px;background:#F7F5F0;border-radius:16px">"Thanks all. Here's where we landed: the voice fix ships Friday, and Glama gets connected next…"</div>
-   <div style="display:flex;gap:8px;margin-top:12px"><span style="flex:1;height:44px;border-radius:22px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">Edit</span><span style="flex:1.4;height:44px;border-radius:22px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:14px"><span class="ms" style="font-size:18px">send</span>Approve & send</span></div>
-  </div>
- </div>
- <!-- input -->
- <div style="position:absolute;left:16px;right:16px;bottom:22px">
-  <div style="display:flex;gap:8px;margin-bottom:12px;overflow:hidden"><span class="chip" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.12)">✦ Plan my week</span><span class="chip" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.12)">Search Peyda</span><span class="chip" style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.12)">New post</span></div>
-  <div style="height:64px;border-radius:32px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 8px 0 20px;gap:10px"><span style="flex:1;font-size:15px;opacity:.5">Ask, search or command…</span><span class="ms" style="opacity:.7">attach_file</span><div class="orb" style="width:48px;height:48px;box-shadow:none"><span class="ms fill" style="font-size:22px">mic</span></div></div>
- </div>
-</div><div class="caption"><b>04 · The ✦ orb: one place to command</b>Search, compose and the assistant become one input. The agent shows each step as it works and stops at a checkpoint: you see the exact message and who gets it before anything is sent. This replaces the separate search bar, the Post button and the assistant ring.</div></div>
+<!-- ===================== 04 YOU ===================== -->
+<div class="w"><div class="phone" id="s4">
+ <div class="status"><span>19:58</span><span><i class="i">signal_cellular_alt</i><i class="i">wifi</i><i class="i">battery_5_bar</i></span></div>
+ <div class="pad row" style="margin-top:8px;gap:14px">
+  <span class="sq t-l" style="width:56px;height:56px;border-radius:16px;font-size:22px">D</span>
+  <div style="flex:1"><div style="font-weight:800;font-size:19px">@decillionai</div><div class="row mono" style="gap:6px;font-size:12.5px;color:var(--ink-3)">684afa…ef55<i class="i" style="font-size:15px">content_copy</i></div></div>
+  <span class="ib"><i class="i">qr_code_2</i></span><span class="ib"><i class="i">settings</i></span></div>
+ <div class="pad" style="margin-top:18px"><div style="background:var(--lapis);color:var(--on-lapis);border-radius:16px;padding:16px">
+  <div class="row" style="justify-content:space-between"><span style="font-size:13px;font-weight:600;opacity:.8">Wallet</span><span class="mono" style="font-size:12px;opacity:.7">−86 this week</span></div>
+  <div class="mono" style="font-size:38px;font-weight:600;letter-spacing:-1.5px;margin-top:2px">1,240<span style="font-family:Vazirmatn;font-size:15px;font-weight:600;letter-spacing:0;opacity:.8;margin-left:8px">credits</span></div>
+  <div class="row" style="gap:8px;margin-top:12px"><span class="btn" style="flex:1;background:#fff;color:#1A3280">Top up</span><span class="btn" style="flex:1;border:1px solid rgba(255,255,255,.35);color:#fff">History</span></div>
+ </div></div>
+ <div class="sec" style="margin-top:18px"><b>Spent this week</b><span class="mono" style="font-size:12px;color:var(--ink-3)">86 cr</span></div>
+ <div class="pad"><div class="box" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+  <div><div class="row" style="justify-content:space-between;font-size:13.5px"><span style="font-weight:600">laboratory</span><span class="mono" style="font-size:12.5px;color:var(--ink-2)">48</span></div><div style="height:6px;border-radius:3px;background:var(--sunken);margin-top:5px"><div style="width:56%;height:100%;border-radius:3px;background:var(--lapis)"></div></div></div>
+  <div><div class="row" style="justify-content:space-between;font-size:13.5px"><span style="font-weight:600">Peyda</span><span class="mono" style="font-size:12.5px;color:var(--ink-2)">27</span></div><div style="height:6px;border-radius:3px;background:var(--sunken);margin-top:5px"><div style="width:31%;height:100%;border-radius:3px;background:var(--lapis)"></div></div></div>
+  <div><div class="row" style="justify-content:space-between;font-size:13.5px"><span style="font-weight:600">Other</span><span class="mono" style="font-size:12.5px;color:var(--ink-2)">11</span></div><div style="height:6px;border-radius:3px;background:var(--sunken);margin-top:5px"><div style="width:13%;height:100%;border-radius:3px;background:var(--ink-3)"></div></div></div>
+ </div></div>
+ <div class="pad" style="margin-top:14px"><div class="box">
+  <div class="row" style="padding:13px 14px"><i class="i" style="color:var(--ink-2)">storefront</i><span style="flex:1;font-weight:600;font-size:15px">Store</span><span class="sub">3 bots</span><i class="i" style="color:var(--ink-3);font-size:20px">chevron_right</i></div>
+  <div style="height:1px;background:var(--line-2);margin-left:48px"></div>
+  <div class="row" style="padding:13px 14px"><i class="i" style="color:var(--ink-2)">devices</i><span style="flex:1;font-weight:600;font-size:15px">Devices</span><span class="sub">2 signed in</span><i class="i" style="color:var(--ink-3);font-size:20px">chevron_right</i></div>
+  <div style="height:1px;background:var(--line-2);margin-left:48px"></div>
+  <div class="row" style="padding:13px 14px"><i class="i" style="color:var(--ink-2)">code</i><span style="flex:1;font-weight:600;font-size:15px">Developer API</span><span class="sub">2 keys</span><i class="i" style="color:var(--ink-3);font-size:20px">chevron_right</i></div>
+  <div style="height:1px;background:var(--line-2);margin-left:48px"></div>
+  <div class="row" style="padding:13px 14px"><i class="i" style="color:var(--ink-2)">shield_person</i><span style="flex:1;font-weight:600;font-size:15px">Admin console</span><i class="i" style="color:var(--ink-3);font-size:20px">chevron_right</i></div>
+ </div></div>
+ <div class="pad" style="margin-top:14px"><div class="box row" style="padding:13px 14px;color:var(--anar)"><i class="i">logout</i><span style="font-weight:600;font-size:15px">Sign out</span></div></div>
+ <div class="tabbar"><a><span class="ic"><i class="i">home</i></span>Home</a><a><span class="ic"><i class="i">chat_bubble</i></span>Chats<span class="n">3</span></a><a class="ask"><span class="ic"><i class="i">keyboard_command_key</i></span>Ask</a><a class="on"><span class="ic"><i class="i f">person</i></span>You</a></div>
+</div><div class="cap"><b>04 · You</b>The wallet is the only filled-colour block in the app, because money matters most here. Spending per project is shown as a real chart instead of a "Usage" chip. Store, Devices, API and Admin are one grouped list with live counts, and Sign out is its own row, not a button floating next to the nav.</div></div>
 
-<!-- ============ 5. TODAY (night) ============ -->
-<div class="wrap"><div class="phone" id="s5" style="background:#0B0D18;color:#fff">
- <div style="position:absolute;inset:0;height:480px;background:linear-gradient(180deg,#141A3A 0%,#1E1A4A 45%,#0B0D18 100%)"></div>
- <div style="position:absolute;inset:0;height:420px;background-image:radial-gradient(1.2px 1.2px at 40px 90px,#fff,transparent),radial-gradient(1px 1px at 120px 160px,#fff,transparent),radial-gradient(1.5px 1.5px at 300px 70px,#fff,transparent),radial-gradient(1px 1px at 250px 200px,#cfd6ff,transparent),radial-gradient(1px 1px at 340px 260px,#fff,transparent),radial-gradient(1.3px 1.3px at 80px 300px,#fff,transparent),radial-gradient(1px 1px at 190px 60px,#fff,transparent),radial-gradient(1px 1px at 360px 150px,#fff,transparent);opacity:.8"></div>
- <div style="position:absolute;right:34px;top:96px;width:64px;height:64px;border-radius:50%;background:#F4EBD0;box-shadow:0 0 60px 20px rgba(244,235,208,.18)"><div style="position:absolute;left:18px;top:-6px;width:60px;height:60px;border-radius:50%;background:#171C42"></div></div>
- <div class="status" style="color:#fff"><span>23:12</span><span class="r"><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_3_bar</span></span></div>
- <div class="pad" style="position:relative;display:flex;align-items:center;justify-content:space-between;margin-top:6px">
-  <div style="display:flex;align-items:center;gap:10px"><div class="av" style="width:38px;height:38px;background:linear-gradient(135deg,#4B3FE0,#9A7BFF)">D</div><span class="serif" style="font-size:24px;font-style:italic">aseman</span></div>
- </div>
- <div class="pad" style="position:relative;margin-top:96px">
-  <div style="font-size:13px;font-weight:700;color:#9AA3D9">FRIDAY · 23:12</div>
-  <div class="serif" style="font-size:46px;line-height:1.02;margin-top:6px">Rest well.<br><i style="color:#FFC56B">2 agents keep watch.</i></div>
- </div>
- <div class="pad" style="position:relative;margin-top:22px;display:flex;flex-direction:column;gap:10px">
-  <div style="border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:14px 16px;display:flex;gap:12px;align-items:center">
-   <div style="width:40px;height:40px;border-radius:50%;padding:2px;background:conic-gradient(#FFC56B 0 62%,rgba(255,255,255,.12) 62%)"><div class="av" style="width:100%;height:100%;background:#1E9E73;border:3px solid #141A3A;font-size:12px">Py</div></div>
-   <div style="flex:1"><div style="font-weight:800;font-size:14.5px">Peyda is indexing overnight</div><div style="font-size:12.5px;opacity:.6">62% · done around 02:40</div></div></div>
-  <div style="border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:14px 16px;display:flex;gap:12px;align-items:center">
-   <div class="av" style="width:40px;height:40px;background:#4B3FE0;font-size:12px">Dc</div>
-   <div style="flex:1"><div style="font-weight:800;font-size:14.5px">Morning brief scheduled</div><div style="font-size:12.5px;opacity:.6">Ready at 07:30 · quiet hours on</div></div><span class="ms" style="opacity:.6">bedtime</span></div>
- </div>
- <div class="dock"><div class="nav" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12)"><a><span class="ms">forum</span></a><a class="on"><span class="ms fill">bedtime</span>Tonight</a><a><span class="ms">person</span></a></div><div class="orb" style="box-shadow:0 0 0 4px rgba(255,255,255,.12),0 14px 30px -6px rgba(255,122,89,.5)"><span class="ms fill">auto_awesome</span></div></div>
-</div><div class="caption"><b>05 · The sky follows the clock</b>"Aseman" means sky, and the home screen now looks like it. At night the header turns to moon and stars, the tab changes to "Tonight", and the agents still running in the background appear as small progress cards.</div></div>
+<!-- ===================== 05 DARK ===================== -->
+<div class="w"><div class="phone dark" id="s5">
+ <div class="status"><span>23:12</span><span><i class="i">signal_cellular_alt</i><i class="i">wifi</i><i class="i">battery_3_bar</i></span></div>
+ <div class="pad row" style="justify-content:space-between;margin-top:6px">
+  <div class="row" style="gap:8px"><span style="font-size:22px;font-weight:800;letter-spacing:-.4px">aseman</span><span style="font-size:15px;color:var(--ink-3);font-weight:500">آسمان</span></div>
+  <div class="row" style="gap:4px"><span class="ib"><i class="i">search</i></span><span class="ib" style="position:relative"><i class="i">notifications</i><i class="dot" style="position:absolute;top:9px;right:10px;background:var(--saffron-fill);border:2px solid var(--paper);width:10px;height:10px"></i></span></div></div>
+ <div class="pad" style="margin-top:6px"><div class="sub" style="font-weight:600">Friday, 20 November</div></div>
+ <div class="sec"><b>Needs you</b><span class="mono" style="font-size:12px;color:var(--saffron)">1</span></div>
+ <div class="pad"><div style="background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--saffron-fill);border-radius:12px;padding:12px 14px">
+  <div class="row" style="gap:10px"><span class="sq t-s" style="width:36px;height:36px;font-size:14px">Gl</span><div style="flex:1"><div style="font-weight:700;font-size:15px">Glama wants 40 credits</div><div class="sub">To finish "Summarise Nov invoices"</div></div></div>
+  <div class="row" style="gap:8px;margin-top:12px"><span class="btn b-out" style="flex:1">Decline</span><span class="btn b-ink" style="flex:1.3">Allow 40 cr</span></div></div></div>
+ <div class="sec"><b>Agents</b><a>Manage</a></div>
+ <div class="pad"><div class="box">
+  <div class="row" style="padding:12px 14px"><span class="sq t-l" style="width:36px;height:36px;font-size:14px">Dc</span><div style="flex:1"><div style="font-weight:700;font-size:15px">decillion</div><div class="sub">Brief scheduled for 07:30</div></div><span class="pill t-n"><i class="dot" style="background:var(--ink-3)"></i>Idle</span></div>
+  <div style="height:1px;background:var(--line-2);margin-left:62px"></div>
+  <div class="row" style="padding:12px 14px"><span class="sq t-f" style="width:36px;height:36px;font-size:14px">Py</span><div style="flex:1"><div style="font-weight:700;font-size:15px">Peyda</div><div class="row" style="gap:8px;margin-top:5px"><div style="flex:1;height:4px;border-radius:2px;background:var(--sunken)"><div style="width:78%;height:100%;border-radius:2px;background:var(--firoozeh)"></div></div><span class="mono" style="font-size:11.5px;color:var(--ink-2)">78%</span></div></div><span class="pill t-f"><i class="dot" style="background:var(--firoozeh)"></i>Indexing</span></div>
+ </div></div>
+ <div class="sec"><b>Following</b><a>All posts</a></div>
+ <div class="pad"><div class="box" style="padding:14px">
+  <div class="row"><span class="sq t-l" style="width:36px;height:36px;border-radius:50%;font-size:14px">D</span><div style="flex:1"><div style="font-weight:700;font-size:14.5px">Decillion AI</div><div class="sub" style="font-size:12.5px">@decillionai · 7d</div></div></div>
+  <div style="font-size:15px;margin-top:8px">Good morning!</div>
+  <div class="row" style="gap:18px;margin-top:12px;color:var(--ink-3);font-size:13px;font-weight:600"><span class="row" style="gap:5px;color:var(--anar)"><i class="i f" style="font-size:19px">favorite</i>1</span><span class="row" style="gap:5px"><i class="i" style="font-size:19px">mode_comment</i>0</span><span class="row" style="gap:5px"><i class="i" style="font-size:19px">ios_share</i>Share</span></div>
+ </div></div>
+ <div class="tabbar"><a class="on"><span class="ic"><i class="i f">home</i></span>Home</a><a><span class="ic"><i class="i">chat_bubble</i></span>Chats</a><a class="ask"><span class="ic"><i class="i">keyboard_command_key</i></span>Ask</a><a><span class="ic"><i class="i">person</i></span>You</a></div>
+</div><div class="cap"><b>05 · Dark theme, Home with a request</b>Dark mode is a separate set of colours, not an inverted light theme: a warm near-black background with lifted lapis, firoozeh and saffron tones that pass contrast. This shows Home when an agent asks for money; the approval card sits at the top under "Needs you".</div></div>
 
+<!-- ===================== 06 SYSTEM ===================== -->
+<div class="w"><div id="s6" style="width:840px;background:#FBFAF6;border-radius:28px;padding:32px;border:1px solid #DDD8CC">
+ <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:26px;font-weight:800">Kashi colour system</div><div style="font-size:13px;color:#686B74">Aseman · v2 · contrast measured against its own background</div></div>
+ <p style="font-size:14px;color:#4A4E58;margin-top:6px;max-width:680px;line-height:1.55">Taken from Isfahan tilework: lapis for you and primary actions, firoozeh (turquoise) for agents doing well, saffron for "waiting on you", anar (pomegranate) for destructive actions. About 90% of every screen stays neutral, so colour always means something.</p>
+ <div id="sw" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px"></div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:26px">
+  <div><div style="font-size:12px;font-weight:700;color:#686B74;letter-spacing:.06em">TYPE · Vazirmatn (Latin + Persian) / IBM Plex Mono</div>
+   <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:28px;font-weight:800;letter-spacing:-.3px">Chats <span style="font-size:13px;font-weight:500;color:#686B74">28 / 800</span></div>
+    <div style="font-size:15.5px;font-weight:700">laboratory <span style="font-size:13px;font-weight:500;color:#686B74">15.5 / 700</span></div>
+    <div style="font-size:14.5px">I'm doing well, thanks <span style="font-size:13px;color:#686B74">14.5 / 400</span></div>
+    <div style="font-size:16px;font-weight:600" dir="rtl">آسمان — گفتگو با عامل‌ها</div>
+    <div class="mono" style="font-size:14px">1,240 · 684afa…ef55 · 19:41</div></div></div>
+  <div><div style="font-size:12px;font-weight:700;color:#686B74;letter-spacing:.06em">RULES</div>
+   <ul style="margin-top:10px;padding-left:18px;font-size:13.5px;line-height:1.7;color:#4A4E58">
+    <li>One filled colour block per screen at most (wallet, your bubble).</li>
+    <li>State = colour + word + shape. Never colour alone.</li>
+    <li>Saffron only for things waiting on the user.</li>
+    <li>No gradients, no blur, no glow. Depth comes from a 1px line and a sunken surface.</li>
+    <li>Numbers, times and keys use mono with tabular figures.</li>
+    <li>Built with Persian in mind: one family renders both scripts, layouts mirror for RTL.</li></ul></div>
+ </div>
+</div><div class="cap" style="width:840px"><b>06 · The colour system</b>Every pairing used in the screens is listed with its measured WCAG contrast ratio.</div></div>
+
+<script>
+function L(h){const c=[1,3,5].map(i=>parseInt(h.substr(i,2),16)/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function cr(a,b){const x=L(a),y=L(b);return ((Math.max(x,y)+.05)/(Math.min(x,y)+.05)).toFixed(1)}
+const S=[
+ ['Paper','#F4F1EA','#15171C','background'],['Surface','#FBFAF6','#15171C','cards, bars'],['Sunken','#ECE8DE','#4A4E58','tracks, wells'],['Ink','#15171C','#F4F1EA','text, ink buttons'],
+ ['Lapis','#23409A','#FFFFFF','primary, you'],['Lapis tint','#E2E7F4','#23409A','selected, avatars'],['Firoozeh','#D9EEEB','#0B6B66','agent ok / running'],['Saffron','#F8EBCF','#7E5000','waiting on you'],
+ ['Anar','#F6E0DC','#B0362C','destructive, likes'],['Ink 2','#F4F1EA','#4A4E58','secondary text'],['Ink 3','#F4F1EA','#686B74','meta, timestamps'],['Dark paper','#0F1114','#ECE8DF','dark background'],
+ ['Dark lapis','#171A1F','#9DB0F2','dark primary'],['Dark firoozeh','#14302F','#5CC6BE','dark agent ok'],['Dark saffron','#33280F','#F0B24A','dark waiting'],['Dark anar','#3A1D1A','#F08A7E','dark destructive']];
+document.getElementById('sw').innerHTML=S.map(([n,bg,fg,r])=>{const c=cr(bg,fg);const ok=c>=7?'AAA':c>=4.5?'AA':'AA large';return `<div style="border:1px solid #DDD8CC;border-radius:14px;overflow:hidden;background:#fff"><div style="height:74px;background:${bg};color:${fg};padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between"><span style="font-weight:700;font-size:15px">Aa ${n}</span><span class="mono" style="font-size:11.5px">${c}:1 ${ok}</span></div><div style="padding:8px 12px;font-size:12px;line-height:1.45"><div class="mono" style="color:#15171C">${bg} / ${fg}</div><div style="color:#686B74">${r}</div></div></div>`}).join('');
+</script>
 </body></html>

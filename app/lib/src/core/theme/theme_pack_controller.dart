@@ -14,7 +14,7 @@ class ThemePackController extends ChangeNotifier {
   static const idKey = 'aseman.theme_pack_id';
   static const listingKey = 'aseman.theme_listing_id';
 
-  ThemePack pack = DefaultThemePacks.paper;
+  ThemePack pack = DefaultThemePacks.kashi;
   String? listingId;
   String? themeBotId;
 
@@ -72,7 +72,7 @@ class ThemePackController extends ChangeNotifier {
   Future<void> applyBuiltin(String id) =>
       apply(DefaultThemePacks.byId(id), listing: null, botId: null);
 
-  Future<void> clearToDefault() => applyBuiltin(DefaultThemePacks.paperId);
+  Future<void> clearToDefault() => applyBuiltin(DefaultThemePacks.kashiId);
 
   /// Replace pack JSON from the server active-theme sync without wiping ids.
   Future<void> syncFromServer({

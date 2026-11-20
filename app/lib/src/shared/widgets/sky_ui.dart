@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_surfaces.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/aseman_tokens.dart';
 import '../../core/theme/control_look.dart';
 import '../../core/theme/design_language.dart';
@@ -306,7 +307,7 @@ class HaloRing extends StatelessWidget {
     final tokens = AsemanTokens.maybeOf(context);
     // Paper is flat print: no sweep, and no leftover stroke that still reads
     // as a ring. Cached packs may still say halo_style "ring".
-    if (ThemeChrome.isPaper(context)) return child;
+    if (ThemeChrome.isFlat(context)) return child;
     final haloAccent = accent ??
         ThemeRoles.partAccent(context, ThemePartId.halo);
     final haloSecondary =
@@ -764,6 +765,8 @@ class FeatureStageCard extends StatelessWidget {
     this.accent,
     this.secondary,
     this.badges = const [],
+    this.filled = false,
+    this.highlight,
   });
 
   final String title;
@@ -775,9 +778,27 @@ class FeatureStageCard extends StatelessWidget {
   final Color? secondary;
   final List<FeatureStageBadge> badges;
 
+  /// Solid accent card (the one filled block on a screen, e.g. Wallet).
+  final bool filled;
+
+  /// Optional figure under the subtitle (e.g. a balance).
+  final Widget? highlight;
+
+  /// Fill for [filled]: the accent in light mode; in dark mode its deeper
+  /// tone, so the card stays saturated instead of pastel.
+  static Color filledColor(ColorScheme scheme) {
+    if (scheme.brightness != Brightness.dark) return scheme.primary;
+    final hsl = HSLColor.fromColor(scheme.primary);
+    return hsl
+        .withLightness(.42)
+        .withSaturation(math.min(hsl.saturation, .6))
+        .toColor();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (filled) return _filled(context, scheme);
     final accentColor = accent ?? scheme.primary;
     return SoftCard(
       onTap: onTap,
@@ -853,6 +874,126 @@ class FeatureStageCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+extension on FeatureStageCard {
+  Widget _filled(BuildContext context, ColorScheme scheme) {
+    final fill = FeatureStageCard.filledColor(scheme);
+    final ink = AppTheme.readableOn(fill, Colors.white, 4.5);
+    final radius = AppShape.borderRadius(context, AppShape.inner);
+    return Material(
+      color: fill,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: DefaultTextStyle.merge(
+            style: TextStyle(color: ink),
+            child: IconTheme.merge(
+              data: IconThemeData(color: ink),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          borderRadius: AppShape.borderRadius(context, 12),
+                          color: ink.withValues(alpha: .14),
+                        ),
+                        child: Icon(icon, size: 22),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (eyebrow != null) ...[
+                              EyebrowLabel(
+                                eyebrow!,
+                                color: ink.withValues(alpha: .75),
+                                size: 10,
+                              ),
+                              const SizedBox(height: 2),
+                            ],
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -.3,
+                                    height: 1.15,
+                                    color: ink,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ],
+                  ),
+                  if (highlight != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    highlight!,
+                  ],
+                  const SizedBox(height: AppSpacing.sm - 2),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: ink.withValues(alpha: .85),
+                          height: 1.35,
+                        ),
+                  ),
+                  if (badges.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final badge in badges)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: AppShape.borderRadius(context, 10),
+                              border: Border.all(
+                                color: ink.withValues(alpha: .35),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(badge.icon, size: 13),
+                                const SizedBox(width: 5),
+                                Text(
+                                  badge.label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: ink,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

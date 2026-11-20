@@ -13,16 +13,16 @@ import 'theme_pack.dart';
 
 abstract final class AppTheme {
   static ThemeData get dark =>
-      fromPack(DefaultThemePacks.paper, Brightness.dark);
+      fromPack(DefaultThemePacks.kashi, Brightness.dark);
   static ThemeData get light =>
-      fromPack(DefaultThemePacks.paper, Brightness.light);
+      fromPack(DefaultThemePacks.kashi, Brightness.light);
 
   static ThemeData darkWith(
     Color accent, {
     ThemePack? pack,
     String? paletteId,
   }) => fromPack(
-    pack ?? DefaultThemePacks.paper,
+    pack ?? DefaultThemePacks.kashi,
     Brightness.dark,
     accent: accent,
     paletteId: paletteId,
@@ -33,7 +33,7 @@ abstract final class AppTheme {
     ThemePack? pack,
     String? paletteId,
   }) => fromPack(
-    pack ?? DefaultThemePacks.paper,
+    pack ?? DefaultThemePacks.kashi,
     Brightness.light,
     accent: accent,
     paletteId: paletteId,
@@ -122,9 +122,14 @@ abstract final class AppTheme {
   }) {
     final dark = brightness == Brightness.dark;
     final baseTokens = pack.tokens.forBrightness(brightness);
-    final palette = _resolvePalette(pack, paletteId: paletteId, accent: accent);
+    final palette = _resolvePalette(
+      pack,
+      paletteId: paletteId,
+      accent: accent,
+    ).forBrightness(brightness);
     final tokens = baseTokens.overlayPalette(palette);
     final paperPack = pack.id == DefaultThemePacks.paperId;
+    final kashiPack = pack.id == DefaultThemePacks.kashiId;
     final surface =
         tokens.surface ??
         (dark ? const Color(0xFF111119) : const Color(0xFFF7F7F9));
@@ -145,7 +150,18 @@ abstract final class AppTheme {
     // that hue (a deeper tone) so it does not jump to a complementary color.
     late final ColorScheme scheme;
     late final Color seed;
-    if (paperPack) {
+    if (kashiPack) {
+      seed = palette.accent;
+      scheme = _kashiScheme(
+        brightness: brightness,
+        accent: seed,
+        surface: surface,
+        scaffold: pageScaffold,
+        sunken: surfaceHigh,
+        success: tokens.success!,
+        danger: tokens.danger!,
+      );
+    } else if (paperPack) {
       final tonal = ColorScheme.fromSeed(
         seedColor: palette.accent,
         brightness: brightness,
@@ -358,7 +374,7 @@ abstract final class AppTheme {
           space: 1,
         ),
         cardTheme: CardThemeData(
-          color: pack.id == DefaultThemePacks.paperId
+          color: DefaultThemePacks.isFlat(pack.id)
               ? surface
               : AppSurfaces.card(scheme, tokens: extension),
           surfaceTintColor: Colors.transparent,
@@ -372,6 +388,67 @@ abstract final class AppTheme {
       tokens: extension,
     );
   }
+}
+
+/// Kashi roles: exact neutrals from the pack (limestone paper or night blue),
+/// one accent for primary, its 12–18% tint for containers and selection,
+/// firoozeh for tertiary (agents ok) and anar for errors.
+ColorScheme _kashiScheme({
+  required Brightness brightness,
+  required Color accent,
+  required Color surface,
+  required Color scaffold,
+  required Color sunken,
+  required Color success,
+  required Color danger,
+}) {
+  final dark = brightness == Brightness.dark;
+  final ink = dark ? const Color(0xFFE7EBF5) : const Color(0xFF15171C);
+  final ink2 = dark ? const Color(0xFFA7B1C8) : const Color(0xFF4A4E58);
+  Color tint(Color c) =>
+      Color.alphaBlend(c.withValues(alpha: dark ? .18 : .12), surface);
+  final seeded = ColorScheme.fromSeed(seedColor: accent, brightness: brightness);
+  final raw = seeded.copyWith(
+    primary: accent,
+    onPrimary: dark ? scaffold : Colors.white,
+    primaryContainer: tint(accent),
+    onPrimaryContainer: accent,
+    secondary: ink2,
+    onSecondary: dark ? scaffold : Colors.white,
+    secondaryContainer: tint(accent),
+    onSecondaryContainer: accent,
+    tertiary: success,
+    onTertiary: dark ? scaffold : Colors.white,
+    tertiaryContainer: tint(success),
+    onTertiaryContainer: success,
+    error: danger,
+    onError: dark ? scaffold : Colors.white,
+    errorContainer: tint(danger),
+    onErrorContainer: danger,
+    surface: surface,
+    onSurface: ink,
+    onSurfaceVariant: ink2,
+    surfaceTint: Colors.transparent,
+    surfaceDim: scaffold,
+    surfaceBright: surface,
+    surfaceContainerLowest: surface,
+    surfaceContainerLow: Color.lerp(surface, scaffold, .5),
+    surfaceContainer: scaffold,
+    surfaceContainerHigh: sunken,
+    surfaceContainerHighest: Color.lerp(
+      sunken,
+      ink,
+      dark ? .05 : .04,
+    ),
+    outline: dark ? const Color(0xFF56658A) : const Color(0xFF8C8F98),
+    outlineVariant: dark ? const Color(0xFF25314D) : const Color(0xFFDDD8CC),
+    inverseSurface: ink,
+    onInverseSurface: surface,
+    inversePrimary: seeded.inversePrimary,
+    shadow: Colors.black,
+    scrim: Colors.black,
+  );
+  return AppTheme.ensureReadable(raw, 4.5);
 }
 
 ThemePaletteOption _resolvePalette(
@@ -411,10 +488,17 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
   final nav = tokens.control('nav_pill');
   final slider = tokens.control('slider');
   final overlay = AppSurfaces.overlay(scheme, tokens: tokens);
-  final paper = tokens.packId == DefaultThemePacks.paperId;
-  final menuFill = paper ? scheme.surfaceContainerHigh : overlay;
-  final navFill = paper ? scheme.surfaceContainer : overlay;
-  final quiet = paper ? FontWeight.w500 : FontWeight.w700;
+  final paper = DefaultThemePacks.isFlat(tokens.packId);
+  final kashi = tokens.packId == DefaultThemePacks.kashiId;
+  final menuFill = kashi
+      ? scheme.surface
+      : (paper ? scheme.surfaceContainerHigh : overlay);
+  final navFill = kashi
+      ? scheme.surface
+      : (paper ? scheme.surfaceContainer : overlay);
+  final quiet = tokens.packId == DefaultThemePacks.paperId
+      ? FontWeight.w500
+      : FontWeight.w700;
   final borderColor = AppSurfaces.cardBorder(scheme);
   final buttonShape = button.border(sideColor: scheme.outline);
   final menuStyle = MenuStyle(
@@ -724,10 +808,10 @@ ThemeData _expressive(ThemeData base, {required AsemanTokens tokens}) {
         tokens: tokens,
       ).withValues(alpha: lang.interaction.hoverAlpha),
       splashColor: AppFab.inkOf(scheme, tokens: tokens).withValues(alpha: .12),
-      elevation: fab.elevation > 0 ? fab.elevation : 3,
-      focusElevation: fab.elevation > 0 ? fab.elevation : 3,
-      hoverElevation: fab.elevation > 0 ? fab.elevation + 1 : 4,
-      highlightElevation: fab.elevation > 0 ? fab.elevation : 3,
+      elevation: fab.elevation > 0 ? fab.elevation : (kashi ? 0 : 3),
+      focusElevation: fab.elevation > 0 ? fab.elevation : (kashi ? 0 : 3),
+      hoverElevation: fab.elevation > 0 ? fab.elevation + 1 : (kashi ? 1 : 4),
+      highlightElevation: fab.elevation > 0 ? fab.elevation : (kashi ? 0 : 3),
       disabledElevation: 0,
       enableFeedback: lang.interaction.ink != InkKind.none,
       shape: AppFab.shapeOf(scheme, tokens: tokens),
@@ -777,6 +861,8 @@ abstract final class AppFab {
     AsemanTokens? tokens,
   }) {
     if (danger) return scheme.errorContainer;
+    // Kashi: solid ink action buttons (black on paper, pale on night blue).
+    if (tokens?.packId == DefaultThemePacks.kashiId) return scheme.onSurface;
     final fab = tokens?.control('fab');
     return switch (fab?.fill) {
       FillKind.tonal => scheme.secondaryContainer,
@@ -793,6 +879,7 @@ abstract final class AppFab {
     AsemanTokens? tokens,
   }) {
     if (danger) return scheme.onErrorContainer;
+    if (tokens?.packId == DefaultThemePacks.kashiId) return scheme.surface;
     final fab = tokens?.control('fab');
     return switch (fab?.fill) {
       FillKind.tonal => scheme.onSecondaryContainer,

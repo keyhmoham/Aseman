@@ -67,6 +67,26 @@ flutter:
   # Generic CSS families for Elpian content: `serif` and `monospace` (and the
   # stacks that fall back to them) need real faces; Flutter has only its sans.
   fonts:
+    # Kashi theme: Vazirmatn renders Latin and Persian; Plex Mono sets
+    # numbers, times and keys (both SIL OFL, licences in assets/fonts/).
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+        - asset: assets/fonts/Vazirmatn-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Vazirmatn-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Vazirmatn-ExtraBold.ttf
+          weight: 800
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
     - family: serif
       fonts:
         - asset: assets/elpian/fonts/LiberationSerif-Regular.ttf

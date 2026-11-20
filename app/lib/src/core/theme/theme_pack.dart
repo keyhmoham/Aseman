@@ -163,20 +163,41 @@ class ThemePaletteOption {
     this.success,
     this.warning,
     this.danger,
+    this.accentDark,
   });
 
   final String id;
   final String label;
   final Color accent;
+
+  /// Accent for dark mode when the light one is too deep to read on a dark
+  /// surface. Null keeps [accent] in both modes.
+  final Color? accentDark;
   final Color? secondary;
   final Color? success;
   final Color? warning;
   final Color? danger;
 
+  /// This option as it applies under [brightness]: dark mode swaps in
+  /// [accentDark] when the option has one.
+  ThemePaletteOption forBrightness(Brightness brightness) =>
+      brightness == Brightness.dark && accentDark != null
+          ? ThemePaletteOption(
+              id: id,
+              label: label,
+              accent: accentDark!,
+              secondary: secondary,
+              success: success,
+              warning: warning,
+              danger: danger,
+            )
+          : this;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'label': label,
         'accent': colorToHex(accent),
+        if (accentDark != null) 'accent_dark': colorToHex(accentDark!),
         if (secondary != null) 'secondary': colorToHex(secondary!),
         if (success != null) 'success': colorToHex(success!),
         if (warning != null) 'warning': colorToHex(warning!),
@@ -188,6 +209,7 @@ class ThemePaletteOption {
         id: '${json['id'] ?? ''}',
         label: '${json['label'] ?? json['id'] ?? 'Accent'}',
         accent: parseColor(json['accent']) ?? AppColors.primary,
+        accentDark: parseColor(json['accent_dark']),
         secondary: parseColor(json['secondary'] ?? json['secondary_accent']),
         success: parseColor(json['success']),
         warning: parseColor(json['warning']),

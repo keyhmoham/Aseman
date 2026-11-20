@@ -63,33 +63,73 @@ class GadgetsEdgeHandle extends StatelessWidget {
                           navigatorKey.currentContext ?? hostContext,
                     ),
                     behavior: HitTestBehavior.opaque,
-                    child: CustomPaint(
-                      painter: EdgeBumpPainter(
-                        fill: ThemeRoles.selectedFill(context),
-                        shadow: scheme.shadow,
-                      ),
-                      child: SizedBox(
-                        width: _width,
-                        height: _height,
-                        child: Align(
-                          alignment: const Alignment(.35, 0),
-                          child: Badge(
-                            isLabelVisible: onScreen > 0,
-                            smallSize: 7,
-                            backgroundColor: ThemeRoles.selectedInk(context),
-                            child: Icon(
-                              Icons.extension_rounded,
-                              size: 16,
-                              color: ThemeRoles.selectedInk(context),
+                    child: ThemeChrome.isKashi(context)
+                        ? _KashiEdgeTab(onScreen: onScreen)
+                        : CustomPaint(
+                            painter: EdgeBumpPainter(
+                              fill: ThemeRoles.selectedFill(context),
+                              shadow: scheme.shadow,
+                            ),
+                            child: SizedBox(
+                              width: _width,
+                              height: _height,
+                              child: Align(
+                                alignment: const Alignment(.35, 0),
+                                child: Badge(
+                                  isLabelVisible: onScreen > 0,
+                                  smallSize: 7,
+                                  backgroundColor:
+                                      ThemeRoles.selectedInk(context),
+                                  child: Icon(
+                                    Icons.extension_rounded,
+                                    size: 16,
+                                    color: ThemeRoles.selectedInk(context),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
               ),
             ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kashi's gadgets handle: a small hairline tab flush with the right edge
+/// instead of a painted bump.
+class _KashiEdgeTab extends StatelessWidget {
+  const _KashiEdgeTab({required this.onScreen});
+
+  final int onScreen;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 30,
+      height: 52,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+        border: Border(
+          left: BorderSide(color: scheme.outlineVariant),
+          top: BorderSide(color: scheme.outlineVariant),
+          bottom: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Badge(
+        isLabelVisible: onScreen > 0,
+        smallSize: 7,
+        backgroundColor: scheme.primary,
+        child: Icon(
+          Icons.extension_outlined,
+          size: 18,
+          color: scheme.onSurfaceVariant,
         ),
       ),
     );

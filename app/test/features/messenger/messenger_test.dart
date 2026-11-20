@@ -411,7 +411,10 @@ void main() {
     Future<void> expectCentered(Size size) async {
       await openHomeChats(tester, size);
       final panel = tester.getRect(find.byType(MessengerPanel));
-      final bar = tester.getRect(inMessenger(find.byType(TabBar)));
+      // Phone and desktop home tabs use the full-width counted filter.
+      final bar = tester.getRect(
+        inMessenger(find.byKey(const ValueKey('chat-filters'))),
+      );
       expect(bar.center.dx, closeTo(panel.center.dx, 1));
     }
 

@@ -530,6 +530,47 @@ class _ChatListState extends State<_ChatList> {
   String _label(String name, int unread) =>
       unread > 0 ? '$name · $unread' : name;
 
+  /// How many list rows each filter shows (a project counts once).
+  int _count(_Filter f) {
+    final spaces = <String>{};
+    var n = 0;
+    for (final chat in _chats) {
+      if (chat.isAseman || chat.home) continue;
+      if (f == _Filter.personal && !chat.direct) continue;
+      if (f == _Filter.rooms && chat.direct) continue;
+      if (chat.direct) {
+        n++;
+      } else if (spaces.add(chat.spaceId)) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /// Agents you talk to directly, with what each is doing right now.
+  List<_AgentStatus> get _agentStatuses => [
+    for (final chat in _chats)
+      if (chat.direct && !chat.isAseman && (chat.peer?.isAgent ?? false))
+        _AgentStatus(chat: chat, agent: _agentFor(chat)),
+  ]..sort((a, b) => a.rank.compareTo(b.rank));
+
+  /// Phone chats tab: pinned rows, then the rest, each set in one card with
+  /// inset dividers.
+  List<Widget> _groupedTiles(List<_ChatEntry> shown, bool dense) {
+    final pinned = [for (final e in shown) if (e.pinnedAt != null) e];
+    final recent = [for (final e in shown) if (e.pinnedAt == null) e];
+    Widget group(String label, List<_ChatEntry> entries) => _ChatGroup(
+      label: label,
+      children: [
+        for (final e in entries) ..._entryTiles(e, dense, grouped: true),
+      ],
+    );
+    return [
+      if (pinned.isNotEmpty) group('PINNED', pinned),
+      if (recent.isNotEmpty) group('RECENT', recent),
+    ];
+  }
+
   List<Widget> _chatTiles(List<_ChatEntry> shown, bool dense) => [
     for (var i = 0; i < shown.length; i++) ...[
       if (i > 0) const SizedBox(height: 2),
@@ -610,6 +651,12 @@ class _ChatListState extends State<_ChatList> {
         _label('Personal', _unread(true)),
         _label('Rooms', _unread(false)),
       ],
+      filterNames: const ['All', 'Personal', 'Rooms'],
+      filterCounts: [for (final f in _Filter.values) _count(f)],
+      agents: pageScroll ? _agentStatuses : const [],
+      onOpenAgent: _open,
+      me: _me,
+      composeInTitle: pageScroll,
       onCompose: _composeMenu,
       onClose: widget.onClose,
       requests: _requests,
@@ -620,7 +667,9 @@ class _ChatListState extends State<_ChatList> {
               if (mounted) unawaited(_load());
             },
     );
-    final tiles = _chatTiles(shown, dense);
+    final tiles = pageScroll
+        ? _groupedTiles(shown, dense)
+        : _chatTiles(shown, dense);
 
     if (pageScroll) {
       return Scaffold(
@@ -671,7 +720,11 @@ class _ChatListState extends State<_ChatList> {
     );
   }
 
-  List<Widget> _entryTiles(_ChatEntry entry, bool dense) {
+  List<Widget> _entryTiles(
+    _ChatEntry entry,
+    bool dense, {
+    bool grouped = false,
+  }) {
     if (entry is _DirectEntry) {
       final chat = entry.chat;
       return [
@@ -680,6 +733,7 @@ class _ChatListState extends State<_ChatList> {
           me: _me,
           agent: _agentFor(chat),
           dense: dense,
+          grouped: grouped,
           onTap: () => _open(chat),
           onMenu: (at, anchor) => _chatMenu(chat, at: at, anchor: anchor),
         ),
@@ -697,7 +751,9 @@ class _ChatListState extends State<_ChatList> {
           color: open
               ? scheme.primary.withValues(alpha: .07)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
+          borderRadius: grouped
+              ? BorderRadius.zero
+              : BorderRadius.circular(AppShape.innerOf(context)),
         ),
         child: Column(
           children: [
@@ -907,7 +963,14 @@ class _SpaceChatTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (space.rooms.length > 1) ...[
+                          if (ThemeChrome.isKashi(context)) ...[
+                            const SizedBox(width: 6),
+                            _TypeTag(
+                              space.rooms.length > 1
+                                  ? '${space.rooms.length} ROOMS'
+                                  : 'ROOM',
+                            ),
+                          ] else if (space.rooms.length > 1) ...[
                             const SizedBox(width: 6),
                             _Tag('${space.rooms.length}', scheme.primary),
                           ],
@@ -958,7 +1021,7 @@ class _SpaceChatTile extends StatelessWidget {
                         ],
                         Text(
                           _chatWhen(space.updatedAt),
-                          style: TextStyle(
+                          style: ThemeChrome.numeric(context).copyWith(
                             fontSize: 11,
                             color: unread
                                 ? scheme.primary
@@ -978,6 +1041,16 @@ class _SpaceChatTile extends StatelessWidget {
                         ),
                         backgroundColor: scheme.primary,
                         textColor: scheme.onPrimary,
+                      )
+                    else if (_chatPreview(latest, me) == 'No messages yet')
+                      // An empty room: the next step, not a dead end.
+                      Text(
+                        'Say hi',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary,
+                        ),
                       )
                     else
                       const SizedBox(height: 16),
@@ -1055,12 +1128,17 @@ class _ChatTile extends StatelessWidget {
     this.agent,
     this.dense = false,
     this.topic = false,
+    this.grouped = false,
   });
 
   final ChatSummary chat;
   final String me;
   final Bot? agent;
   final bool dense;
+
+  /// Drawn inside a [_ChatGroup] card: no unread wash, the badge and time
+  /// carry it.
+  final bool grouped;
 
   /// A room shown under its space, rather than as its own chat.
   final bool topic;
@@ -1079,7 +1157,7 @@ class _ChatTile extends StatelessWidget {
         chat.direct && !chat.isAseman && (chat.peer?.isAgent ?? false);
     // Flat rows (not SoftCards): a light unread wash only.
     return Material(
-      color: unread
+      color: unread && !grouped
           ? ThemeRoles.selectedFill(context)
           : Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -1158,7 +1236,9 @@ class _ChatTile extends StatelessWidget {
                               !chat.isAseman &&
                               (chat.peer?.isAgent ?? false)) ...[
                             const SizedBox(width: 6),
-                            _Tag('AI', scheme.tertiary),
+                            ThemeChrome.isKashi(context)
+                                ? const _TypeTag('AGENT')
+                                : _Tag('AI', scheme.tertiary),
                           ],
                           if (!chat.direct && !topic) ...[
                             const SizedBox(width: 6),
@@ -1215,7 +1295,7 @@ class _ChatTile extends StatelessWidget {
                         ],
                         Text(
                           _chatWhen(chat.updatedAt),
-                          style: TextStyle(
+                          style: ThemeChrome.numeric(context).copyWith(
                             fontSize: 11,
                             color: unread
                                 ? scheme.primary
@@ -1295,6 +1375,33 @@ String _chatWhen(DateTime? t) {
   return '${t.day}/${t.month}/${t.year % 100}';
 }
 
+/// Kashi kind label (AGENT, ROOM): neutral mono caps on a sunken pill.
+class _TypeTag extends StatelessWidget {
+  const _TypeTag(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: ThemeChrome.numeric(context).copyWith(
+          fontSize: 9.5,
+          letterSpacing: .8,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
 class _Tag extends StatelessWidget {
   const _Tag(this.text, this.color);
   final String text;
@@ -1329,10 +1436,29 @@ class _MessengerChrome extends StatelessWidget {
     required this.onFilter,
     required this.filterLabels,
     required this.onCompose,
+    this.filterNames = const [],
+    this.filterCounts = const [],
+    this.agents = const [],
+    this.onOpenAgent,
+    this.me = '',
+    this.composeInTitle = false,
     this.onClose,
     this.requests = 0,
     this.onRequests,
   });
+
+  /// Plain filter names with [filterCounts] (phone tab). Empty keeps the
+  /// [filterLabels] tab bar.
+  final List<String> filterNames;
+  final List<int> filterCounts;
+
+  /// Agents in the strip under the filters (phone tab only).
+  final List<_AgentStatus> agents;
+  final ValueChanged<ChatSummary>? onOpenAgent;
+  final String me;
+
+  /// The compose button sits in the title row instead of beside search.
+  final bool composeInTitle;
 
   final String title;
   final String subtitle;
@@ -1357,38 +1483,44 @@ class _MessengerChrome extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _titleRow(context, scheme),
-        SizedBox(height: dense ? 4 : 6),
-        Text(
-          subtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: dense ? 11.5 : 13,
-                height: 1.35,
-                color: scheme.onSurfaceVariant,
-              ),
-        ),
+        if (!composeInTitle) ...[
+          SizedBox(height: dense ? 4 : 6),
+          _subtitle(context, scheme),
+        ],
         SizedBox(height: gap),
         _SearchComposeBar(
           dense: dense,
           search: search,
           onSearchChanged: onSearchChanged,
           onClearSearch: onClearSearch,
-          onCompose: onCompose,
+          onCompose: composeInTitle ? null : onCompose,
         ),
-        SizedBox(height: dense ? 10 : 14),
-        SegmentedTabBar(
-          alignment: Alignment.center,
-          compact: compact,
-          selectedIndex: filterIndex,
-          onTap: onFilter,
-          labels: filterLabels,
-          icons: const [
-            Icons.all_inbox_rounded,
-            Icons.person_outline_rounded,
-            Icons.workspaces_outline,
-          ],
-        ),
+        SizedBox(height: dense ? 10 : 12),
+        if (filterNames.isNotEmpty && filterCounts.length == filterNames.length)
+          _FilterSegments(
+            key: const ValueKey('chat-filters'),
+            names: filterNames,
+            counts: filterCounts,
+            selected: filterIndex,
+            onTap: onFilter,
+          )
+        else
+          SegmentedTabBar(
+            alignment: Alignment.center,
+            compact: compact,
+            selectedIndex: filterIndex,
+            onTap: onFilter,
+            labels: filterLabels,
+            icons: const [
+              Icons.all_inbox_rounded,
+              Icons.person_outline_rounded,
+              Icons.workspaces_outline,
+            ],
+          ),
+        if (agents.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _AgentStrip(agents: agents, me: me, onOpen: onOpenAgent),
+        ],
         if (requests > 0 && onRequests != null) ...[
           SizedBox(height: dense ? 8 : 10),
           _RequestsBanner(count: requests, onTap: onRequests!),
@@ -1398,7 +1530,20 @@ class _MessengerChrome extends StatelessWidget {
     );
   }
 
+  Widget _subtitle(BuildContext context, ColorScheme scheme) => Text(
+    subtitle,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontSize: dense ? 11.5 : 13,
+      height: 1.35,
+      color: scheme.onSurfaceVariant,
+    ),
+  );
+
   Widget _titleRow(BuildContext context, ColorScheme scheme) {
+    // Kashi drops the accent rule under the title.
+    final rule = !ThemeChrome.isKashi(context);
     final titleStyle = (dense
             ? Theme.of(context).textTheme.titleLarge
             : Theme.of(context).textTheme.headlineSmall)
@@ -1408,31 +1553,52 @@ class _MessengerChrome extends StatelessWidget {
           height: 1.05,
         );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: composeInTitle
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+              if (rule) ...[
               const SizedBox(height: 8),
               Container(
                 width: dense ? 28 : 36,
                 height: 3,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  gradient: LinearGradient(
-                    colors: [
-                      scheme.primary,
-                      AppColors.cyanOf(context).withValues(alpha: .85),
-                      scheme.primary.withValues(alpha: .15),
-                    ],
-                  ),
+                  // Flat packs: one solid accent rule, no gradient.
+                  color: ThemeChrome.isFlat(context) ? scheme.primary : null,
+                  gradient: ThemeChrome.isFlat(context)
+                      ? null
+                      : LinearGradient(
+                          colors: [
+                            scheme.primary,
+                            AppColors.cyanOf(context).withValues(alpha: .85),
+                            scheme.primary.withValues(alpha: .15),
+                          ],
+                        ),
                 ),
               ),
+              ],
+              if (composeInTitle) ...[
+                SizedBox(height: rule ? 8 : 4),
+                _subtitle(context, scheme),
+              ],
             ],
           ),
         ),
+        if (composeInTitle)
+          Builder(
+            builder: (fabContext) => SkyFab(
+              mini: true,
+              tooltip: 'New',
+              icon: Icons.edit_square,
+              onPressed: () => onCompose(fabContext),
+            ),
+          ),
         if (onClose != null)
           IconButton.filledTonal(
             tooltip: 'Close',
@@ -1458,10 +1624,13 @@ class _SearchComposeBar extends StatelessWidget {
   final TextEditingController search;
   final VoidCallback onSearchChanged;
   final VoidCallback onClearSearch;
-  final Future<void> Function(BuildContext fabContext) onCompose;
+
+  /// Null when the compose button lives in the title row.
+  final Future<void> Function(BuildContext fabContext)? onCompose;
 
   @override
   Widget build(BuildContext context) {
+    final compose = onCompose;
     return Row(
       children: [
         Expanded(
@@ -1480,15 +1649,17 @@ class _SearchComposeBar extends StatelessWidget {
                   ),
           ),
         ),
-        const SizedBox(width: 8),
-        Builder(
-          builder: (fabContext) => SkyFab(
-            mini: true,
-            tooltip: 'New',
-            icon: Icons.add_rounded,
-            onPressed: () => onCompose(fabContext),
+        if (compose != null) ...[
+          const SizedBox(width: 8),
+          Builder(
+            builder: (fabContext) => SkyFab(
+              mini: true,
+              tooltip: 'New',
+              icon: Icons.add_rounded,
+              onPressed: () => compose(fabContext),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1847,4 +2018,268 @@ class _PickTile extends StatelessWidget {
     subtitle: Text(subtitle),
     onTap: onTap,
   );
+}
+
+
+/// One agent in the chats strip and what it is doing.
+class _AgentStatus {
+  _AgentStatus({required this.chat, this.agent});
+
+  final ChatSummary chat;
+  final Bot? agent;
+
+  bool get working => chat.working;
+  bool get waiting => !working && chat.unread > 0;
+
+  /// Working first, then those with replies for you, then idle.
+  int get rank => working ? 0 : (waiting ? 1 : 2);
+
+  String get label => working
+      ? 'working'
+      : waiting
+      ? (chat.unread == 1 ? '1 new reply' : '${chat.unread} new replies')
+      : 'idle';
+}
+
+/// Horizontal strip of agent chips: avatar, name and a status dot (firoozeh
+/// working, saffron waiting on you, grey idle). Tapping opens the chat.
+class _AgentStrip extends StatelessWidget {
+  const _AgentStrip({required this.agents, required this.me, this.onOpen});
+
+  final List<_AgentStatus> agents;
+  final String me;
+  final ValueChanged<ChatSummary>? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: agents.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final a = agents[i];
+          final dot = a.working
+              ? AppColors.successOf(context)
+              : a.waiting
+              ? AppColors.warningOf(context)
+              : scheme.onSurfaceVariant;
+          return Semantics(
+            button: true,
+            label: '${a.chat.title}, ${a.label}',
+            excludeSemantics: true,
+            child: Material(
+              color: scheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: scheme.outlineVariant),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onOpen == null ? null : () => onOpen!(a.chat),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(5, 5, 12, 5),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ChatAvatar(
+                        chat: a.chat,
+                        radius: 15,
+                        userId: me,
+                        agent: a.agent,
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            a.chat.title,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: dot,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                a.label,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.15,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Full-width filter: a sunken track with the selected segment raised on a
+/// hairline, each name followed by its count.
+class _FilterSegments extends StatelessWidget {
+  const _FilterSegments({
+    super.key,
+    required this.names,
+    required this.counts,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final List<String> names;
+  final List<int> counts;
+  final int selected;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final r = AppShape.controlOf(context);
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(r),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < names.length; i++)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: i == selected,
+                label: '${names[i]}, ${counts[i]}',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTap(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i == selected ? scheme.surface : null,
+                      borderRadius: BorderRadius.circular(
+                        (r - 3).clamp(4.0, 99.0),
+                      ),
+                      border: i == selected
+                          ? Border.all(color: scheme.outlineVariant)
+                          : null,
+                    ),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: names[i]),
+                          TextSpan(
+                            text: ' ${counts[i]}',
+                            style: ThemeChrome.numeric(context).copyWith(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                              color: i == selected
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: i == selected
+                            ? scheme.primary
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A labelled card of chat rows separated by inset hairlines.
+class _ChatGroup extends StatelessWidget {
+  const _ChatGroup({required this.label, required this.children});
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 4, 2, 6),
+            child: Text(
+              label,
+              style: ThemeChrome.numeric(context).copyWith(
+                fontSize: 11,
+                letterSpacing: 1.3,
+                fontWeight: FontWeight.w500,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(AppShape.innerOf(context)),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 68,
+                      color: scheme.outlineVariant.withValues(alpha: .7),
+                    ),
+                  children[i],
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

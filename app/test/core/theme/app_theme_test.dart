@@ -101,7 +101,7 @@ void main() {
     late Color fg;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.lightWith(Colors.teal),
+        theme: AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.paper),
         home: Builder(
           builder: (context) {
             bg = AppFab.backgroundOf(context);
@@ -111,7 +111,7 @@ void main() {
         ),
       ),
     );
-    final scheme = AppTheme.lightWith(Colors.teal).colorScheme;
+    final scheme = AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.paper).colorScheme;
     expect(bg, scheme.primaryContainer);
     expect(fg, scheme.onPrimaryContainer);
   });
@@ -119,7 +119,7 @@ void main() {
   testWidgets('FloatingActionButton inherits primary-container fill', (
     tester,
   ) async {
-    final theme = AppTheme.lightWith(Colors.teal);
+    final theme = AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.paper);
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
@@ -150,7 +150,7 @@ void main() {
   testWidgets('SkyFab paints primary-container capsule with label', (
     tester,
   ) async {
-    final theme = AppTheme.lightWith(Colors.teal);
+    final theme = AppTheme.lightWith(Colors.teal, pack: DefaultThemePacks.paper);
     await tester.pumpWidget(
       MaterialApp(
         theme: theme,
@@ -200,5 +200,15 @@ void main() {
     expect(tokens.cardAlpha, lessThan(1));
     // Modal chrome is more see-through than a card.
     expect(tokens.overlayAlpha, lessThan(tokens.cardAlpha));
+  });
+
+  test('Kashi action buttons are solid ink, flat', () {
+    for (final b in Brightness.values) {
+      final theme = AppTheme.fromPack(DefaultThemePacks.kashi, b);
+      final fab = theme.floatingActionButtonTheme;
+      expect(fab.backgroundColor, theme.colorScheme.onSurface);
+      expect(fab.foregroundColor, theme.colorScheme.surface);
+      expect(fab.elevation, 0);
+    }
   });
 }

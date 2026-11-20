@@ -9,6 +9,10 @@ import 'theme_pack.dart';
 abstract final class DefaultThemePacks {
   static const skyId = 'builtin.sky';
   static const paperId = 'builtin.paper';
+  static const kashiId = 'builtin.kashi';
+
+  /// Flat, print-like packs (no glass, no glow, solid hairline surfaces).
+  static bool isFlat(String? id) => id == paperId || id == kashiId;
   static const contrastId = 'builtin.high_contrast';
   static const compactId = 'builtin.compact';
   static const fluentId = 'builtin.fluent';
@@ -587,6 +591,45 @@ abstract final class DefaultThemePacks {
     );
   }
 
+  /// Kashi controls: 12px buttons and inputs, 10px chips and segments, 16px
+  /// top bar and menus, 20px cards and nav, hairline borders, no shadow.
+  static DesignLanguage get kashiLanguage {
+    final base = paperLanguage;
+    ControlRecipe r(
+      ControlRecipe recipe,
+      double radius, {
+      FillKind? fill,
+      double? border,
+      double? borderAlpha,
+      double? elevation,
+    }) =>
+        recipe.copyWith(
+          shape: ShapeKind.rounded,
+          radius: radius,
+          fill: fill ?? recipe.fill,
+          borderWidth: border ?? recipe.borderWidth,
+          borderAlpha: borderAlpha ?? recipe.borderAlpha,
+          elevation: elevation ?? recipe.elevation,
+        );
+    return base.copyWith(
+      button: r(base.button, 12, border: 0, elevation: 0),
+      chip: r(base.chip, 10, border: 1, borderAlpha: .35),
+      input: r(base.input, 12, fill: FillKind.tonal, border: 0),
+      card: r(base.card, 20, fill: FillKind.solid, border: 1, elevation: 0),
+      sheet: r(base.sheet, 24, fill: FillKind.solid, border: 1),
+      fab: r(base.fab, 16, fill: FillKind.solid, border: 0, elevation: 0),
+      navPill: r(base.navPill, 20, fill: FillKind.solid, border: 1),
+      dialog: r(base.dialog, 24, fill: FillKind.solid, border: 1),
+      menu: r(base.menu, 16, fill: FillKind.solid, border: 1),
+      chatBubble: r(base.chatBubble, 16),
+      panelHeader: r(base.panelHeader, 16, fill: FillKind.solid, border: 1),
+      listTile: r(base.listTile, 12, border: 0),
+      tab: r(base.tab, 10),
+      tooltip: r(base.tooltip, 8),
+      shadow: const ShadowRecipe(blur: 0, y: 0, alpha: 0),
+    );
+  }
+
   static ThemePack get paper => ThemePack(
         meta: const ThemePackMeta(
           id: paperId,
@@ -845,13 +888,178 @@ abstract final class DefaultThemePacks {
         ],
       );
 
-  static List<ThemePack> get all =>
-      [paper, sky, highContrast, compact, fluent, cupertino, neoBrutal];
+
+  /// Kashi accent options, named after Isfahan tilework. Each carries a lifted
+  /// tone for the night-blue dark theme. Success, warning and danger stay on
+  /// the pack's per-mode tokens (firoozeh, saffron, anar).
+  static const kashiPalettes = <ThemePaletteOption>[
+    ThemePaletteOption(
+      id: 'lapis',
+      label: 'Lapis',
+      accent: Color(0xFF23409A),
+      accentDark: Color(0xFF9DB0F2),
+    ),
+    ThemePaletteOption(
+      id: 'firoozeh',
+      label: 'Firoozeh',
+      accent: Color(0xFF0B6B66),
+      accentDark: Color(0xFF5CC6BE),
+    ),
+    ThemePaletteOption(
+      id: 'saffron',
+      label: 'Saffron',
+      accent: Color(0xFF7E5000),
+      accentDark: Color(0xFFF0B24A),
+    ),
+    ThemePaletteOption(
+      id: 'anar',
+      label: 'Anar',
+      accent: Color(0xFFB0362C),
+      accentDark: Color(0xFFF08A7E),
+    ),
+    ThemePaletteOption(
+      id: 'ink',
+      label: 'Ink',
+      accent: Color(0xFF15171C),
+      accentDark: Color(0xFFE7EBF5),
+    ),
+    ThemePaletteOption(
+      id: 'kaghaz',
+      label: 'Kaghaz',
+      accent: Color(0xFF5A3E1B),
+      accentDark: Color(0xFFD9B98A),
+    ),
+  ];
+
+  /// Kashi: warm limestone paper in light, night blue in dark. Flat hairline
+  /// surfaces, 20/16/12 corners, Vazirmatn type, colour reserved for meaning.
+  static ThemePack get kashi => ThemePack(
+        meta: const ThemePackMeta(
+          id: kashiId,
+          name: 'Kashi',
+          description:
+              'Isfahan tilework colours: lapis, firoozeh, saffron and anar on '
+              'limestone paper, with a night-blue dark mode.',
+          author: 'Aseman',
+          previewColors: [
+            Color(0xFFF4F1EA),
+            Color(0xFF23409A),
+            Color(0xFF0A1020),
+          ],
+          builtin: true,
+        ),
+        language: kashiLanguage,
+        tokens: const ThemeTokenSet(
+          light: ThemeTokens(
+            accent: Color(0xFF23409A),
+            secondaryAccent: Color(0xFF4A4E58),
+            scaffold: Color(0xFFF4F1EA),
+            surface: Color(0xFFFBFAF6),
+            surfaceHigh: Color(0xFFECE8DE),
+            inputFill: Color(0xFFECE8DE),
+            cardAlpha: 1,
+            overlayAlpha: 1,
+            blurSigma: 0,
+            radiusCard: 20,
+            radiusInner: 16,
+            radiusControl: 12,
+            radiusFab: 16,
+            radiusFabSmall: 12,
+            radiusFabLarge: 20,
+            success: Color(0xFF0B6B66),
+            warning: Color(0xFF7E5000),
+            danger: Color(0xFFB0362C),
+            titleWeight: 800,
+            labelWeight: 700,
+            letterSpacingDisplay: -0.5,
+            letterSpacingTitle: -0.2,
+            fontFamily: kashiFont,
+            fabMistAlpha: 0,
+          ),
+          dark: ThemeTokens(
+            accent: Color(0xFF9DB0F2),
+            secondaryAccent: Color(0xFFA7B1C8),
+            scaffold: Color(0xFF0A1020),
+            surface: Color(0xFF111A2F),
+            surfaceHigh: Color(0xFF18233D),
+            inputFill: Color(0xFF18233D),
+            cardAlpha: 1,
+            overlayAlpha: 1,
+            blurSigma: 0,
+            radiusCard: 20,
+            radiusInner: 16,
+            radiusControl: 12,
+            radiusFab: 16,
+            radiusFabSmall: 12,
+            radiusFabLarge: 20,
+            success: Color(0xFF5CC6BE),
+            warning: Color(0xFFF0B24A),
+            danger: Color(0xFFF08A7E),
+            titleWeight: 800,
+            labelWeight: 700,
+            letterSpacingDisplay: -0.5,
+            letterSpacingTitle: -0.2,
+            fontFamily: kashiFont,
+            fabMistAlpha: 0,
+          ),
+        ),
+        graphics: const ThemeGraphics(
+          atmosphere: 'flat',
+          haloStyle: 'solid',
+          iconTreatment: 'rounded',
+          backdropStyle: 'solid',
+        ),
+        shell: const ShellLayoutSpec(),
+        // Exact Kashi corners where the token defaults would round too much.
+        components: const {
+          // 12px on the 40px phone bar keeps the mockup's 16-on-56 proportion.
+          'panel_header': ComponentStyle(radius: 12),
+          'menu': ComponentStyle(radius: 16),
+          'chip': ComponentStyle(radius: 10),
+          'tab': ComponentStyle(radius: 10),
+          'list_tile': ComponentStyle(radius: 12),
+          'chat_bubble': ComponentStyle(radius: 16),
+        },
+        palettes: kashiPalettes,
+      );
+
+  /// UI family of the Kashi pack (Latin + Persian).
+  static const kashiFont = 'Vazirmatn';
+
+  /// Numbers, times, keys and dates.
+  static const monoFont = 'IBMPlexMono';
+
+  /// Adds the Kashi accents to another built-in pack's colour options so
+  /// every theme offers them, without replacing that pack's own list.
+  static ThemePack _withKashiAccents(ThemePack pack) {
+    final own = pack.selectablePalettes;
+    final ids = {for (final o in own) o.id};
+    final extra = [
+      for (final o in kashiPalettes.take(4))
+        if (!ids.contains(o.id)) o,
+    ];
+    if (extra.isEmpty) return pack;
+    return pack.copyWith(palettes: [...own, ...extra]);
+  }
+
+  static List<ThemePack> get all => [
+        kashi,
+        for (final p in [
+          paper,
+          sky,
+          highContrast,
+          compact,
+          fluent,
+          cupertino,
+          neoBrutal,
+        ])
+          _withKashiAccents(p),
+      ];
 
   static ThemePack byId(String id) {
     for (final pack in all) {
       if (pack.id == id) return pack;
     }
-    return paper;
+    return kashi;
   }
 }

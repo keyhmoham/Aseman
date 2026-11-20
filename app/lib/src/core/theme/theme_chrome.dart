@@ -85,6 +85,10 @@ extension AsemanThemeX on BuildContext {
     final tokens = maybeAsemanTokens;
     final half = size / 2;
     if (half <= 0) return BorderRadius.zero;
+    // Kashi: people and agents are always round.
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      return BorderRadius.circular(half);
+    }
 
     final avatar = tokens?.control('avatar');
     final chip = tokens?.control('chip');
@@ -183,6 +187,13 @@ extension AsemanThemeX on BuildContext {
   }) {
     final scheme = Theme.of(this).colorScheme;
     final a = accent ?? scheme.primary;
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      // Kashi: a borderless tinted tile, ~30% corner.
+      return BoxDecoration(
+        color: Color.alphaBlend(a.withValues(alpha: .12), scheme.surface),
+        borderRadius: BorderRadius.circular((size * .3).roundToDouble()),
+      );
+    }
     final chip = chipRecipe;
     final r = chip.shape == ShapeKind.stadium
         ? size / 2
@@ -213,6 +224,16 @@ extension AsemanThemeX on BuildContext {
     final scheme = Theme.of(this).colorScheme;
     final color = accent ?? scheme.onSurfaceVariant;
     final chip = chipRecipe;
+    if (maybeAsemanTokens?.packId == DefaultThemePacks.kashiId) {
+      // Kashi: paper fill with a hairline, the label carries the colour.
+      return ShapeDecoration(
+        color: scheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(chip.radius),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      );
+    }
     final side = chip.borderWidth > 0
         ? color.withValues(alpha: chip.borderAlpha)
         : color.withValues(alpha: chip.fill == FillKind.outline ? .55 : 0);
@@ -533,6 +554,27 @@ abstract final class ThemeChrome {
   static bool isPaper(BuildContext context) =>
       AsemanTokens.maybeOf(context)?.packId == DefaultThemePacks.paperId;
 
+  /// Any flat built-in pack (Paper or Kashi): solid hairline surfaces, no
+  /// halos, glass or glow.
+  static bool isFlat(BuildContext context) =>
+      DefaultThemePacks.isFlat(AsemanTokens.maybeOf(context)?.packId);
+
+  /// The built-in Kashi pack (the default).
+  static bool isKashi(BuildContext context) =>
+      AsemanTokens.maybeOf(context)?.packId == DefaultThemePacks.kashiId;
+
+  /// Font for numbers, times, keys and dates: IBM Plex Mono under Kashi,
+  /// the pack's own family elsewhere (null).
+  static String? numericFamily(BuildContext context) =>
+      isKashi(context) ? DefaultThemePacks.monoFont : null;
+
+  /// [base] set in [numericFamily] with tabular figures.
+  static TextStyle numeric(BuildContext context, [TextStyle? base]) =>
+      (base ?? const TextStyle()).copyWith(
+        fontFamily: numericFamily(context),
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
   /// Selected navigation captions. Paper matches the expressive rail (w500).
   static FontWeight selectedNavWeight(
     BuildContext context, {
@@ -741,7 +783,7 @@ abstract final class ThemeChrome {
     final accentColor = accent ?? scheme.primary;
     final cardFill = AppSurfaces.card(scheme, tokens: tokens);
     final fillKind = card?.fill ?? FillKind.solid;
-    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    final paper = DefaultThemePacks.isFlat(tokens?.packId);
     if (paper &&
         (fillKind == FillKind.solid || fillKind == FillKind.tonal)) {
       if (selected) return scheme.secondaryContainer;
@@ -753,7 +795,10 @@ abstract final class ThemeChrome {
           scheme.surfaceContainerLow,
         );
       }
-      return scheme.surfaceContainerHigh;
+      // Kashi cards sit raised on the page; Paper cards are a tone darker.
+      return tokens?.packId == DefaultThemePacks.kashiId
+          ? scheme.surface
+          : scheme.surfaceContainerHigh;
     }
     if (selected) {
       return Color.alphaBlend(accentColor.withValues(alpha: .10), cardFill);
@@ -862,9 +907,11 @@ abstract final class ThemeChrome {
     final corners = input?.borderRadius ?? BorderRadius.circular(
       input?.shape == ShapeKind.stadium ? 999 : (tokens?.radiusControl ?? 16),
     );
-    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    final paper = DefaultThemePacks.isFlat(tokens?.packId);
     final fill = paper
-        ? scheme.surfaceContainerHighest
+        ? (tokens?.packId == DefaultThemePacks.kashiId
+            ? scheme.surfaceContainerHigh
+            : scheme.surfaceContainerHighest)
         : switch (input?.fill) {
       FillKind.solid => scheme.surface,
       FillKind.glass || FillKind.gradient =>
@@ -989,7 +1036,7 @@ abstract final class ThemeChrome {
       );
     }
     final Color fill;
-    final paper = tokens?.packId == DefaultThemePacks.paperId;
+    final paper = DefaultThemePacks.isFlat(tokens?.packId);
     if (paper) {
       // Two steps of the same accent: saturated container for you, a quieter
       // surface step for everyone else.

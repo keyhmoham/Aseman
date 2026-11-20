@@ -348,7 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final signedIn = widget.dependencies != null;
     final packs = ThemePackScope.maybeOf(context);
     final settings = AppSettingsScope.of(context);
-    final packName = (packs?.pack ?? DefaultThemePacks.paper).meta.name;
+    final packName = (packs?.pack ?? DefaultThemePacks.kashi).meta.name;
     final mode = switch (settings.themeMode) {
       ThemeMode.system => 'System',
       ThemeMode.light => 'Light',
@@ -665,8 +665,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           (a, b) => (a - textScale).abs() <= (b - textScale).abs() ? a : b,
         );
         final packs = ThemePackScope.maybeOf(context);
-        final active = packs?.pack.id ?? DefaultThemePacks.paperId;
-        final pack = packs?.pack ?? DefaultThemePacks.paper;
+        final active = packs?.pack.id ?? DefaultThemePacks.kashiId;
+        final pack = packs?.pack ?? DefaultThemePacks.kashi;
         final selected = pack.resolvePalette(
           paletteId: settings.paletteId,
           accent: settings.accent,
@@ -745,7 +745,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 for (final option in pack.selectablePalettes)
                   _AccentChoice(
-                    color: option.accent,
+                    color: option
+                        .forBrightness(Theme.of(context).brightness)
+                        .accent,
                     label: option.label,
                     selected: selected.id == option.id,
                     onTap: () => settings.setPalette(option),

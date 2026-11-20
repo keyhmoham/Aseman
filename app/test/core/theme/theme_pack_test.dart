@@ -93,8 +93,12 @@ void main() {
       pack.palettes.firstWhere((p) => p.id == 'blue').accent,
       const Color(0xFF1157CE),
     );
-    expect(AppTheme.light.extension<AsemanTokens>()!.packId, pack.id);
-    expect(DefaultThemePacks.byId('missing').id, pack.id);
+    // Kashi is the default now; Paper stays selectable by id.
+    expect(
+      AppTheme.light.extension<AsemanTokens>()!.packId,
+      DefaultThemePacks.kashiId,
+    );
+    expect(DefaultThemePacks.byId(pack.id).id, pack.id);
 
     final blueDark = AppTheme.fromPack(
       pack,

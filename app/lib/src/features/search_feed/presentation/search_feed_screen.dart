@@ -289,7 +289,9 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
   /// [phone] is the home tab layout. The search chrome stays compact in both
   /// the phone Explore tab and the wide posts pane.
   Widget _feedPane({required bool phone, required double topInset}) {
-    final showComposer = _feedComposerVisible(phone);
+    // Phones put Post in the Following header instead of floating it over
+    // the posts.
+    final showComposer = _feedComposerVisible(phone) && !phone;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -381,6 +383,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
                       blur: AppSurfaces.blurSigmaOf(context),
                       borderRadius: BorderRadius.zero,
                       border: false,
+                      // Kashi: tabs sit on the limestone / night page so
+                      // their cards read as raised.
+                      color: ThemeChrome.isKashi(context)
+                          ? Theme.of(context).scaffoldBackgroundColor
+                          : null,
                       child: child,
                     );
                     final phoneTabs = homePhoneTabsOf(context);
@@ -584,7 +591,7 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
               onSearch: _openExplore,
             ),
           ),
-          ..._feedSlivers(horizontalPad, bottom: bottom),
+          ..._feedSlivers(horizontalPad, bottom: bottom, phone: phone),
         ],
       );
     },
@@ -647,7 +654,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
     );
   }
 
-  List<Widget> _feedSlivers(double horizontalPad, {required double bottom}) {
+  List<Widget> _feedSlivers(
+    double horizontalPad, {
+    required double bottom,
+    bool phone = false,
+  }) {
     final posts = model.followingPosts;
     return [
       // The person's assistant leads their home: the brief, what waits on
@@ -666,7 +677,32 @@ class _SearchFeedScreenState extends State<SearchFeedScreen>
       ),
       SliverPadding(
         padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
-        sliver: SliverToBoxAdapter(child: _FeedHeader(count: posts.length)),
+        sliver: SliverToBoxAdapter(
+          child: _FeedHeader(
+            count: posts.length,
+            post: phone && _feedComposerVisible(true)
+                ? ThemeSlotHost(
+                    slot: FeatureSlots.homeComposer,
+                    child: ThemeSlotHost(
+                      slot: ThemeChromeSlots.feedComposer,
+                      child: FilledButton.icon(
+                        onPressed: _openComposer,
+                        icon: const Icon(Icons.edit_rounded, size: 18),
+                        label: const Text('Post'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.onSurface,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.surface,
+                          minimumSize: const Size(0, 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        ),
       ),
       if (posts.isEmpty)
         const SliverFillRemaining(
@@ -1100,7 +1136,7 @@ class _SearchBar extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Search Aseman…',
+                        'Search people, agents, posts…',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1122,15 +1158,18 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _FeedHeader extends StatelessWidget {
-  const _FeedHeader({required this.count});
+  const _FeedHeader({required this.count, this.post});
 
   final int count;
+
+  /// New-post button shown in place of the count (phones).
+  final Widget? post;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     const title = 'Following';
-    const subtitle = 'People and agents you follow, and your spaces';
+    const subtitle = 'People, agents & your spaces';
     return Row(
       children: [
         Expanded(
@@ -1154,6 +1193,9 @@ class _FeedHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
+        if (post != null)
+          post!
+        else
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app_dependencies.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shape.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_surfaces.dart';
 import '../../../core/theme/aseman_tokens.dart';
+import '../../../core/theme/theme_chrome.dart';
 import '../../../core/theme/theme_roles.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/mini_tag.dart';
@@ -158,6 +160,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
     final accentKey =
         post.authorId.isNotEmpty ? post.authorId : (post.serverId ?? post.name);
     final accent = ThemeRoles.identity(context, accentKey);
+    // Kashi sets the post kind inline beside the name, in small caps.
+    final kashi = ThemeChrome.isKashi(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       // Soft portal surface — no BackdropFilter; Opacity is safe here.
@@ -204,6 +208,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
                               const SizedBox(width: 5),
                               Icon(Icons.verified_rounded,
                                   size: 16, color: scheme.primary),
+                            ],
+                            if (kashi && post.tag.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              _KindTag(post.tag),
                             ],
                           ]),
                           const SizedBox(height: 1),
@@ -284,19 +292,21 @@ class _FeedPostCardState extends State<FeedPostCard> {
                             child: MiniTag(post.coin ?? 'CHART', accent))
                       ])),
                 ],
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    SoftMetaChip(label: post.tag),
-                    if (post.workspace != null)
-                      SoftMetaChip(
-                        label: post.workspace!.toUpperCase(),
-                      ),
-                  ],
-                ),
+                if (!kashi || post.workspace != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (!kashi) SoftMetaChip(label: post.tag),
+                      if (post.workspace != null)
+                        SoftMetaChip(
+                          label: post.workspace!.toUpperCase(),
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm - 2),
                 Divider(height: 1, color: AppSurfaces.cardBorder(scheme)),
                 const SizedBox(height: AppSpacing.xs),
@@ -310,7 +320,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
                         label: post.likes,
                         tooltip: post.liked ? 'Unlike' : 'Like',
                         active: post.liked,
-                        activeColor: scheme.primary,
+                        activeColor: kashi
+                            ? AppColors.dangerOf(context)
+                            : scheme.primary,
                         onTap: widget.onToggleLike,
                       ),
                       _PostAction(
@@ -434,6 +446,34 @@ class _PostAction extends StatelessWidget {
                       fontSize: 13, fontWeight: FontWeight.w600, color: color)),
             ]),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Kashi post kind (POST, UPDATE…): neutral mono caps on a sunken pill.
+class _KindTag extends StatelessWidget {
+  const _KindTag(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text.toUpperCase(),
+        style: ThemeChrome.numeric(context).copyWith(
+          fontSize: 9.5,
+          letterSpacing: .8,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurfaceVariant,
         ),
       ),
     );

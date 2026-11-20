@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_chrome.dart';
 import '../../core/theme/theme_roles.dart';
 import '../../shared/widgets/glass_surface.dart';
 import 'assistant_common.dart';
@@ -153,10 +155,28 @@ class _HomeAssistantState extends State<HomeAssistant>
               child: ExpansionTile(
                 initiallyExpanded: briefOpen,
                 onExpansionChanged: (v) => briefOpen = v,
-                leading: Icon(
-                  Icons.wb_sunny_outlined,
-                  color: scheme.onSurfaceVariant,
-                ),
+                leading: ThemeChrome.isKashi(context)
+                    // Kashi: the sun sits in a saffron tile.
+                    ? Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            AppColors.warningOf(context).withValues(alpha: .16),
+                            scheme.surface,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.wb_sunny_outlined,
+                          size: 19,
+                          color: AppColors.warningOf(context),
+                        ),
+                      )
+                    : Icon(
+                        Icons.wb_sunny_outlined,
+                        color: scheme.onSurfaceVariant,
+                      ),
                 title: Text(
                   'Today\'s brief',
                   style: TextStyle(
@@ -317,105 +337,125 @@ class _TasksPulseCard extends StatelessWidget {
             if (pulse.done > 0) '${pulse.done} done',
           ].join(' · ');
 
+    final needsColor = AppColors.warningOf(context);
+    final workingColor = AppColors.successOf(context);
+    // The waiting tasks are listed under this card; keep the summary here.
+    final line = subtitle;
     return GlassSurface(
       onTap: onOpen,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) => _PulseRing(
-                pulse: pulse,
-                breath: animation.value,
-                size: 78,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              children: [
+                AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, _) => _PulseRing(
+                    pulse: pulse,
+                    breath: animation.value,
+                    size: 84,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.auto_awesome_rounded,
-                          size: 16, color: scheme.primary),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Your assistant',
-                          maxLines: 1,
+                      Row(
+                        children: [
+                          Icon(Icons.auto_awesome_rounded,
+                              size: 16, color: scheme.primary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Your assistant',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded,
+                              color: scheme.onSurfaceVariant),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        headline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 21,
+                          letterSpacing: -.3,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (line.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          line,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: .2,
+                            fontSize: 13,
+                            height: 1.35,
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
-                      ),
-                      Icon(Icons.chevron_right_rounded,
-                          color: scheme.onSurfaceVariant),
+                      ],
+                      if (pulse.needsYou > 0) ...[
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          onPressed: onOpen,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: scheme.onSurface,
+                            foregroundColor: scheme.surface,
+                            minimumSize: const Size(0, 34),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            textStyle: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          child: const Text('Review'),
+                        ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    headline,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      letterSpacing: -.3,
-                      fontWeight: FontWeight.w800,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (final (i, (label, count, color)) in [
+                  ('Needs you', pulse.needsYou, needsColor),
+                  ('Working', pulse.working, workingColor),
+                  ('Suggested', pulse.suggested, scheme.primary),
+                  ('Done', pulse.done, scheme.outline),
+                ].indexed) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  Expanded(
+                    child: _CountTile(
+                      label: label,
+                      count: count,
+                      color: color,
+                      highlight: i == 0 && count > 0,
+                      live: i == 1 && count > 0,
+                      breath: animation,
+                      onTap: onOpen,
                     ),
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _LegendChip(
-                        label: 'Needs you',
-                        count: pulse.needsYou,
-                        color: scheme.error,
-                        onTap: onOpen,
-                      ),
-                      _LegendChip(
-                        label: 'Working',
-                        count: pulse.working,
-                        color: scheme.primary,
-                        live: pulse.working > 0,
-                        breath: animation,
-                        onTap: onOpen,
-                      ),
-                      _LegendChip(
-                        label: 'Suggested',
-                        count: pulse.suggested,
-                        color: scheme.tertiary,
-                        onTap: onOpen,
-                      ),
-                      _LegendChip(
-                        label: 'Done',
-                        count: pulse.done,
-                        color: scheme.outline,
-                        onTap: onOpen,
-                      ),
-                    ],
                   ),
                 ],
-              ),
+              ],
             ),
           ],
         ),
@@ -424,12 +464,15 @@ class _TasksPulseCard extends StatelessWidget {
   }
 }
 
-class _LegendChip extends StatelessWidget {
-  const _LegendChip({
+/// One status count under the assistant ring: number in the numeric face,
+/// a dot in the status colour, the tile tinted when it waits on you.
+class _CountTile extends StatelessWidget {
+  const _CountTile({
     required this.label,
     required this.count,
     required this.color,
     required this.onTap,
+    this.highlight = false,
     this.live = false,
     this.breath,
   });
@@ -438,68 +481,85 @@ class _LegendChip extends StatelessWidget {
   final int count;
   final Color color;
   final VoidCallback onTap;
+  final bool highlight;
   final bool live;
   final Animation<double>? breath;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final active = count > 0;
-    Widget chip = Material(
-      color: active
-          ? color.withValues(alpha: .14)
-          : scheme.surface.withValues(alpha: .35),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: active ? color : scheme.outlineVariant,
-                  shape: BoxShape.circle,
+    Widget dot = Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: count > 0 ? color : scheme.outlineVariant,
+        shape: BoxShape.circle,
+      ),
+    );
+    if (live && breath != null) {
+      dot = AnimatedBuilder(
+        animation: breath!,
+        builder: (context, child) =>
+            Opacity(opacity: .55 + .45 * breath!.value, child: child),
+        child: dot,
+      );
+    }
+    return Semantics(
+      button: true,
+      label: '$count $label',
+      excludeSemantics: true,
+      child: Material(
+        color: highlight
+            ? Color.alphaBlend(color.withValues(alpha: .16), scheme.surface)
+            : scheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: highlight
+              ? BorderSide.none
+              : BorderSide(color: scheme.outlineVariant.withValues(alpha: .7)),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count',
+                  style: ThemeChrome.numeric(context).copyWith(
+                    fontSize: 16,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: active ? color : scheme.onSurfaceVariant,
+                Row(
+                  children: [
+                    dot,
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
-    if (live && breath != null) {
-      chip = AnimatedBuilder(
-        animation: breath!,
-        builder: (context, child) => Opacity(
-          opacity: .72 + .28 * breath!.value,
-          child: child,
-        ),
-        child: chip,
-      );
-    }
-    return chip;
   }
 }
 
@@ -528,9 +588,9 @@ class _PulseRing extends StatelessWidget {
           done: pulse.done,
           breath: breath,
           track: scheme.surfaceContainerHighest,
-          needsColor: scheme.error,
-          workingColor: scheme.primary,
-          suggestedColor: scheme.tertiary,
+          needsColor: AppColors.warningOf(context),
+          workingColor: AppColors.successOf(context),
+          suggestedColor: scheme.primary,
           doneColor: scheme.outline,
           centerFill: scheme.surface.withValues(alpha: .55),
           labelColor: scheme.onSurface,
@@ -542,10 +602,10 @@ class _PulseRing extends StatelessWidget {
             children: [
               Text(
                 '${pulse.active}',
-                style: TextStyle(
-                  fontSize: 22,
+                style: ThemeChrome.numeric(context).copyWith(
+                  fontSize: 24,
                   height: 1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: scheme.onSurface,
                 ),
               ),

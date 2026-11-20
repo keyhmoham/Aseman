@@ -68,7 +68,7 @@ abstract final class ThemeRoles {
   /// Selected-row fill. Paper uses the accent's secondary container tone.
   static Color selectedFill(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+    if (DefaultThemePacks.isFlat(_tokens(context)?.packId)) {
       return scheme.secondaryContainer;
     }
     final accent = partAccent(context, ThemePartId.selection);
@@ -80,7 +80,7 @@ abstract final class ThemeRoles {
 
   /// Ink drawn on [selectedFill] (icons, labels).
   static Color selectedInk(BuildContext context) {
-    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+    if (DefaultThemePacks.isFlat(_tokens(context)?.packId)) {
       return Theme.of(context).colorScheme.onSecondaryContainer;
     }
     return partAccent(context, ThemePartId.selection);
@@ -97,7 +97,7 @@ abstract final class ThemeRoles {
   /// Highlighted bubble. Paper uses the accent's primary container tone.
   static Color bubbleFill(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (_tokens(context)?.packId == DefaultThemePacks.paperId) {
+    if (DefaultThemePacks.isFlat(_tokens(context)?.packId)) {
       return scheme.primaryContainer;
     }
     final accent = partAccent(context, ThemePartId.bubbles);

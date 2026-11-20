@@ -257,18 +257,22 @@ class WorkspaceHeader extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: compact ? 6 : 10),
-                Text(
-                  'ASEMAN',
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: compact ? 13.5 : 14.5,
-                    fontWeight: ThemeChrome.isPaper(context)
-                        ? FontWeight.w500
-                        : FontWeight.w800,
-                    letterSpacing: 1.4,
-                    color: Theme.of(context).colorScheme.onSurface,
+                if (ThemeChrome.isKashi(context))
+                  // Phones showing a room title keep the Latin mark only.
+                  _KashiWordmark(persian: !(compact && room != null))
+                else
+                  Text(
+                    'ASEMAN',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: compact ? 13.5 : 14.5,
+                      fontWeight: ThemeChrome.isPaper(context)
+                          ? FontWeight.w500
+                          : FontWeight.w800,
+                      letterSpacing: 1.4,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
-                ),
                 SizedBox(width: compact ? 6 : 10),
                 Expanded(
                   child: Row(
@@ -580,6 +584,54 @@ class _HomePill extends StatelessWidget {
 
 /// A bell-shaped bump growing out of the right edge, tapering to nothing at
 /// its top and bottom. Used by the gadgets handle.
+/// Kashi top-bar wordmark: "aseman" with its Persian name, آسمان.
+class _KashiWordmark extends StatelessWidget {
+  const _KashiWordmark({this.persian = true});
+
+  /// Show the Persian name beside the Latin one.
+  final bool persian;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Aseman',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'aseman',
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.3,
+              height: 1.1,
+              color: scheme.onSurface,
+            ),
+          ),
+          if (persian) ...[
+          const SizedBox(width: 6),
+          Text(
+            'آسمان',
+            maxLines: 1,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              height: 1.1,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class EdgeBumpPainter extends CustomPainter {
   const EdgeBumpPainter({required this.fill, required this.shadow});
   final Color fill;

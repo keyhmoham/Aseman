@@ -8,7 +8,9 @@ import '../../core/theme/app_shape.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/shell_layout.dart';
 import '../../core/theme/shell_layout_builder.dart';
+import '../../core/theme/theme_chrome.dart';
 import '../../core/theme/theme_ui_spec.dart';
+import '../../data/models/bot.dart' show Wallet;
 import '../../features/account/presentation/account_panel.dart';
 import '../../features/admin/presentation/admin_screen.dart' deferred as admin;
 import '../../features/developer/presentation/developer_console.dart'
@@ -341,6 +343,7 @@ class ProfileMenuBody extends StatelessWidget {
             initials: initials,
             accountId: session?.accountId ?? '',
             loggedIn: session?.isLoggedIn ?? false,
+            role: showAdmin ? 'Admin' : null,
             onOpenSettings: showSettings
                 ? () => onSelect(ProfileAction.settings)
                 : null,
@@ -352,7 +355,10 @@ class ProfileMenuBody extends StatelessWidget {
               child: FeatureStageCard(
                 title: 'Store',
                 eyebrow: 'Decillion Store',
-                subtitle: 'Agents, apps, and themes in one storefront',
+                // Kashi keeps the Store card compact: eyebrow, title, chips.
+                subtitle: ThemeChrome.isKashi(context)
+                    ? ''
+                    : 'Agents, apps, and themes in one storefront',
                 icon: Icons.storefront_rounded,
                 accent: scheme.primary,
                 secondary: scheme.tertiary,
@@ -370,6 +376,8 @@ class ProfileMenuBody extends StatelessWidget {
             ThemeSlotHost(
               slot: FeatureSlots.profileWallet,
               child: FeatureStageCard(
+                filled: true,
+                highlight: _WalletBalance(dependencies: dependencies),
                 title: 'Wallet',
                 eyebrow: 'Balance · Usage',
                 subtitle: 'Credits, purchases and what each project spent',
@@ -377,7 +385,7 @@ class ProfileMenuBody extends StatelessWidget {
                 accent: scheme.primary,
                 secondary: scheme.tertiary,
                 badges: const [
-                  FeatureStageBadge(Icons.payments_outlined, 'Credits'),
+                  FeatureStageBadge(Icons.add_rounded, 'Top up', primary: true),
                   FeatureStageBadge(Icons.query_stats_rounded, 'Usage'),
                 ],
                 onTap: () => onSelect(ProfileAction.wallet),
@@ -440,7 +448,11 @@ class _IdentityMasthead extends StatelessWidget {
     required this.accountId,
     required this.loggedIn,
     required this.onOpenSettings,
+    this.role,
   });
+
+  /// Small tag beside the handle (e.g. Admin).
+  final String? role;
 
   final AppDependencies dependencies;
   final String handle;
@@ -468,7 +480,8 @@ class _IdentityMasthead extends StatelessWidget {
             service: dependencies.service,
             avatar: dependencies.sessionController.avatar,
             initials: initials,
-            filled: true,
+            // Kashi: initials on a lapis tint rather than a solid disc.
+            filled: !ThemeChrome.isKashi(context),
             radius: 24,
             subject: 'profile picture',
             enabled: loggedIn,
@@ -481,24 +494,53 @@ class _IdentityMasthead extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '@$handle',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.2,
-                    color: scheme.onSurface,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '@$handle',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -.2,
+                              color: scheme.onSurface,
+                            ),
+                      ),
+                    ),
+                    if (role != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          role!,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   accountId.isEmpty ? 'Signed out' : shortAccountId(accountId),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: ThemeChrome.numeric(
+                    context,
+                    Theme.of(context).textTheme.bodySmall,
+                  ).copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -507,10 +549,96 @@ class _IdentityMasthead extends StatelessWidget {
             IconButton.filledTonal(
               tooltip: 'Settings',
               onPressed: onOpenSettings,
+              style: ThemeChrome.isKashi(context)
+                  ? IconButton.styleFrom(
+                      backgroundColor: scheme.surfaceContainerHigh,
+                      foregroundColor: scheme.onSurfaceVariant,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    )
+                  : null,
               icon: const Icon(Icons.settings_outlined, size: 20),
             ),
         ],
       ),
+    );
+  }
+}
+
+
+/// Live credit balance for the Wallet card. Shows nothing until it loads,
+/// and nothing if the wallet cannot be read.
+class _WalletBalance extends StatefulWidget {
+  const _WalletBalance({required this.dependencies});
+
+  final AppDependencies dependencies;
+
+  @override
+  State<_WalletBalance> createState() => _WalletBalanceState();
+}
+
+class _WalletBalanceState extends State<_WalletBalance> {
+  late final Future<Wallet> _wallet = widget.dependencies.service
+      .fetchWallet();
+
+  static String _group(int n) {
+    final s = n.abs().toString();
+    final out = StringBuffer(n < 0 ? '-' : '');
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) out.write(',');
+      out.write(s[i]);
+    }
+    return out.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Wallet>(
+      future: _wallet,
+      builder: (context, snap) {
+        final w = snap.data;
+        if (w == null) return const SizedBox.shrink();
+        final ink = DefaultTextStyle.of(context).style.color;
+        return Semantics(
+          label: '${w.available} credits available',
+          excludeSemantics: true,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _group(w.available),
+                style: ThemeChrome.numeric(context).copyWith(
+                  fontSize: 30,
+                  height: 1,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -1,
+                  color: ink,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'credits',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: ink?.withValues(alpha: .8),
+                ),
+              ),
+              if (w.locked > 0) ...[
+                const Spacer(),
+                Text(
+                  '${_group(w.locked)} held',
+                  style: ThemeChrome.numeric(context).copyWith(
+                    fontSize: 12,
+                    color: ink?.withValues(alpha: .8),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

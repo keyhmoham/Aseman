@@ -195,7 +195,7 @@ class AsemanTokens extends ThemeExtension<AsemanTokens> {
       maybeOf(context) ?? defaults(Theme.of(context).brightness);
 
   static AsemanTokens defaults(Brightness brightness) =>
-      fromPack(DefaultThemePacks.paper, brightness);
+      fromPack(DefaultThemePacks.kashi, brightness);
 
   static AsemanTokens fromPack(ThemePack pack, Brightness brightness) {
     final tokens = pack.tokens.forBrightness(brightness);

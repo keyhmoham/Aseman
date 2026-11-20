@@ -1459,6 +1459,7 @@ class _MessengerChrome extends StatelessWidget {
         SizedBox(height: dense ? 10 : 12),
         if (filterNames.isNotEmpty && filterCounts.length == filterNames.length)
           _FilterSegments(
+            key: const ValueKey('chat-filters'),
             names: filterNames,
             counts: filterCounts,
             selected: filterIndex,
@@ -1533,7 +1534,7 @@ class _MessengerChrome extends StatelessWidget {
           Builder(
             builder: (fabContext) => SkyFab(
               mini: true,
-              tooltip: 'New chat or space',
+              tooltip: 'New',
               icon: Icons.edit_square,
               onPressed: () => onCompose(fabContext),
             ),
@@ -2085,6 +2086,7 @@ class _AgentStrip extends StatelessWidget {
 /// hairline, each name followed by its count.
 class _FilterSegments extends StatelessWidget {
   const _FilterSegments({
+    super.key,
     required this.names,
     required this.counts,
     required this.selected,

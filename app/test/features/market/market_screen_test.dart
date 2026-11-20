@@ -57,7 +57,8 @@ void main() {
       await tester.tap(find.text('Themes'));
       await tester.pumpAndSettle();
       expect(find.text('Included with Decillion'), findsOneWidget);
-      expect(find.text('Sky'), findsOneWidget);
+      // The shelf leads with the default pack.
+      expect(find.text('Kashi'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
     tester.view.resetPhysicalSize();

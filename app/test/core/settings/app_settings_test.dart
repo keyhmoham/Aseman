@@ -16,9 +16,9 @@ void main() {
     expect(first.accent, AppSettingsController.defaultAccent);
     expect(
       first.accent.toARGB32(),
-      DefaultThemePacks.paper.defaultPalette.accent.toARGB32(),
+      DefaultThemePacks.kashi.defaultPalette.accent.toARGB32(),
     );
-    expect(DefaultThemePacks.paper.defaultPalette.id, 'grey');
+    expect(DefaultThemePacks.kashi.defaultPalette.id, 'lapis');
 
     first.setThemeMode(ThemeMode.dark);
     first.setPalette(

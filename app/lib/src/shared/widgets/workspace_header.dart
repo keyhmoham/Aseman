@@ -258,7 +258,8 @@ class WorkspaceHeader extends StatelessWidget {
                 ),
                 SizedBox(width: compact ? 6 : 10),
                 if (ThemeChrome.isKashi(context))
-                  const _KashiWordmark()
+                  // Phones showing a room title keep the Latin mark only.
+                  _KashiWordmark(persian: !(compact && room != null))
                 else
                   Text(
                     'ASEMAN',
@@ -585,7 +586,10 @@ class _HomePill extends StatelessWidget {
 /// its top and bottom. Used by the gadgets handle.
 /// Kashi top-bar wordmark: "aseman" with its Persian name, آسمان.
 class _KashiWordmark extends StatelessWidget {
-  const _KashiWordmark();
+  const _KashiWordmark({this.persian = true});
+
+  /// Show the Persian name beside the Latin one.
+  final bool persian;
 
   @override
   Widget build(BuildContext context) {
@@ -608,6 +612,7 @@ class _KashiWordmark extends StatelessWidget {
               color: scheme.onSurface,
             ),
           ),
+          if (persian) ...[
           const SizedBox(width: 6),
           Text(
             'آسمان',
@@ -620,6 +625,7 @@ class _KashiWordmark extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
+          ],
         ],
       ),
     );

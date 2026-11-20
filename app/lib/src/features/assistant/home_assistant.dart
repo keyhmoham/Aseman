@@ -321,10 +321,8 @@ class _TasksPulseCard extends StatelessWidget {
 
     final needsColor = AppColors.warningOf(context);
     final workingColor = AppColors.successOf(context);
-    final next = pulse.needsYouTasks.isEmpty
-        ? null
-        : '${pulse.needsYouTasks.first['title'] ?? ''}'.trim();
-    final line = (next != null && next.isNotEmpty) ? next : subtitle;
+    // The waiting tasks are listed under this card; keep the summary here.
+    final line = subtitle;
     return GlassSurface(
       onTap: onOpen,
       child: Padding(

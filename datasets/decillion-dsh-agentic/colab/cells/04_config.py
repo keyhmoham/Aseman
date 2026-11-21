@@ -1,7 +1,7 @@
 # 4. Configuration (the only cell you normally edit)
 MODEL_ID = 'Qwen/Qwen3.5-4B'
 REPO = 'https://github.com/keyhmoham/Aseman.git'
-BRANCH = 'claude/zen-franklin-krxjsu'
+BRANCH = 'main'
 DATA_DIR = '/content/Aseman/datasets/decillion-dsh-agentic'
 
 BIG_GPU = GPU_MEM_GB >= 35

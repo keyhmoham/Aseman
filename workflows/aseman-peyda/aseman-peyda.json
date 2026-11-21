@@ -82,6 +82,11 @@
    "type": "string",
    "default": "",
    "description": "A Hugging Face mirror's URL (for example https://hf-mirror.com) for the GLiNER2 model download, when huggingface.co cannot be reached from the node's network. Empty: huggingface.co"
+  },
+  "google_maps": {
+   "type": "boolean",
+   "default": true,
+   "description": "Add Google Maps as a search service (places and local businesses: address, phone, website, rating), in plain and agentic search, through the Google Maps Scraper Kit's engine (a pinned copy and a headless Chrome are installed on the project's computer). false: skip it"
   }
  },
  "secrets": {
@@ -92,6 +97,10 @@
   "HF_TOKEN": {
    "description": "A Hugging Face token, only to speed up the model download",
    "required": false
+  },
+  "GMAPS_PROXY_URL": {
+   "description": "A proxy for the Google Maps engine's Chrome (http://user:pass@host:port, or socks5://host:port without a password), when Google refuses or rate-limits the computer's address. Not the Iranian proxy: Google Maps does not need one",
+   "required": false
   }
  },
  "vars": {
@@ -101,7 +110,7 @@
   "stamp": "${{ substr(sha256(json(files('app/'))), 0, 16) }}",
   "agents": "${{ list(object('name', 'Peyda Analyst', 'description', 'Reads the extracted queries and search results, refines queries, and answers in the chat', 'instructions', file('agents/analyst.md')), object('name', 'Peyda Builder', 'description', 'Builds and publishes the Peyda frontend with the App UI toolchain', 'instructions', file('agents/builder.md'))) }}",
   "frontend_task": "${{ replace(replace(replace(file('brief/frontend-task.md'), '${PRODUCT}', inputs.product), '${PLATFORM}', inputs.platform_name), '${STAMP}', vars.stamp) }}",
-  "egress_hosts": "${{ unique(concat(list('pypi.org', 'files.pythonhosted.org', 'download.pytorch.org', 'pytorch.org', '*.pytorch.org', 'huggingface.co', '*.huggingface.co', 'hf.co', '*.hf.co'), list('30book.com', '*.30book.com', 'abadis.ir', '*.abadis.ir', 'alibaba.ir', '*.alibaba.ir', 'aparat.com', '*.aparat.com', 'balad.ir', '*.balad.ir', 'bama.ir', '*.bama.ir', 'basalam.com', '*.basalam.com', 'cafebazaar.ir', '*.cafebazaar.ir', 'cinematicket.org', '*.cinematicket.org', 'codal.ir', '*.codal.ir', 'darukade.com', '*.darukade.com', 'digikala.com', '*.digikala.com', 'divar.ir', '*.divar.ir', 'doctoreto.com', '*.doctoreto.com', 'eghamat24.com', '*.eghamat24.com', 'emalls.ir', '*.emalls.ir', 'exiryab.com', '*.exiryab.com', 'faradars.org', '*.faradars.org', 'fidibo.com', '*.fidibo.com', 'filimo.com', '*.filimo.com', 'fipiran.ir', '*.fipiran.ir', 'flytoday.ir', '*.flytoday.ir', 'iranketab.ir', '*.iranketab.ir', 'irantalent.com', '*.irantalent.com', 'irimo.ir', '*.irimo.ir', 'jabama.com', '*.jabama.com', 'karlancer.com', '*.karlancer.com', 'khodro45.com', '*.khodro45.com', 'kilid.com', '*.kilid.com', 'maktabkhooneh.org', '*.maktabkhooneh.org', 'mehrnews.com', '*.mehrnews.com', 'milli.gold', '*.milli.gold', 'mobile.ir', '*.mobile.ir', 'mrbilit.com', '*.mrbilit.com', 'neshan.org', '*.neshan.org', 'nobitex.ir', '*.nobitex.ir', 'okala.com', '*.okala.com', 'otaghak.com', '*.otaghak.com', 'paziresh24.com', '*.paziresh24.com', 'ponisha.ir', '*.ponisha.ir', 'qavanin.ir', '*.qavanin.ir', 'raja.ir', '*.raja.ir', 'rrk.ir', '*.rrk.ir', 'safar724.com', '*.safar724.com', 'sheypoor.com', '*.sheypoor.com', 'snappfood.ir', '*.snappfood.ir', 'snappshop.ir', '*.snappshop.ir', 'snapptrip.com', '*.snapptrip.com', 'soft98.ir', '*.soft98.ir', 'taaghche.com', '*.taaghche.com', 'tapsi.food', '*.tapsi.food', 'technolife.com', '*.technolife.com', 'tgju.org', '*.tgju.org', 'time.ir', '*.time.ir', 'tiwall.com', '*.tiwall.com', 'torob.com', '*.torob.com', 'tsetmc.com', '*.tsetmc.com', 'varzesh3.com', '*.varzesh3.com', 'virgool.io', '*.virgool.io', 'wikipedia.org', '*.wikipedia.org', 'zoomit.ir', '*.zoomit.ir'), inputs.egress_allow, inputs.hf_endpoint == '' ? list() : list(regex_replace(inputs.hf_endpoint, '^[A-Za-z0-9+.-]+://([^/:]+).*$', '$1')), (secrets.IRAN_PROXY_URL ?? '') == '' ? list() : list(regex_replace(secrets.IRAN_PROXY_URL, '^[A-Za-z0-9+.-]+://([^@/]*@)?([^:/]+).*$', '$2')))) }}"
+  "egress_hosts": "${{ unique(concat(list('pypi.org', 'files.pythonhosted.org', 'download.pytorch.org', 'pytorch.org', '*.pytorch.org', 'huggingface.co', '*.huggingface.co', 'hf.co', '*.hf.co'), list('30book.com', '*.30book.com', 'abadis.ir', '*.abadis.ir', 'alibaba.ir', '*.alibaba.ir', 'aparat.com', '*.aparat.com', 'balad.ir', '*.balad.ir', 'bama.ir', '*.bama.ir', 'basalam.com', '*.basalam.com', 'cafebazaar.ir', '*.cafebazaar.ir', 'cinematicket.org', '*.cinematicket.org', 'codal.ir', '*.codal.ir', 'darukade.com', '*.darukade.com', 'digikala.com', '*.digikala.com', 'divar.ir', '*.divar.ir', 'doctoreto.com', '*.doctoreto.com', 'eghamat24.com', '*.eghamat24.com', 'emalls.ir', '*.emalls.ir', 'exiryab.com', '*.exiryab.com', 'faradars.org', '*.faradars.org', 'fidibo.com', '*.fidibo.com', 'filimo.com', '*.filimo.com', 'fipiran.ir', '*.fipiran.ir', 'flytoday.ir', '*.flytoday.ir', 'iranketab.ir', '*.iranketab.ir', 'irantalent.com', '*.irantalent.com', 'irimo.ir', '*.irimo.ir', 'jabama.com', '*.jabama.com', 'karlancer.com', '*.karlancer.com', 'khodro45.com', '*.khodro45.com', 'kilid.com', '*.kilid.com', 'maktabkhooneh.org', '*.maktabkhooneh.org', 'mehrnews.com', '*.mehrnews.com', 'milli.gold', '*.milli.gold', 'mobile.ir', '*.mobile.ir', 'mrbilit.com', '*.mrbilit.com', 'neshan.org', '*.neshan.org', 'nobitex.ir', '*.nobitex.ir', 'okala.com', '*.okala.com', 'otaghak.com', '*.otaghak.com', 'paziresh24.com', '*.paziresh24.com', 'ponisha.ir', '*.ponisha.ir', 'qavanin.ir', '*.qavanin.ir', 'raja.ir', '*.raja.ir', 'rrk.ir', '*.rrk.ir', 'safar724.com', '*.safar724.com', 'sheypoor.com', '*.sheypoor.com', 'snappfood.ir', '*.snappfood.ir', 'snappshop.ir', '*.snappshop.ir', 'snapptrip.com', '*.snapptrip.com', 'soft98.ir', '*.soft98.ir', 'taaghche.com', '*.taaghche.com', 'tapsi.food', '*.tapsi.food', 'technolife.com', '*.technolife.com', 'tgju.org', '*.tgju.org', 'time.ir', '*.time.ir', 'tiwall.com', '*.tiwall.com', 'torob.com', '*.torob.com', 'tsetmc.com', '*.tsetmc.com', 'varzesh3.com', '*.varzesh3.com', 'virgool.io', '*.virgool.io', 'wikipedia.org', '*.wikipedia.org', 'zoomit.ir', '*.zoomit.ir'), inputs.egress_allow, inputs.hf_endpoint == '' ? list() : list(regex_replace(inputs.hf_endpoint, '^[A-Za-z0-9+.-]+://([^/:]+).*$', '$1')), (secrets.IRAN_PROXY_URL ?? '') == '' ? list() : list(regex_replace(secrets.IRAN_PROXY_URL, '^[A-Za-z0-9+.-]+://([^@/]*@)?([^:/]+).*$', '$2')), inputs.google_maps ? list('codeload.github.com', 'storage.googleapis.com', 'google.com', '*.google.com', 'gstatic.com', '*.gstatic.com', '*.googleusercontent.com', '*.ggpht.com') : list(), (inputs.google_maps && (secrets.GMAPS_PROXY_URL ?? '') != '') ? list(regex_replace(secrets.GMAPS_PROXY_URL, '^[A-Za-z0-9+.-]+://([^@/]*@)?([^:/]+).*$', '$2')) : list())) }}"
  },
  "defaults": {
   "retry": {
@@ -308,9 +317,10 @@
     "assets": "app/",
     "render": true,
     "files": {
-     ".peyda/env": "PEYDA_GLINER_MODEL=${{ inputs.gliner_model }}\nPEYDA_MAX_ROUNDS=${{ inputs.max_rounds }}\nPEYDA_DEFAULT_CITY=${{ inputs.default_city }}\n${{ inputs.hf_endpoint == '' ? '' : 'HF_ENDPOINT=' + inputs.hf_endpoint + '\\n' }}",
+     ".peyda/env": "PEYDA_GLINER_MODEL=${{ inputs.gliner_model }}\nPEYDA_MAX_ROUNDS=${{ inputs.max_rounds }}\nPEYDA_DEFAULT_CITY=${{ inputs.default_city }}\nPEYDA_GMAPS=${{ inputs.google_maps ? '1' : '0' }}\n${{ inputs.hf_endpoint == '' ? '' : 'HF_ENDPOINT=' + inputs.hf_endpoint + '\\n' }}",
      ".peyda/iran_proxy": "${{ secrets.IRAN_PROXY_URL ?? '' }}",
      ".peyda/hf_token": "${{ secrets.HF_TOKEN ?? '' }}",
+     ".peyda/gmaps_proxy": "${{ secrets.GMAPS_PROXY_URL ?? '' }}",
      ".peyda/stamp": "${{ vars.stamp }}"
     },
     "exec": [
@@ -323,7 +333,7 @@
   },
   {
    "id": "install_wait",
-   "name": "Wait for the install: environment, model, iran-mcp servers, tests, smoke test",
+   "name": "Wait for the install: environment, model, iran-mcp servers, Google Maps engine, tests, smoke test",
    "timeout": "120m",
    "wait": {
     "action": "spaces.sandbox_exec",

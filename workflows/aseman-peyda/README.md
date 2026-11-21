@@ -4,6 +4,7 @@ One workflow installer that brings up the **aseman-peyda** organization and plat
 
 - **GLiNER2** ([fastino-ai/GLiNER2](https://github.com/fastino-ai/GLiNER2)) reads a query and turns it into a structured *frame*: domains, intent, and slots (product, brand, city, origin, destination, date, price range…).
 - **iran-mcp** ([sepehr071/iran-mcp](https://github.com/sepehr071/iran-mcp)) is the search backend: the frame is turned into tool calls on 61 Iranian sites (Digikala, Torob, Divar, Snapp, MrBilit, Paziresh24, Kilid, TGJU, news, Wikipedia…), asked in parallel.
+- **Google Maps** ([Google Maps Scraper Kit](https://github.com/mahanaicoach/google-maps-scraper-kit#use-it-with-claude-code-or-any-agent)) is a second search backend, for places and local businesses (cafés, restaurants, clinics, hotels, salons, workshops): name, category, rating and reviews, phone, opening status, address and the Maps link. The kit's engine runs unmodified on the project's computer and Peyda puts an MCP server in front of it (`peyda/gmaps_mcp.py`), so the gateway asks it exactly as it asks an iran-mcp server: in plain search and in the agentic loop, where the Analyst reviews and answers from its results.
 - **Peyda Analyst**, a Decillion agent, is in the loop when **Agentic search** is on: it reads what GLiNER2 extracted and what the sites returned, decides whether to accept, write a better query (which goes back through GLiNER2 → iran-mcp) or ask the person, and then answers in the chat, remembering the conversation.
 - The frontend is an **Elpian** program: a Google-like first page, a results page, and a chat page.
 
@@ -13,6 +14,7 @@ One workflow installer that brings up the **aseman-peyda** organization and plat
  (Elpian)   frontend ────┼─► project "Peyda" (one computer)                               │
                          │     Peyda server (FastAPI)                                      │
    plain search ─────────┼──►   GLiNER2 ─► frame ─► iran-mcp gateway ─► 61 stdio servers ─► sites
+                         │                              │       └─► gmaps_mcp ─► kit engine ─► Google Maps
                          │                              ▲                                  │
    agentic search ───────┼──►   orchestrator ───────────┘  ◄── frame + results            │
                          │          │  ask (with the chat's history, as the person)        │
@@ -57,8 +59,9 @@ The first run takes a while, often 15 to 30 minutes, and the workflow waits for 
 | `manage_network` | `true` | when the node restricts the project's network, add what Peyda needs to the project's allowlist: the package, PyTorch and model hosts, the 61 sites' domains, the Iranian proxy's host. It only adds hosts. `false` leaves the policy alone |
 | `egress_allow` | `[]` | extra hosts to allow, such as an API host a site uses outside its main domain (`*.example.com` works) |
 | `hf_endpoint` | empty | a Hugging Face mirror's URL for the model download, for networks that cannot reach `huggingface.co` |
+| `google_maps` | `true` | add the Google Maps service (installs the Google Maps Scraper Kit's engine at a pinned commit and, when the computer has no Chrome, its pinned headless Chrome). `false` leaves it out of the install and the catalog |
 
-Secrets (both optional): `IRAN_PROXY_URL` (an HTTP proxy with an Iranian address: many iran-mcp sites answer only Iranian connections, and the others still work without it) and `HF_TOKEN` (faster model download).
+Secrets (all optional): `IRAN_PROXY_URL` (an HTTP proxy with an Iranian address: many iran-mcp sites answer only Iranian connections, and the others still work without it), `HF_TOKEN` (faster model download) and `GMAPS_PROXY_URL` (a proxy for the Google Maps engine's Chrome when Google refuses or rate-limits the computer's address; `http://user:pass@host:port`, or `socks5://host:port` without a password).
 
 ## What it does, and why it is safe to rerun
 
@@ -72,8 +75,8 @@ Every entity is an **upsert**: found by name, created when missing, updated when
 | `ops_key` | API key `aseman-peyda-ops`, bound to the platform | permissions and limits updated; the secret is shown only when created |
 | `space`, `rooms` | project *Peyda*, rooms *Build* and *Operations* | updated if they differ |
 | `agents` | **Peyda Analyst** and **Peyda Builder**, each installed in the project | instructions and model updated in place |
-| `egress_now`, `egress_need`, `egress` | the project's network policy | read; extended only when a needed host is missing (adds to the allowlist, keeps what is there, leaves `allow_all` alone); a rerun finds nothing to add |
-| `install`, `install_wait`, `install_ok` | the app's files, then the Python environment, model, servers, tests and smoke test | files rewritten to match the document; the install runs **in the background** on the project's computer (`scripts/run_install.sh`) and the workflow polls it, because one command may run only about 5 minutes (the node's `command_timeout_sec`). Packages are pinned; the run stops, with the install log, if any part fails. Don't rerun the workflow while an install is still running |
+| `egress_now`, `egress_need`, `egress` | the project's network policy (with `google_maps`: also `codeload.github.com`, `storage.googleapis.com`, `google.com`, `*.google.com`, `*.gstatic.com`, `*.googleusercontent.com`, `*.ggpht.com`) | read; extended only when a needed host is missing (adds to the allowlist, keeps what is there, leaves `allow_all` alone); a rerun finds nothing to add |
+| `install`, `install_wait`, `install_ok` | the app's files, then the Python environment, model, servers, the Google Maps engine, tests and smoke test | files rewritten to match the document; the install runs **in the background** on the project's computer (`scripts/run_install.sh`) and the workflow polls it, because one command may run only about 5 minutes (the node's `command_timeout_sec`). Packages are pinned; the run stops, with the install log, if any part fails. Don't rerun the workflow while an install is still running |
 | `frontend_build` | the app, built by the Builder from the prepared project | **skipped** when an app titled *Peyda* exists and was built from the current source (`vars.stamp`, a hash of `app/`); otherwise the app is updated, never duplicated |
 | `frontend` | the platform's published frontend | republished only when it is not already that app |
 
@@ -98,6 +101,18 @@ If the chat shows **"The analyst was unavailable"**, the line under it (`Why: �
 
 Plain search (switch off) uses no agent and needs no sign-in. Chat needs a signed-in person: their own token reaches the Analyst, so the turn is billed to them.
 
+## Google Maps (`peyda/gmaps.py`, `peyda/gmaps_mcp.py`)
+
+The [Google Maps Scraper Kit](https://github.com/mahanaicoach/google-maps-scraper-kit#use-it-with-claude-code-or-any-agent) is not an MCP server or a library: it is a local HTTP engine (`engine/serve.py`) that drives a headless Chrome against Google Maps, with a job API, plus a CLI and a Claude Code skill around it. Peyda uses the engine and nothing else:
+
+- **Install** (`scripts/install_gmaps.py`, run by `install.sh` unless `PEYDA_GMAPS=0`): the kit's source at the commit pinned in `peyda/gmaps.py` (`KIT_COMMIT`), from GitHub's archive, into `/workspace/.gmaps-kit`; then the kit's own `scripts/engine.py start`, which downloads its pinned Chrome for Testing headless shell (checked against its SHA-256) when the computer has no Chrome; the engine must answer, and is stopped again. A rerun keeps a kit that is already at that commit, with its Chrome.
+- **Run**: `start.sh` starts the engine (it detaches) on `127.0.0.1:8765` (`PEYDA_GMAPS_PORT`), and the service starts it too if it is not running. The engine only listens on the computer itself.
+- **The MCP server** (`python -m peyda.gmaps_mcp`) offers `gm_search(query, city, limit, lat, lon)` and `gm_status()`. A search is one engine job (depth 1: about 20 places, no e-mail, social or review crawling, so a search takes 10–40 s), stopped at `PEYDA_GMAPS_MAX_SECONDS` (40) with the places found so far, and then deleted. With no city and no coordinates, `default_city` is added to the query. Results are cached for 10 minutes, so the loop asking again costs nothing.
+- **In Peyda** it is the catalog's `gmaps` service (`services.json`: `"module": "peyda.gmaps_mcp"`, `"timeout": 60`, `"switch": "PEYDA_GMAPS"`), answering `maps` (with Neshan and Balad) and also `food`, `health` and `stays`. The gateway launches it on Peyda's own interpreter and reads its schema like any other server's, so plain search, the agentic loop, the results page (filter chip, cards) and the Analyst's review and answer all include it without a special case. Each place shows its category, rating and reviews, phone, opening status and address, and links to Google Maps.
+- **Any other agent** can use the same server: `claude mcp add peyda-gmaps -- /workspace/.venvs/peyda/bin/python -m peyda.gmaps_mcp` (run from the app folder, with the engine installed).
+
+If the engine is not installed or not running, Google Maps reports `error` with the reason, like a site that is down, and the other services still answer.
+
 ## The frontend (`app/elpian/src`)
 
 | Screen | |
@@ -113,7 +128,7 @@ Two engine limits shaped it. Elpian has no scroll-to-end, so a chat keeps the tw
 ```bash
 # Python server: the real MCP protocol against a fake iran-mcp server, the loop against a scripted agent
 cd workflows/aseman-peyda/app && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt \
-  && .venv/bin/pip install pytest pytest-asyncio httpx && .venv/bin/python -m pytest -q      # 94 tests
+  && .venv/bin/pip install pytest pytest-asyncio httpx && .venv/bin/python -m pytest -q      # 105 tests
 
 # The installer: check it against a node with `decillion workflow validate` / `plan` (see "Run it")
 
@@ -123,11 +138,14 @@ node <kit>/bundle.mjs . && node <kit>/validate.mjs --program elpian/app.js --ser
 node <kit>/drive.mjs run elpian/e2e --server http://127.0.0.1:8787
 ```
 
-On the project's computer the installer runs the server tests, `scripts/check_services.py` (starts all 61 servers and confirms every tool the catalog routes to exists) and `scripts/smoke_engine.py` (the real model reads Persian and English queries; a chat turn runs end to end with a scripted agent).
+On the project's computer the installer runs the server tests, `scripts/check_services.py` (starts all 61 iran-mcp servers and the Google Maps server and confirms every tool the catalog routes to exists) and `scripts/smoke_engine.py` (the real model reads Persian and English queries; a Google Maps search runs through the real engine; a chat turn runs end to end with a scripted agent).
+
+The Google Maps tests (`tests/test_gmaps.py`) run the real MCP server against a fake engine (the kit's job API), in plain search and in an agentic turn. Against the real kit (its pinned commit and a Chromium), the install script installed, started, checked and stopped the engine, and a search for "coffee shop in Tehran" through the gateway returned 8 places in 16 s.
 
 ## Know before you rely on it
 
-- **Licences.** iran-mcp is **PolyForm Noncommercial**; GLiNER2 is Apache-2.0. Running Peyda as a commercial product needs the iran-mcp author's permission.
+- **Licences.** iran-mcp is **PolyForm Noncommercial**; GLiNER2 is Apache-2.0. Running Peyda as a commercial product needs the iran-mcp author's permission. The Google Maps Scraper Kit is **AGPL-3.0** (with a separate commercial licence, see its `COMMERCIAL.md`): Peyda runs it unmodified as its own process and talks to it only over its local HTTP API; if you change the kit's code and offer Peyda to others, the AGPL asks you to publish those changes.
+- **Google's terms.** Scraping Google Maps is against Google's Terms of Service, as the kit itself says, and Google rate-limits and can block an address for minutes to hours. Peyda keeps each search small (one keyword, about 20 places, cached for 10 minutes), but heavy use will be blocked; set `GMAPS_PROXY_URL`, or run with `google_maps=false`.
 - **Live sites.** The installer's smoke test calls the real sites. In the run I did (from a non-Iranian address, through a filtering proxy) these answered: shops (Emalls, SnappShop, Technolife, Basalam), flights (MrBilit, Alibaba), doctors (Paziresh24, Doctoreto, Darukade, Exiryab) and the TGJU and gold feeds; Digikala and Torob returned nothing for the phone query; Okala needs a *city* (a neighbourhood such as Saadat Abad is reported as an error), Snapp and TapsiFood food search need coordinates and an Iranian address. Sites change and some refuse non-Iranian addresses, so expect some `error`, `empty` or `skipped` per service (set `IRAN_PROXY_URL`); the loop and the UI show this per service. Travel, food and groceries are the least certain.
 - **Not run on a real Decillion node.** The installer was simulated end to end against a fake platform while it was written (including the background install, the network policy and a rerun), and its on-computer part (`scripts/run_install.sh`: network check, install, tests, 61-server check, smoke test) was run end to end in a clean container behind a copy of the node's egress proxy. The workflow itself was not run against a live node by me; its first runs surfaced a model name the node's provider lacked (`agent_model`), a 300 s command limit (hence the background install) and the network policy (hence `manage_network`). The Builder agent's step (it follows `brief/frontend-task.md` with `appui_create` / `appui_publish`) is the part still unexercised and the most likely to need a rerun or a tweak.
 - **Persian reading.** Checked with the real `fastino/gliner2.5-multi-v1` on six queries (Persian and English). It tagged brands, cities, routes, dates and the "under 20 million" price correctly. Its weak spots: it over-scores the catch-all *shopping* domain on flight, doctor and rental queries (Peyda drops it when the query names a service and nothing to buy), it files a doctor's specialty under *product*, and its domain confidence runs low (0.3–0.7), so the lexicon backs it up. This was six queries, not a benchmark. Prices, digits, dates and cities are also handled by rules, and the loop is there to repair the rest.

@@ -40,7 +40,7 @@ DOMAINS: dict[str, str] = {
     "food": "restaurants, dishes, groceries and food delivery",
     "travel_tickets": "flights, trains, buses and other tickets between cities",
     "stays": "hotels, villas and places to stay",
-    "maps": "places, addresses, directions and traffic",
+    "maps": "places and local businesses (cafés, shops, salons, workshops), their addresses, phones and ratings, directions and traffic",
     "health": "doctors, clinics, medicines and appointments",
     "books": "books and audiobooks",
     "courses": "online courses and learning",

@@ -10,7 +10,11 @@ def test_the_shipped_catalog_is_consistent():
     assert len(cat.services) >= 50
     raw = json.loads((Path(__file__).resolve().parent.parent / "peyda" / "services.json").read_text(encoding="utf8"))
     pins = (Path(__file__).resolve().parent.parent / "requirements-services.txt").read_text().split()
-    assert {f"{s['package']}=={s['version']}" for s in raw["services"]} == set(pins)
+    # iran-mcp packages are pinned; Peyda's own servers (a `module` of this app) are not packages
+    assert {f"{s['package']}=={s['version']}" for s in raw["services"] if not s.get("module")} == set(pins)
+    for s in raw["services"]:
+        if s.get("module"):
+            assert (Path(__file__).resolve().parent.parent / (s["module"].replace(".", "/") + ".py")).is_file(), s["id"]
     for s in cat.services.values():
         assert s.domains and set(s.domains) <= set(DOMAINS), s.id
         assert s.tools, s.id

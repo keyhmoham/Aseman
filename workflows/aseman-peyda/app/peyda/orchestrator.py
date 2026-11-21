@@ -63,7 +63,7 @@ class LoopConfig:
     max_rounds: int = 3
     per_service: int = 6
     max_services: int = 6
-    turn_timeout: float = 240.0
+    turn_timeout: float = 300.0  # room for three rounds that wait on Google Maps (up to ~45 s each)
 
     @classmethod
     def from_env(cls) -> "LoopConfig":
@@ -71,7 +71,7 @@ class LoopConfig:
             max_rounds=max(1, min(5, int(os.environ.get("PEYDA_MAX_ROUNDS", "3")))),
             per_service=int(os.environ.get("PEYDA_HITS_PER_SERVICE", "6")),
             max_services=int(os.environ.get("PEYDA_MAX_SERVICES", "6")),
-            turn_timeout=float(os.environ.get("PEYDA_TURN_TIMEOUT", "240")),
+            turn_timeout=float(os.environ.get("PEYDA_TURN_TIMEOUT", "300")),
         )
 
 

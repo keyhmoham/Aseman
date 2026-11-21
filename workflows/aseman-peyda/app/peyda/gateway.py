@@ -126,13 +126,31 @@ class Connection:
 # Launching servers
 # --------------------------------------------------------------------------
 
+APP_ROOT = Path(__file__).resolve().parent.parent
+# What a server of this app (a `module` service) is handed from Peyda's environment: the SDK
+# starts a server with a minimal environment, not this process's.
+_PASS_ENV = ("PEYDA_GMAPS_", "PEYDA_DEFAULT_CITY", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
+             "https_proxy", "http_proxy", "no_proxy", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
+
+
+def module_params(service: Service, environ: dict[str, str] | None = None) -> StdioServerParameters:
+    """A server that is a module of this app runs on this interpreter, from this folder."""
+    environ = dict(os.environ if environ is None else environ)
+    env = {"PYTHONUNBUFFERED": "1", "PYTHONPATH": str(APP_ROOT)}
+    env.update({k: v for k, v in environ.items() if k.startswith(_PASS_ENV)})
+    return StdioServerParameters(command=sys.executable, args=["-m", service.module], env=env, cwd=str(APP_ROOT))
+
+
 def default_launcher(proxy: str = "") -> Launcher:
     """Installed console script first (PEYDA_MCP_BIN_DIR, else the services
-    environment, else next to this interpreter), then `uvx <package>` as upstream documents."""
+    environment, else next to this interpreter), then `uvx <package>` as upstream documents.
+    A `module` service (one of Peyda's own servers) runs on this interpreter."""
     services_venv = Path(os.environ.get("PEYDA_SERVICES_VENV", "/workspace/.venvs/iran-mcp")) / "bin"
     bin_dir = Path(os.environ.get("PEYDA_MCP_BIN_DIR") or (services_venv if services_venv.is_dir() else Path(sys.executable).parent))
 
     def launch(service: Service) -> StdioServerParameters:
+        if service.module:
+            return module_params(service)
         exe = bin_dir / service.package
         env = {"PYTHONUNBUFFERED": "1"}
         if proxy and service.proxy_env:
@@ -453,7 +471,7 @@ class Gateway:
             args, missing = build_args(schema, frame, limit=limit, resolved=resolved, coords=coords, address=address)
             if missing:
                 return "skip", {"reason": f"{route.name} needs {', '.join(missing)}", "missing": missing}
-        result = await conn.call(route.name, args, self.tool_timeout)
+        result = await conn.call(route.name, args, service.timeout or self.tool_timeout)
         if attr(result, "isError", "is_error"):
             raise RuntimeError(result_text(result)[:300] or "the tool reported an error")
         return "ok", {"args": args, "hits": parse_hits(service.id, route.name, result, limit)}
@@ -481,4 +499,4 @@ class Gateway:
         return SearchResult(frame=frame, runs=runs, ms=int((time.monotonic() - started) * 1000))
 
 
-__all__ = ["Gateway", "SearchResult", "ServiceRun", "default_launcher", "pick_code", "find_coords"]
+__all__ = ["Gateway", "SearchResult", "ServiceRun", "default_launcher", "module_params", "pick_code", "find_coords"]

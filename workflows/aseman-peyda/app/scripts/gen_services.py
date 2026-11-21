@@ -108,10 +108,21 @@ ROUTES: dict[str, tuple[str, list[str], list, dict]] = {
     "varzesh3": ("varzesh3-mcp", ["sports"], [{"name": "v3_scores", "args": {}}], {}),
 }
 
+# Peyda's own MCP servers, in front of engines that are not iran-mcp servers. They are
+# modules of this app (`python -m <module>`), not packages, so they are not pinned here.
+LOCAL = [
+    {"id": "gmaps", "package": "peyda-gmaps", "module": "peyda.gmaps_mcp", "version": "kit-c3e63f1",
+     "title": "Google Maps", "site": "https://www.google.com/maps",
+     "domains": ["maps", "food", "health", "stays"], "tools": [{"name": "gm_search", "needs": []}],
+     "proxy_env": "", "tool_count": 2, "timeout": 60, "switch": "PEYDA_GMAPS",
+     "hint": "places and local businesses: address, phone, website, rating (Google Maps Scraper Kit)"},
+]
+
 # Which services answer a domain first (the rest follow, by weight).
 LEAD = {"shopping": ["digikala", "torob", "emalls"], "classifieds": ["divar", "sheypoor"],
         "food": ["snapp", "tapsifood"], "travel_tickets": ["mrbilit", "alibaba", "flytoday"],
-        "health": ["paziresh24", "doctoreto"], "prices": ["tgju", "iran_gold"]}
+        "health": ["paziresh24", "doctoreto"], "prices": ["tgju", "iran_gold"],
+        "maps": ["neshan", "gmaps", "balad"]}
 
 
 def main(path: str) -> None:
@@ -151,13 +162,14 @@ def main(path: str) -> None:
             entry["hint"] = extra["hint"]
         out.append(entry)
         pins.append(f"{pkg}=={s['version']}")
+    out.extend(LOCAL)
     if problems:
         sys.exit("\n".join(problems))
     here = Path(__file__).resolve().parent.parent
     (here / "peyda" / "services.json").write_text(
         json.dumps({"lead": LEAD, "services": out}, ensure_ascii=False, indent=1) + "\n", encoding="utf8")
     (here / "requirements-services.txt").write_text("\n".join(sorted(pins)) + "\n")
-    print(f"{len(out)} services written; {len(pins)} packages pinned")
+    print(f"{len(out)} services written ({len(LOCAL)} of Peyda's own); {len(pins)} packages pinned")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,11 @@
   "prices": [
    "tgju",
    "iran_gold"
+  ],
+  "maps": [
+   "neshan",
+   "gmaps",
+   "balad"
   ]
  },
  "services": [
@@ -1269,6 +1274,31 @@
    ],
    "proxy_env": "VARZESH3_MCP_PROXY",
    "tool_count": 18
+  },
+  {
+   "id": "gmaps",
+   "package": "peyda-gmaps",
+   "module": "peyda.gmaps_mcp",
+   "version": "kit-c3e63f1",
+   "title": "Google Maps",
+   "site": "https://www.google.com/maps",
+   "domains": [
+    "maps",
+    "food",
+    "health",
+    "stays"
+   ],
+   "tools": [
+    {
+     "name": "gm_search",
+     "needs": []
+    }
+   ],
+   "proxy_env": "",
+   "tool_count": 2,
+   "timeout": 60,
+   "hint": "places and local businesses: address, phone, website, rating (Google Maps Scraper Kit)",
+   "switch": "PEYDA_GMAPS"
   }
  ]
 }

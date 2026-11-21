@@ -1,4 +1,5 @@
-"""Which iran-mcp servers answer which kind of query."""
+"""Which servers answer which kind of query: the iran-mcp servers, and Peyda's
+own MCP servers in front of other engines (Google Maps, `module`)."""
 from __future__ import annotations
 
 import json
@@ -40,6 +41,8 @@ class Service:
     resolve: str = ""      # tool that turns a place name into the code other tools take
     resolve_specialty: str = ""  # tool that turns a field of medicine into the slug a doctor search takes
     hint: str = ""
+    module: str = ""       # a Python module of this app to run as the server (`python -m <module>`), not a package
+    timeout: float = 0     # seconds a search on this server may take; 0 = the gateway's default
 
     def pick_tools(self, frame: QueryFrame) -> list[ToolRoute]:
         low = frame.normalized.lower()
@@ -62,6 +65,9 @@ class Catalog:
         raw = json.loads(Path(path or HERE / "services.json").read_text(encoding="utf8"))
         out: list[Service] = []
         for s in raw["services"]:
+            switch = s.get("switch")  # an optional service is left out when its variable says 0
+            if switch and os.environ.get(switch, "1").strip().lower() in ("0", "false", "no", "off"):
+                continue
             out.append(Service(
                 id=s["id"], package=s["package"], title=s["title"], site=s["site"], domains=s["domains"],
                 tools=[ToolRoute(name=t["name"], needs=t.get("needs", []), kw=t.get("kw", []),
@@ -72,6 +78,7 @@ class Catalog:
                 version=s.get("version", ""), proxy_env=s.get("proxy_env", ""),
                 geocode=s.get("geocode", ""), resolve=s.get("resolve", ""),
                 resolve_specialty=s.get("resolve_specialty", ""), hint=s.get("hint", ""),
+                module=s.get("module", ""), timeout=float(s.get("timeout", 0) or 0),
             ))
         return cls(out, raw.get("lead", {}))
 

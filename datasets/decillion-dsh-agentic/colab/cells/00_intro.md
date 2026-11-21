@@ -12,3 +12,4 @@ Run the cells in order (Runtime → Change runtime type → a GPU; A100/L4 recom
 8. Render rows with the model's chat template
 9. Trainer with loss on the assistant's turns only
 10. Train (checkpoints, including the LoRA adapter, are saved to Drive and resumed after a disconnect)
+11. Evaluate: validation loss and perplexity on the agent's turns (saved to Drive)

@@ -23,6 +23,25 @@ def _sdk_dirs() -> list[Path]:
     return found
 
 
+USER_AGENT = "Peyda/1.0 (Decillion app)"
+_identified = False
+
+
+def identify_to_the_node() -> None:
+    """Gives `urllib` a real User-Agent. The Decillion SDK calls the node with `urllib`,
+    whose default `Python-urllib/3.x` is refused by Cloudflare (error 1010, a 403 with no
+    JSON body, which the SDK reports as a bare `Forbidden`) on nodes served through it."""
+    global _identified
+    if _identified:
+        return
+    import urllib.request
+
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("User-Agent", USER_AGENT)]
+    urllib.request.install_opener(opener)
+    _identified = True
+
+
 def _decillion_class() -> Any:
     try:
         from decillion_server import Decillion  # already importable
@@ -45,7 +64,14 @@ def normalize_api_url(url: str) -> str:
     A node whose LLM-proxy URL ends in `/deepagents/v1/llm` once handed apps
     `<node>/deepagents/v1/llm/appapi/v1`, which answers "route not found". The
     app API always lives at `<scheme>://<host>/appapi/v1`, so anything between
-    the host and `/appapi/v1` is dropped."""
+    the host and `/appapi/v1` is dropped.
+
+    `PEYDA_NODE_URL` (the workflow's `node_url` input) overrides the node's address
+    outright: a node whose computers run outside its network hands apps an internal
+    host name (`http://decillion:8080`) that they cannot resolve."""
+    node = os.environ.get("PEYDA_NODE_URL", "").strip().rstrip("/")
+    if node:
+        return f"{node}/appapi/v1"
     m = re.match(r"^(https?://[^/]+)(?:/.*)?/appapi/v1/?$", (url or "").strip())
     return f"{m.group(1)}/appapi/v1" if m else (url or "")
 
@@ -58,6 +84,7 @@ class DecillionAnalyst:
         fixed = {k.lower(): v for k, v in headers.items()}
         if fixed.get("x-decillion-api"):
             fixed["x-decillion-api"] = normalize_api_url(fixed["x-decillion-api"])
+        identify_to_the_node()
         self._decillion = _decillion_class().from_headers(fixed)
 
     async def ask(self, prompt: str, history: list[dict[str, str]]) -> str:

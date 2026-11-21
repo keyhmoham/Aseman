@@ -12,6 +12,12 @@ from peyda.catalog import Catalog, Service, ToolRoute  # noqa: E402
 from peyda.extractor import HeuristicExtractor  # noqa: E402
 from peyda.gateway import Gateway  # noqa: E402
 
+@pytest.fixture(autouse=True)
+def _no_node_url_override(monkeypatch):
+    """The installer's settings (`.peyda/env`) may set PEYDA_NODE_URL on the computer that runs these tests."""
+    monkeypatch.delenv("PEYDA_NODE_URL", raising=False)
+
+
 FAKE = str(Path(__file__).resolve().parent / "fake_iran_mcp.py")
 
 

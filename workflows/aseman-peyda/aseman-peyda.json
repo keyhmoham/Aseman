@@ -58,6 +58,11 @@
    "default": "تهران",
    "description": "The city assumed for location-bound services (food, groceries) when a query names none"
   },
+  "node_url": {
+   "type": "string",
+   "default": "",
+   "description": "The node's public address as the project's computer reaches it, for example https://preview.decillionai.com. Set it when the chat shows 'The analyst was unavailable' with 'Name or service not known': the node hands apps an internal host name (http://decillion:8080) that a computer outside its network cannot resolve. Empty uses the address the node gives. Changing it alone does not rebuild the frontend: also pass rebuild_frontend=true"
+  },
   "build_frontend": {
    "type": "boolean",
    "default": true,
@@ -317,7 +322,7 @@
     "assets": "app/",
     "render": true,
     "files": {
-     ".peyda/env": "PEYDA_GLINER_MODEL=${{ inputs.gliner_model }}\nPEYDA_MAX_ROUNDS=${{ inputs.max_rounds }}\nPEYDA_DEFAULT_CITY=${{ inputs.default_city }}\nPEYDA_GMAPS=${{ inputs.google_maps ? '1' : '0' }}\n${{ inputs.hf_endpoint == '' ? '' : 'HF_ENDPOINT=' + inputs.hf_endpoint + '\\n' }}",
+     ".peyda/env": "PEYDA_GLINER_MODEL=${{ inputs.gliner_model }}\nPEYDA_MAX_ROUNDS=${{ inputs.max_rounds }}\nPEYDA_DEFAULT_CITY=${{ inputs.default_city }}\n${{ inputs.node_url == '' ? '' : 'PEYDA_NODE_URL=' + inputs.node_url + '\\n' }}PEYDA_GMAPS=${{ inputs.google_maps ? '1' : '0' }}\n${{ inputs.hf_endpoint == '' ? '' : 'HF_ENDPOINT=' + inputs.hf_endpoint + '\\n' }}",
      ".peyda/iran_proxy": "${{ secrets.IRAN_PROXY_URL ?? '' }}",
      ".peyda/hf_token": "${{ secrets.HF_TOKEN ?? '' }}",
      ".peyda/gmaps_proxy": "${{ secrets.GMAPS_PROXY_URL ?? '' }}",

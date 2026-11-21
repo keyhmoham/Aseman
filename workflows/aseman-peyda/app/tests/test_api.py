@@ -154,6 +154,7 @@ def test_the_sdk_is_found_where_the_computer_installs_it(tmp_path, monkeypatch):
     (tmp_path / "decillion_server.py").write_text("class Decillion:\n    marker = 'found'\n")
     monkeypatch.setattr(sys, "path", list(sys.path))  # the lookup adds the SDK's folder; undo that afterwards
     monkeypatch.setenv("DECILLION_SDK_DIR", str(tmp_path))
+    monkeypatch.setattr(agent, "ROOT", tmp_path / "app")  # an app built by appui_create has its own vendor/decillion-sdk, which would win
     monkeypatch.delitem(sys.modules, "decillion_server", raising=False)
     assert agent._decillion_class().marker == "found"
     sys.modules.pop("decillion_server", None)
@@ -168,6 +169,40 @@ def test_a_wrong_app_api_url_from_the_node_is_corrected():
     assert normalize_api_url("") == ""
 
 
+def test_a_configured_node_url_replaces_the_one_the_node_hands_out(monkeypatch):
+    from peyda.agent import normalize_api_url
+    monkeypatch.setenv("PEYDA_NODE_URL", "https://node.example.com/")
+    assert normalize_api_url("http://decillion:8080/appapi/v1") == "https://node.example.com/appapi/v1"
+    assert normalize_api_url("") == "https://node.example.com/appapi/v1"
+    monkeypatch.setenv("PEYDA_NODE_URL", "")  # unset: the node's own address is used
+    assert normalize_api_url("http://decillion:8080/appapi/v1") == "http://decillion:8080/appapi/v1"
+
+
+def test_calls_to_the_node_carry_a_real_user_agent(monkeypatch):
+    """Cloudflare refuses urllib's default User-Agent (error 1010), which the SDK reports as a bare Forbidden."""
+    import threading, urllib.request
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from peyda import agent
+    seen = []
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(self.headers.get("User-Agent"))
+            self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+        def log_message(self, *a): pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(urllib.request, "_opener", None)  # undo the process-wide opener afterwards
+    monkeypatch.setattr(agent, "_identified", False)
+    try:
+        agent.identify_to_the_node()
+        urllib.request.urlopen(f"http://127.0.0.1:{srv.server_port}/", timeout=10).read()
+    finally:
+        srv.shutdown()
+    assert seen == [agent.USER_AGENT] and not seen[0].startswith("Python-urllib")
+
+
 def test_the_analyst_calls_the_corrected_url(tmp_path, monkeypatch):
     import sys
     from peyda import agent
@@ -180,6 +215,7 @@ def test_the_analyst_calls_the_corrected_url(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setenv("DECILLION_SDK_DIR", str(tmp_path))
+    monkeypatch.setattr(agent, "ROOT", tmp_path / "app")  # an app built by appui_create has its own vendor/decillion-sdk, which would win
     monkeypatch.delitem(sys.modules, "decillion_server", raising=False)
     agent.DecillionAnalyst({"X-Decillion-Api": "http://decillion:8080/deepagents/v1/llm/appapi/v1", "X-Decillion-User-Token": "t"})
     import decillion_server

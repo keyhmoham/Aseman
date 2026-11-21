@@ -7,8 +7,8 @@ function loadInfo() {
 function runSearch(q) {
   q = (q || "").trim();
   if (!q) { return; }
-  app.set({ mode: "results", q: q, searching: true, searchError: null, results: null, filter: "all" });
-  Decillion.fetch("api/search", { method: "POST", body: { q: q, limit: 6 } })
+  app.set({ mode: "results", q: q, searching: true, searchError: null, results: null, filter: "all", item: null });
+  Decillion.fetch("api/search", { method: "POST", body: { q: q, limit: 8 } })
     .then(function (r) { if (app.state.q === q) { app.set({ results: r.json, searching: false }); } })
     .catch(function (e) { app.set({ searching: false, searchError: errorText(e) }); });
 }
@@ -19,6 +19,7 @@ function loadChats() {
 }
 
 function openChat(id) {
+  if (isExpanded()) { loadChats(); }
   app.set({ mode: "chat", chat: id, messages: [], chatError: null, run: null, events: [], showAll: false });
   Decillion.fetch("api/chats/" + id)
     .then(function (r) { if (app.state.chat === id) { app.set({ messages: r.json.messages || [] }); } })
@@ -28,6 +29,7 @@ function openChat(id) {
 function newChat(first) {
   if (!signedIn()) { app.set({ mode: "chat", chat: null, messages: [], chatError: "signin" }); return; }
   app.set({ mode: "chat", chat: null, messages: [], chatError: null, run: null, events: [], showAll: false });
+  if (isExpanded()) { loadChats(); }
   if (first) { sendMessage(first); }
 }
 

@@ -25,7 +25,7 @@ function toggleAgentic(on) {
 var app = App.create({
   state: {
     mode: "home", q: "", agentic: false, info: null,
-    results: null, searching: false, searchError: null, filter: "all",
+    results: null, searching: false, searchError: null, filter: "all", sort: "relevance", view: "grouped", item: null, back: "results",
     chats: [], chat: null, messages: [], composer: "", run: null, events: [], sending: false, chatError: null, showAll: false,
   },
 
@@ -33,6 +33,7 @@ var app = App.create({
     if (s.mode === "results") { return resultsView(s, app); }
     if (s.mode === "chat") { return chatView(s, app); }
     if (s.mode === "history") { return historyView(s, app); }
+    if (s.mode === "item") { return itemView(s, app); }
     return homeView(s, app);
   },
 

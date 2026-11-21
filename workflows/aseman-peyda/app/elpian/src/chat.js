@@ -11,18 +11,19 @@ function chatHeader(s, app) {
         T("Peyda", "titleMediumEmphasized"),
         T(s.run ? "Working on it…" : "Agentic search", "labelSmall", { color: "muted" }),
       ] }] },
-      { type: "IconButton", key: "hist", props: { icon: "history", tooltip: "Chat history" },
+      isCompact() ? null : agenticSwitch(s, app),
+      hasSidebar() ? null : { type: "IconButton", key: "hist", props: { icon: "history", tooltip: "Chat history" },
         events: { tap: app.handler("chat_history", function () { loadChats(); app.set({ mode: "history" }); }) } },
-      { type: "IconButton", key: "new", props: { icon: "comment", tooltip: "New chat", variant: "tonal" },
+      hasSidebar() ? null : { type: "IconButton", key: "new", props: { icon: "comment", tooltip: "New chat", variant: "tonal" },
         events: { tap: app.handler("chat_new", function () { newChat(); }) } },
-    ] },
-    { type: "Row", props: { style: { padding: "0 8" } }, children: [agenticSwitch(s, app)] },
-  ] };
+    ].filter(Boolean) },
+    isCompact() ? { type: "Row", props: { style: { padding: "0 8" } }, children: [agenticSwitch(s, app)] } : null,
+  ].filter(Boolean) };
 }
 
 function userBubble(m) {
   return { type: "Row", key: "m_" + m.id, props: { style: { justifyContent: "flex-end" } }, children: [
-    { type: "Card", props: { tone: "primary", radius: 20, style: { padding: "10 14", maxWidth: "300" } }, children: [T(m.text, "bodyLarge")] },
+    { type: "Flexible", children: [{ type: "Card", props: { tone: "primary", radius: 20, style: { padding: "10 14", maxWidth: isCompact() ? "300" : "560" } }, children: [T(m.text, "bodyLarge")] }] },
   ] };
 }
 
@@ -48,7 +49,10 @@ function assistantBubble(m) {
     parts.push({ type: "Tag", props: { text: "The analyst was unavailable: results shown as they came", status: "warning", icon: "warning" } });
     if (p.degraded_reason) { parts.push(T("Why: " + p.degraded_reason, "bodySmall", { color: "muted" })); }
   }
-  (p.cards || []).forEach(function (c, i) { parts.push(Object.assign({}, hitCard(c, c.source), { key: "card_" + m.id + "_" + i })); });
+  var items = (p.cards || []).map(function (c, i) {
+    return { hit: c, service: String(c.ref || c.service || "").split(":")[0], source: c.source || c.service || "", index: i, rank: i, domain: "" };
+  });
+  if (items.length) { parts.push(cardGrid(items, app, { prefix: "card_" + m.id, minColumnWidth: 200, maxColumns: 3 })); }
   var trace = roundsTrace(p.rounds, m.id);
   if (trace) { parts.push(trace); }
   if (p.suggestions && p.suggestions.length && m.id === lastAssistantId()) {
@@ -142,14 +146,44 @@ function composer(s, app) {
   ] };
 }
 
-function chatView(s, app) {
-  return { type: "Scaffold", children: [
-    { type: "Column", props: { style: { alignItems: "stretch" } }, children: [
-      chatHeader(s, app),
-      { type: "Expanded", children: [{ type: "ListView", children: [
-        { type: "Column", props: { style: { padding: "8 16 16 16", gap: "16", alignItems: "stretch" } }, children: [chatBody(s, app)] },
-      ] }] },
-      composer(s, app),
+// Desk windows: the chats beside the conversation.
+function chatSidebar(s, app) {
+  var rows = (s.chats || []).map(function (c) {
+    return { type: "ListTile", key: "side_" + c.id, props: { title: c.title, leading: "chat_bubble", lines: 1, dense: true, selected: s.chat === c.id },
+      events: { tap: app.handler("side_" + c.id, function () { openChat(c.id); }) } };
+  });
+  return { type: "SizedBox", props: { style: { width: "300" } }, children: [
+    { type: "Column", props: { style: { alignItems: "stretch", padding: "16 12 16 16", gap: "12" } }, children: [
+      { type: "Button", key: "side_new", props: { text: "New chat", icon: "edit_note", variant: "tonal", fullWidth: true },
+        events: { tap: app.handler("side_new", function () { newChat(); }) } },
+      T("Recent", "labelLarge", { color: "muted" }),
+      { type: "Expanded", children: [rows.length ? { type: "ListView", children: [{ type: "ListGroup", key: "side_list", props: { variant: "tonal" }, children: rows }] }
+        : T("Your conversations will be listed here.", "bodySmall", { color: "muted" })] },
     ] },
   ] };
+}
+
+function conversation(s, app) {
+  return { type: "Column", props: { style: { alignItems: "stretch" } }, children: [
+    chatHeader(s, app),
+    { type: "Expanded", children: [{ type: "ListView", children: [
+      pageColumn([chatBody(s, app)], { maxWidth: 880, padding: isCompact() ? "8 16 16 16" : "12 24 24 24", gap: "16" }),
+    ] }] },
+    { type: "Center", children: [{ type: "Container", props: { style: { maxWidth: "880", width: "100%" } }, children: [composer(s, app)] }] },
+  ] };
+}
+
+function hasSidebar() { return isExpanded() && signedIn(); }
+
+function chatView(s, app) {
+  if (hasSidebar()) {
+    return { type: "Scaffold", children: [
+      { type: "Row", props: { style: { alignItems: "stretch" } }, children: [
+        chatSidebar(s, app),
+        { type: "VerticalDivider" },
+        { type: "Expanded", children: [conversation(s, app)] },
+      ] },
+    ] };
+  }
+  return { type: "Scaffold", children: [conversation(s, app)] };
 }

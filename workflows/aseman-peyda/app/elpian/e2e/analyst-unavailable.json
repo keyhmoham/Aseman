@@ -146,7 +146,7 @@
    "do": "tap",
    "target": {
     "type": "Button",
-    "text": "Search"
+    "text": "Ask Peyda"
    }
   },
   {

@@ -1,0 +1,264 @@
+{
+ "name": "results show pictures, the lowest price, sorting and a result in full",
+ "viewport": "phone",
+ "mocks": [
+  {
+   "path": "api/info",
+   "json": {
+    "platform": "Peyda",
+    "signed_in": true,
+    "services": 62,
+    "sites": [
+     "Digikala"
+    ],
+    "extractor": {
+     "ready": true,
+     "engine": "gliner2"
+    },
+    "max_rounds": 3
+   }
+  },
+  {
+   "path": "api/chats",
+   "json": {
+    "chats": []
+   }
+  },
+  {
+   "path": "api/search",
+   "json": {
+    "frame": {
+     "text": "گوشی سامسونگ",
+     "domains": [
+      {
+       "name": "shopping",
+       "score": 0.9
+      }
+     ],
+     "intent": "cheapest",
+     "slots": {
+      "product": "گوشی",
+      "brand": "سامسونگ"
+     },
+     "assumptions": []
+    },
+    "total": 4,
+    "score": 9,
+    "ms": 1840,
+    "gaps": [],
+    "services": [
+     {
+      "id": "digikala",
+      "title": "Digikala",
+      "status": "ok",
+      "count": 2,
+      "ms": 900,
+      "reason": "",
+      "missing": [],
+      "hits": [
+       {
+        "service": "digikala",
+        "tool": "t",
+        "title": "Samsung Galaxy A55",
+        "url": "https://www.digikala.com/product/a55",
+        "price_toman": 18500000,
+        "detail": "Digikala seller · rating: 4.4",
+        "image": "https://dkstatics-public.digikala.com/a55.jpg"
+       },
+       {
+        "service": "digikala",
+        "tool": "t",
+        "title": "Samsung Galaxy S24",
+        "url": "https://www.digikala.com/product/s24",
+        "price_toman": 38000000,
+        "detail": "",
+        "image": "//dkstatics-public.digikala.com/s24.jpg"
+       }
+      ]
+     },
+     {
+      "id": "torob",
+      "title": "Torob",
+      "status": "ok",
+      "count": 1,
+      "ms": 700,
+      "reason": "",
+      "missing": [],
+      "hits": [
+       {
+        "service": "torob",
+        "tool": "t",
+        "title": "Samsung Galaxy A25",
+        "url": "https://torob.com/p/a25",
+        "price_toman": 11800000,
+        "detail": "from 12 shops",
+        "image": "/relative/a25.jpg"
+       }
+      ]
+     },
+     {
+      "id": "gmaps",
+      "title": "Google Maps",
+      "status": "ok",
+      "count": 1,
+      "ms": 1800,
+      "reason": "",
+      "missing": [],
+      "hits": [
+       {
+        "service": "gmaps",
+        "tool": "gm_search",
+        "title": "Samsung Store Valiasr",
+        "url": "https://www.google.com/maps/place/x",
+        "detail": "Electronics store · ★ 4.7 (1,204) · +98 21 2222 3333 · Tehran",
+        "image": "https://lh3.googleusercontent.com/p/store.jpg"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "steps": [
+  {
+   "do": "type",
+   "target": {
+    "key": "q"
+   },
+   "text": "گوشی سامسونگ"
+  },
+  {
+   "do": "tap",
+   "target": {
+    "type": "Button",
+    "text": "Search"
+   }
+  },
+  {
+   "expect": {
+    "text": [
+     "Lowest price found",
+     "11,800,000 Toman",
+     "Samsung Galaxy A55",
+     "Google Maps",
+     "4.7 · 1.2K",
+     "4.4"
+    ],
+    "request": {
+     "method": "POST",
+     "path": "api/search",
+     "body": {
+      "q": "گوشی سامسونگ",
+      "limit": 8
+     }
+    }
+   }
+  },
+  {
+   "do": "select",
+   "target": {
+    "key": "view"
+   },
+   "value": "all"
+  },
+  {
+   "expect": {
+    "text": [
+     "Relevance",
+     "Cheapest",
+     "Rating"
+    ]
+   }
+  },
+  {
+   "do": "select",
+   "target": {
+    "key": "sort"
+   },
+   "value": "price"
+  },
+  {
+   "expect": {
+    "state": {
+     "sort": "price",
+     "view": "all"
+    }
+   }
+  },
+  {
+   "do": "select",
+   "target": {
+    "key": "sort"
+   },
+   "value": "rating"
+  },
+  {
+   "expect": {
+    "state": {
+     "sort": "rating"
+    }
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Lowest price found"
+  },
+  {
+   "expect": {
+    "text": [
+     "Samsung Galaxy A25",
+     "Open on Torob",
+     "Ask the analyst about it",
+     "More like this"
+    ],
+    "state": {
+     "mode": "item"
+    }
+   }
+  },
+  {
+   "do": "tap",
+   "target": "Back to the results"
+  },
+  {
+   "expect": {
+    "state": {
+     "mode": "results"
+    },
+    "text": "Lowest price found"
+   }
+  },
+  {
+   "do": "tap",
+   "target": {
+    "type": "Card",
+    "text": "Samsung Store Valiasr"
+   }
+  },
+  {
+   "expect": {
+    "text": [
+     "Samsung Store Valiasr",
+     "1,204 reviews",
+     "Open on Google Maps"
+    ]
+   }
+  },
+  {
+   "do": "tap",
+   "target": "More like this"
+  },
+  {
+   "expect": {
+    "state": {
+     "mode": "results",
+     "q": "Samsung Store Valiasr"
+    },
+    "request": {
+     "method": "POST",
+     "path": "api/search"
+    }
+   }
+  }
+ ]
+}

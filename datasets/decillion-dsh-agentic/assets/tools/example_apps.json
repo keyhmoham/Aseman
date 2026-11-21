@@ -1,0 +1,26 @@
+[
+ {"name": "GitHub", "bot_id": "6a1f03c2b7d94e10a4c5e2f81d0b9c37", "kind": "tool", "note": "illustrative connected MCP app (function names follow the public GitHub MCP server)",
+  "commands": [
+   {"name": "list_issues", "description": "List issues in a GitHub repository.", "schema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "state": {"type": "string", "enum": ["open", "closed", "all"]}}, "required": ["owner", "repo"]}},
+   {"name": "create_issue", "description": "Create a new issue in a GitHub repository.", "schema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "title": {"type": "string"}, "body": {"type": "string"}, "labels": {"type": "array", "items": {"type": "string"}}}, "required": ["owner", "repo", "title"]}},
+   {"name": "add_issue_comment", "description": "Add a comment to an existing issue.", "schema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "issue_number": {"type": "number"}, "body": {"type": "string"}}, "required": ["owner", "repo", "issue_number", "body"]}}
+  ]},
+ {"name": "Exa", "bot_id": "0d9e44a1c35f4b7a8e21b6c90f3d5a12", "kind": "tool", "note": "illustrative connected MCP app (Exa web search)",
+  "commands": [
+   {"name": "web_search_exa", "description": "Search the web with Exa and return clean text results with titles and URLs.", "schema": {"type": "object", "properties": {"query": {"type": "string"}, "numResults": {"type": "number"}}, "required": ["query"]}}
+  ]},
+ {"name": "Weather", "bot_id": "a7c2e9f04b1d4c6e9a3f5b8d2e1c0f47", "kind": "tool", "note": "illustrative app with one function",
+  "commands": [
+   {"name": "forecast", "description": "Forecast for a city: today and the next days.", "schema": {"type": "object", "properties": {"city": {"type": "string"}, "days": {"type": "integer"}}, "required": ["city"]}}
+  ]},
+ {"name": "Shop", "bot_id": "3e8b1d6f9a2c4e05b7d1f3a9c6e2b804", "kind": "tool", "note": "illustrative store app",
+  "commands": [
+   {"name": "list_orders", "description": "List the store's orders, newest first.", "schema": {"type": "object", "properties": {"status": {"type": "string", "enum": ["open", "shipped", "cancelled", "all"]}, "limit": {"type": "integer"}}}},
+   {"name": "get_order", "description": "One order with its items, customer and status.", "schema": {"type": "object", "properties": {"order_id": {"type": "string"}}, "required": ["order_id"]}},
+   {"name": "update_order_status", "description": "Change an order's status and notify the customer.", "schema": {"type": "object", "properties": {"order_id": {"type": "string"}, "status": {"type": "string", "enum": ["open", "shipped", "cancelled"]}}, "required": ["order_id", "status"]}}
+  ]},
+ {"name": "Translator", "bot_id": "9b4d2a7e1c6f4083a5e9d1b7c3f2a6e0", "kind": "tool", "note": "illustrative tool bot asked in plain words",
+  "description": "Translates text between languages."},
+ {"name": "Invoice Maker", "bot_id": "c5f1a8e3d7b24e69a0c4f2d8b1e6a937", "kind": "tool", "note": "illustrative tool bot asked in plain words",
+  "description": "Makes PDF invoices from a customer, items and prices."}
+]

@@ -1,0 +1,16 @@
+The app in this directory is not ready. The platform checked it and found:
+
+READY.json was not written (tests not run, or failing?)
+
+Find the root cause and fix it (AGENTS.md, ELPIAN.md for an Elpian frontend,
+BRIEF.md, CHANGES.md and PLAN.md describe the app). For an Elpian frontend,
+the elpian_validate_program tool (or node vendor/decillion-elpian/validate.mjs
+--program elpian/app.js --server http://127.0.0.1:8787) shows each problem in
+the view trees with where it is and how to fix it, and the Elpian driver
+(elpian_open, elpian_tap, … elpian_run_scenarios; ELPIAN.md, Testing end to
+end) reproduces a failing scenario step by step: replay it by hand, read the
+screen and the PROBLEMS at the failing step, fix the app (or the scenario, if
+it expects the wrong thing), and run every scenario again. Run the tests again, make sure the start command serves on
+0.0.0.0:8787 and GET / answers, then rewrite READY.json.
+Your elpian_* tools are the decillion-elpian command (decillion-elpian tools lists
+them). When it is fixed, call appui_publish with this dir again.

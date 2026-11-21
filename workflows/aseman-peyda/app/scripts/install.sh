@@ -1,8 +1,10 @@
 #!/bin/sh
 # Installs Peyda's Python environment on the project's computer, idempotently:
-#   scripts/install.sh [--no-model] [--no-services]
+#   scripts/install.sh [--no-model] [--no-services] [--no-gmaps]
 # A CPU build of torch (no CUDA wheels), the server, GLiNER2, the iran-mcp
-# servers (pinned in requirements-services.txt), and the model weights.
+# servers (pinned in requirements-services.txt), the model weights, and the
+# Google Maps Scraper Kit's engine (a pinned commit, and a headless Chrome) for
+# the Google Maps service, unless PEYDA_GMAPS=0.
 set -eu
 cd "$(dirname "$0")/.."
 VENV="${PEYDA_VENV:-/workspace/.venvs/peyda}"
@@ -33,5 +35,13 @@ case " $* " in *" --no-model "*) ;; *)
   export HF_HUB_DOWNLOAD_TIMEOUT=60 HF_HUB_ETAG_TIMEOUT=30
   HF_HUB_DISABLE_XET=1 fetch || { echo "plain download failed; trying the xet store"; HF_HUB_DISABLE_XET=0 fetch; }
   ;;
+esac
+case " $* " in *" --no-gmaps "*) ;; *)
+  if [ "${PEYDA_GMAPS:-1}" != 0 ]; then
+    st=0; out=$("$VENV/bin/python" scripts/install_gmaps.py 2>&1) || st=$?
+    echo "$out"
+    { [ "$st" = 0 ] && echo "$out" | grep -q "google maps engine ready"; } \
+      || { echo "the Google Maps engine did not install (rerun with google_maps=false to go without it)"; exit 1; }
+  fi ;;
 esac
 echo "peyda environment ready: $VENV"

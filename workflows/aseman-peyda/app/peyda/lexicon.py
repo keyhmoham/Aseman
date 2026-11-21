@@ -48,7 +48,11 @@ DOMAIN_WORDS: dict[str, tuple[str, ...]] = {
     "food": ("پیتزا", "برگر", "کباب", "رستوران", "غذا", "ناهار", "شام", "سوپرمارکت", "pizza", "burger", "restaurant", "food", "kebab", "delivery"),
     "travel_tickets": ("بلیط", "پرواز", "قطار", "اتوبوس", "flight", "ticket", "train", "bus "),
     "stays": ("هتل", "ویلا", "اقامتگاه", "سوئیت", "hotel", "villa", "stay", "nights"),
-    "maps": ("آدرس", "مسیر", "نقشه", "نزدیک", "route", "directions", "address", "nearby", "map"),
+    "maps": ("آدرس", "مسیر", "نقشه", "نزدیک", "route", "directions", "address", "nearby", "map",
+             # places and local businesses (Google Maps lists them with phones, hours and ratings)
+             "کافه", "کافی شاپ", "آرایشگاه", "باشگاه", "تعمیرگاه", "مکانیکی", "کارواش", "دندانپزشک", "شماره تماس",
+             "ساعت کاری", "موزه", "cafe", "café", "coffee shop", "salon", "barber", "gym", "mechanic", "car wash",
+             "dentist", "opening hours", "phone number of", "museum", "near me"),
     "health": ("دکتر", "پزشک", "نوبت", "داروخانه", "دارو", "درمانگاه", "doctor", "clinic", "pharmacy", "appointment", "dermatolog"),
     "books": ("کتاب", "رمان", "کتاب صوتی", "book", "novel", "audiobook"),
     "courses": ("دوره", "آموزش", "کلاس", "course", "learn ", "tutorial"),

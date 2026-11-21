@@ -5,7 +5,7 @@
 #   run_install.sh start    begin (or join the install already running)
 #   run_install.sh status   print PEYDA_INSTALL=running|ok|failed|lost and the log's tail; always exits 0
 # Steps, in order, each of which must print what it should:
-#   netcheck.py · install.sh · the test suite · check_services.py · smoke_engine.py
+#   netcheck.py · install.sh (with the Google Maps engine) · the test suite · check_services.py · smoke_engine.py
 cd "$(dirname "$0")/.."
 APP="$(pwd)"
 VENV="${PEYDA_VENV:-/workspace/.venvs/peyda}"
@@ -26,6 +26,10 @@ step() { # step <expected output> <command...>
 job() {
   echo $$ >"$STATE/pid"
   cd "$APP" || exit 1
+  # Settings the workflow wrote (PEYDA_GMAPS, HF_ENDPOINT, …), for the network check too.
+  if [ -f .peyda/env ]; then set -a; . ./.peyda/env; set +a; fi
+  [ -n "${HF_ENDPOINT:-}" ] || unset HF_ENDPOINT
+  if [ -s .peyda/gmaps_proxy ]; then PEYDA_GMAPS_PROXY="$(cat .peyda/gmaps_proxy)"; export PEYDA_GMAPS_PROXY; fi
   step "network check: ok" python3 scripts/netcheck.py &&
   step "peyda environment ready" sh scripts/install.sh &&
   step "passed" "$VENV/bin/python" -m pytest -q -p no:cacheprovider &&

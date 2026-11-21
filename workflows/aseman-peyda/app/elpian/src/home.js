@@ -40,7 +40,7 @@ function homeView(s, app) {
         ] },
       ] }] },
       { type: "Row", props: { style: { padding: "8 16 16 16", justifyContent: "center" } }, children: [
-        { type: "Expanded", children: [T("Aseman Peyda · searches Digikala, Divar, Snapp, MrBilit, Paziresh24 and more", "labelSmall", { color: "muted", textAlign: "center", maxLines: 2, overflow: "ellipsis" })] },
+        { type: "Expanded", children: [T("Aseman Peyda · searches Digikala, Divar, Snapp, MrBilit, Paziresh24, Google Maps and more", "labelSmall", { color: "muted", textAlign: "center", maxLines: 2, overflow: "ellipsis" })] },
       ] },
     ] },
   ] };

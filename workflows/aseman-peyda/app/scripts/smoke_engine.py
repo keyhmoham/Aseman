@@ -10,6 +10,7 @@ failure. What must hold is the reading and the plumbing.
 """
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -71,6 +72,19 @@ async def main() -> int:
                 print("  FAIL: not read as expected")
             elif answered:
                 print(f"  answered by: {', '.join(answered)}")
+
+        # Google Maps (the kit's engine behind peyda/gmaps_mcp.py): it must be routed and answer
+        # over MCP; what Google returns from this network is reported, as for the other sites.
+        if os.environ.get("PEYDA_GMAPS", "1").strip() != "0":
+            r = (await client.post("/api/search", json={"q": "کافه در شیراز", "domains": ["maps"]})).json()
+            gm = next((s for s in r["services"] if s["id"] == "gmaps"), None)
+            if gm is None:
+                failures += 1
+                print("\nFAIL Google Maps was not routed for a maps search")
+            else:
+                print(f"\nGoogle Maps: {gm['status']}, {gm['count']} places in {gm['ms']} ms" + (f" ({gm['reason']})" if gm["reason"] else ""))
+                for h in gm.get("hits", [])[:3]:
+                    print(f"  {h['title']} · {h.get('detail', '')[:100]}")
 
         user = {"x-decillion-user": "smoke", "x-decillion-user-token": "t"}
         chat = (await client.post("/api/chats", headers=user)).json()

@@ -11,6 +11,7 @@ an installer is hard to read. With no proxy it connects directly.
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import sys
 from urllib.parse import urlparse
@@ -27,6 +28,22 @@ def wanted(env: dict[str, str]) -> list[tuple[str, str, bool]]:
         ("download-r2.pytorch.org", "CPU PyTorch (the wheels are served from here)", True),
         (hub, "the GLiNER2 model" + (" (cached already)" if model_cached else ""), not model_cached),
         ("cas-bridge.xethub.hf.co", "model files (the xet store)", False),
+    ] + gmaps_hosts(env)
+
+
+def gmaps_hosts(env: dict[str, str]) -> list[tuple[str, str, bool]]:
+    """The Google Maps service's: its engine's source and Chrome, needed only until they are
+    installed, and Google Maps itself, which the service needs and the install does not."""
+    if env.get("PEYDA_GMAPS", "1").strip() == "0":
+        return []
+    kit = os.path.join(env.get("PEYDA_GMAPS_KIT") or "/workspace/.gmaps-kit")
+    have_kit = os.path.isfile(os.path.join(kit, ".peyda-commit"))
+    have_chrome = os.path.isdir(os.path.join(kit, ".engine", "chrome")) or any(
+        shutil.which(b) for b in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"))
+    return [
+        ("codeload.github.com", "the Google Maps Scraper Kit's source" + (" (installed already)" if have_kit else ""), not have_kit),
+        ("storage.googleapis.com", "Chrome for the Google Maps engine" + (" (a Chrome is here already)" if have_chrome else ""), not have_chrome),
+        ("www.google.com", "Google Maps, which the Google Maps service searches", False),
     ]
 
 

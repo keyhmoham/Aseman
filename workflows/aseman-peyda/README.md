@@ -115,11 +115,18 @@ If the engine is not installed or not running, Google Maps reports `error` with 
 
 ## The frontend (`app/elpian/src`)
 
-| Screen | |
-| --- | --- |
-| Home | wordmark, one search bar, the **Agentic search** switch, a Search button, example queries |
-| Results | what was understood (domain, product, brand, city, route, price as tags), per-service filter chips, results grouped by service with prices in Toman and links, a note when services need more detail, services that had nothing or did not answer |
-| Chat | the conversation with the Peyda Analyst: your messages, the answer in Markdown, result cards, a live trace while it works (extract → search → review rounds, per service), a collapsible "How I searched" with each round's query and the analyst's reason, follow-up chips, history, new chat |
+The layout follows the window (`Decillion.viewport().sizeClass`): one column on phones, grids on tablets, and on desk windows a sidebar beside the content. Colours come from the person's theme, so light and dark both work.
+
+| Screen | Phone | Desk window |
+| --- | --- | --- |
+| Home | wordmark, search bar, a card with the **Agentic search** switch saying what each mode does, the Search (or *Ask Peyda*) button, example queries, **Browse by category** (shopping, flights, places, doctors, homes, cars, gold and currency, news: each runs a sample query), the number of services and whether the model is ready | the same, centred, with a larger wordmark and four categories a row |
+| Results | what was understood (domain, product, brand, city, route, price as tags), per-site filter chips, the **lowest price found** highlighted, *Grouped* (by site) or *All* (sorted by **Relevance**, **Cheapest** or **Rating**), results as rows with their **picture**, price, rating and source, a note when services need more detail, services that had nothing or did not answer | a sidebar (what was understood, the sites with their counts as a filter list, the services that had nothing) beside a strip of numbers (results, sites answered, time, lowest price) and the results as a grid of picture tiles |
+| A result | its picture, title, price, rating and reviews, source, the site's detail line, a link to open it on the site, **Ask the analyst about it** (starts a chat about it), **More like this** | picture and facts side by side |
+| Chat | the conversation with the Peyda Analyst: your messages, the answer in Markdown, result cards with pictures, a live trace while it works (extract → search → review rounds, per service), a collapsible "How I searched" with each round's query and the analyst's reason, follow-up chips | the chat history as a sidebar (new chat, recent chats) beside the conversation |
+
+**Pictures.** A result shows the `image` its site gave (iran-mcp's records, Google Maps' thumbnails) when it is an absolute `https` address (`//host/…` is taken as https; relative paths and plain http are not drawn). Without one, the card shows its category's icon on a tonal panel, so grids stay even. Titles and *Open on …* are Markdown links, which the client opens in the browser.
+
+**Loading, empty, error.** A search shows a skeleton shaped like its results (rows on phones, tiles elsewhere); nothing found offers agentic search; a failed search says why with *Try again*.
 
 Two engine limits shaped it. Elpian has no scroll-to-end, so a chat keeps the two newest exchanges on screen and folds older ones behind *Show earlier*. Elpian timers tick at 5 s at best, so a run is followed by a request the server holds open until something happens (`GET api/runs/<id>?wait=20`).
 
@@ -133,7 +140,7 @@ cd workflows/aseman-peyda/app && python -m venv .venv && .venv/bin/pip install -
 # The installer: check it against a node with `decillion workflow validate` / `plan` (see "Run it")
 
 # The Elpian program: with the App UI kit (deploy/sandbox-computer/appui/elpian) and quickjs-emscripten
-node scripts/stub_server.mjs 8787 &
+node scripts/stub_server.mjs 8787 &          # canned answers with pictures; STUB_DELAY_MS=3000 holds searches to show loading
 node <kit>/bundle.mjs . && node <kit>/validate.mjs --program elpian/app.js --server http://127.0.0.1:8787 --strict
 node <kit>/drive.mjs run elpian/e2e --server http://127.0.0.1:8787
 ```

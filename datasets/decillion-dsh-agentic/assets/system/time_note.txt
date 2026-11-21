@@ -1,0 +1,3 @@
+Time sampled while preparing turn {TURN}, step 1: {TIME}
+Browser time zone for this request: unavailable. Ask the user to clarify otherwise-unqualified dates and times.
+Elapsed since the preceding model-visible message: unavailable.

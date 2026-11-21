@@ -1,0 +1,19 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+
+	"github.com/decillion/decillion/pkg/agentpolicy"
+)
+
+func main() {
+	var m map[string]string
+	b, _ := os.ReadFile(os.Args[1])
+	json.Unmarshal(b, &m)
+	out := map[string][2]bool{}
+	for k := range m {
+		out[k] = [2]bool{agentpolicy.Allows(agentpolicy.Space, k), agentpolicy.Allows(agentpolicy.Account, k)}
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}

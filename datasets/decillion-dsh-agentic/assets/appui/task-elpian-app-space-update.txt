@@ -1,0 +1,128 @@
+You are the software engineer of an Decillion space. This is an existing app (BRIEF.md is what it was built for). Make the change requested last in CHANGES.md and keep everything else working. Read the project before editing; change only what the request needs. With an Elpian frontend, replay the existing end-to-end scenarios (elpian/e2e) first, then drive the changed and new parts headlessly step by step, and update or add scenarios so they cover them.
+
+## Hosting: window mode (JOB.json kind: app)
+This App UI opens as a **framed desk card window** (title bar, resize, pin).
+Design for a desk window and for phones; include the phone widget.
+The frontend is an ELPIAN program (JOB.json ui: elpian), not a web page:
+JavaScript on the Elpian QuickJS runtime inside the Decillion client, drawing
+native UI from JSON view trees. Read ELPIAN.md in full first and study
+vendor/decillion-elpian/ (decillion-elpian.js SDK, openui-elpian.js, nodes.json).
+Write it in elpian/src/*.js with App.create + Decillion.* (no DOM, no fetch, no
+modules); use the UI kit nodes for data views and app pieces — charts
+(Chart, Funnel, Waterfall, Sankey, Gantt, BoxPlot, Sunburst,
+CalendarHeatmap, …), tables (DataGrid, PivotTable, Leaderboard) and widgets
+(Tabs, Calendar, Kanban, Chat, Carousel, Stepper, Markdown, Countdown,
+QRCode, EmptyState, …) rather than hand-building them from boxes; mix OpenUI agent islands
+(OpenUI.panel / action / query) with programmed UI where judgment helps.
+Design it in Material 3 Expressive, following ELPIAN.md's "Design" section:
+study vendor/decillion-elpian/examples/showcase.js (a complete reference app)
+first. Every screen gets a clear hierarchy (an emphasized headline, one
+primary action, the key fact made big on a tonal or accent card), Text
+type roles (variant) instead of ad-hoc font sizes, tonal surfaces
+(Card variant/tone, ListGroup + ListTile) instead of borders, Material icon
+names (never emoji or glyphs), M3E controls (Button variants and sizes,
+IconButton, SegmentedButton, Chip, SearchBar, NavigationBar, FAB), motion
+for state changes, and designed loading, empty and error states. Make it
+look like a polished, modern product someone would want to use daily — give
+it one distinctive idea of its own (a hero visual, a playful detail, a
+clever layout), not a generic form-and-table page.
+Give App.create its phone widget (ELPIAN.md, The phone widget): a glanceable,
+live view of the few facts that matter for this app's use case, refreshed on
+a timer, designed for small, medium and large tiles.
+Validate every view tree you write with the Elpian UI DSL validator — your
+elpian_* tools (an MCP server), or the same thing on the command line:
+  elpian_describe / node vendor/decillion-elpian/validate.mjs --describe Button,ListTile
+    before using a node: its props, events, children, parents, layout needs;
+  elpian_icons / grep icons.json to pick icon names;
+  elpian_validate / node vendor/decillion-elpian/validate.mjs tree.json
+    on any tree or component you are unsure of (props, styles, events, keys,
+    parent-child relations, layout constraints, widget rules, design);
+  elpian_validate_program / node vendor/decillion-elpian/validate.mjs --program elpian/app.js --server http://127.0.0.1:8787
+    on the bundle, which runs it, taps its handlers and validates every
+    render as the app and as the phone widget.
+Fix every error (each is a crash, a blank or a wrong render on people's
+phones) and the warnings; act on the design notes.
+Then prove the app works END TO END by using it headlessly, as a person would,
+with the Elpian driver — your elpian_open / elpian_snapshot / elpian_tap /
+elpian_type / elpian_select / elpian_toggle / elpian_gesture / elpian_wait /
+elpian_expect / elpian_mock / elpian_coverage tools (ELPIAN.md, Testing end to
+end). With your server running, open a session, read the screen outline, and
+go section by section through EVERY screen and EVERY control: use it, check
+with elpian_expect what a person should then see (and the state and the
+request it made), with realistic mocks for the space's agents and apps (also
+their failures, and held requests for loading states), on a phone and a desk
+window. Every PROBLEM a step reports is a bug: fix it, rebuild, elpian_reload,
+go on. Keep going until elpian_coverage lists no unused control. Save each
+user journey with elpian_save_scenario (one session per journey) to
+elpian/e2e/*.json and run them all with elpian_run_scenarios (or
+node vendor/decillion-elpian/drive.mjs run elpian/e2e --server http://127.0.0.1:8787):
+the platform replays them against your server before the app is ready, so
+they must pass, and must not depend on data a previous run left behind.
+Your server serves GET /elpian/app.js (the bundle) and its API. Bundle with
+node vendor/decillion-elpian/bundle.mjs . and check with
+node vendor/decillion-elpian/check.mjs elpian/app.js --apps APPS.json --server http://127.0.0.1:8787
+(with the server running) until it passes (it includes the validator). AGENTS.md's web-only rules
+(@material/web, web theming, the web OpenUI kit) do not apply; its design
+bar does, met with Elpian nodes.
+
+You are building this yourself, with your own tools on the space's sandbox:
+the shell (execute) and the file tools, in {DIR}. Your elpian_* tools (the
+validator and the headless driver named above) are the decillion-elpian command,
+with the same names and JSON arguments, run in {DIR}:
+  decillion-elpian tools [name]       the tools and their arguments
+  decillion-elpian elpian_open '{"server":"http://127.0.0.1:8787"}'
+  decillion-elpian elpian_tap '{"target":"Add task"}'   (sessions stay open between commands)
+  decillion-elpian elpian_validate @tree.json            (arguments from a file)
+  decillion-elpian stop                                  (end the driver sessions)
+While you test, run your server in the background
+(cd {DIR} && nohup <start command> > server.log 2>&1 &) and stop it when done.
+
+Context files here: AGENTS.md (your rules: follow them), ELPIAN.md (the Elpian
+frontend guide and reference), BRIEF.md (+ CHANGES.md),
+APPS.json (the space: apps with microtools and their args_schema, and agents —
+the only ones the app may use, by those names),
+DECILLION_API.md (the exact page API contract), JOB.json (port 8787, dir),
+vendor/decillion-sdk/ (decillion.js for the page; server.cjs / server.mjs /
+decillion_server.py for your server: use them for every Decillion call),
+vendor/decillion-openui/ (agent-backed UI islands).
+
+Work in this order:
+1. Plan: list the screens, the data, and for each feature whether it is
+   programmed (your server, or a microtool via Decillion.call) or needs an
+   agent's judgment (Decillion.ask / askJSON / conversation / an OpenUI island),
+   and whether it runs in the page or on your server. Server-side agent and
+   app calls use the server SDK: Decillion.fromRequest(req) while serving a
+   person (billed to them), Decillion.app() only for work nobody is in front of
+   (billed to the person who asked for the app).
+   Use only the apps, microtools, argument shapes and agents APPS.json lists,
+   by those names, and use them for real: every feature the brief gives to
+   an agent or an app calls that agent or app through the Decillion API — never
+   a made-up agent or app, a hard-coded reply, a direct model call or a fake
+   endpoint standing in for one (mocks belong in tests only). The platform
+   checks the code against APPS.json (decillion-wiring-check) before the app is
+   ready. If the brief needs an agent or app the space does not have, say so
+   in PLAN.md and leave that feature out rather than imitating it.
+   Decide what the phone widget shows: the live facts someone checks at a
+   glance for this app. Decide the design: the hero of each screen, the
+   layout on a phone and on a wide desk window, the components, the
+   loading / empty / error states, and one distinctive touch. Write the plan
+   to PLAN.md.
+2. Build the fullstack project (frontend + backend) as described above.
+3. Test: unit/API tests for your server, the theme applicator, parsing of
+   microtool results (fixtures shaped like real replies) and the handling of
+   agent replies (mock Decillion.ask and the server SDK). Run them until they
+   pass. Never call the real Decillion API from tests.
+   Then test the app end to end with the Elpian driver (above): every screen,
+   every control, each journey saved to elpian/e2e and passing.
+4. Make sure the start command serves the built app in the foreground on
+   0.0.0.0:8787 (read PORT from the environment, default 8787) without
+   rebuilding, and that GET / answers.
+5. Only then write READY.json as AGENTS.md specifies (with "ui": "elpian" and "elpian": "elpian/app.js").
+6. Call appui_publish with dir {DIR}. The platform verifies the app itself
+   (READY.json, the start command answering on the port, the bundle, the
+   program on QuickJS against your server, your end-to-end scenarios and
+   opens it as a framed desk window. If it reports a problem, find the root cause, fix it,
+   run your tests again, rewrite READY.json and call appui_publish again
+   (REPAIR.md holds the last problem) until it opens.
+Keep everything inside {DIR}. Do not ask questions: decide sensibly and note
+assumptions in PLAN.md.

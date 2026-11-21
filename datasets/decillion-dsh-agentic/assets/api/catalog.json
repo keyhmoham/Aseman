@@ -1,0 +1,5745 @@
+[
+ {
+  "namespace": "bots",
+  "name": "agent_apply_sample_looks",
+  "summary": "Admin: give the sample agents already on this node their creatures",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "agent_import_samples",
+  "summary": "Admin: add the sample agents to the catalog",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "agent_samples",
+  "summary": "Admin: the sample agents and which are already on this node",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_create",
+  "summary": "Deploy a bot VM from an image or yml spec",
+  "input": {
+   "properties": {
+    "allowed_tools": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "args": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "cost": {
+     "properties": {
+      "cpu_per_min": {
+       "type": "integer"
+      },
+      "disk_per_gb_min": {
+       "type": "integer"
+      },
+      "image_cost": {
+       "type": "integer"
+      },
+      "memory_per_gb_min": {
+       "type": "integer"
+      },
+      "per_call": {
+       "type": "integer"
+      },
+      "per_minute": {
+       "type": "integer"
+      },
+      "token_in_rate": {
+       "type": "integer"
+      },
+      "token_out_rate": {
+       "type": "integer"
+      }
+     },
+     "type": "object"
+    },
+    "description": {
+     "type": "string"
+    },
+    "entities": {
+     "type": "object"
+    },
+    "env": {
+     "type": "object"
+    },
+    "frontend": {
+     "type": "string"
+    },
+    "frontend_ref": {
+     "type": "string"
+    },
+    "image_ref": {
+     "type": "string"
+    },
+    "instructions": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "max_tokens": {
+     "type": "integer"
+    },
+    "max_turns": {
+     "type": "integer"
+    },
+    "model": {
+     "type": "string"
+    },
+    "module": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "provider": {
+     "type": "string"
+    },
+    "reasoning_effort": {
+     "type": "string"
+    },
+    "resources": {
+     "properties": {
+      "cpu": {
+       "type": "number"
+      },
+      "disk": {
+       "type": "integer"
+      },
+      "max_runtime_sec": {
+       "type": "integer"
+      },
+      "memory": {
+       "type": "integer"
+      }
+     },
+     "type": "object"
+    },
+    "service": {
+     "properties": {
+      "id": {
+       "type": "string"
+      },
+      "network": {
+       "type": "string"
+      },
+      "port": {
+       "type": "integer"
+      }
+     },
+     "type": "object"
+    },
+    "skills": {
+     "items": {
+      "properties": {
+       "description": {
+        "type": "string"
+       },
+       "instructions": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "tools": {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "spec_yml": {
+     "type": "string"
+    },
+    "vm_type": {
+     "type": "string"
+    },
+    "widget_dsl": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_delete",
+  "summary": "Delete a bot VM permanently",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_detail",
+  "summary": "Read bot descriptor and authorized configuration",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_edit",
+  "summary": "Edit and activate an agent definition",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "brain_instructions": {
+     "type": "string"
+    },
+    "cost": {
+     "properties": {
+      "cpu_per_min": {
+       "type": "integer"
+      },
+      "disk_per_gb_min": {
+       "type": "integer"
+      },
+      "image_cost": {
+       "type": "integer"
+      },
+      "memory_per_gb_min": {
+       "type": "integer"
+      },
+      "per_call": {
+       "type": "integer"
+      },
+      "per_minute": {
+       "type": "integer"
+      },
+      "token_in_rate": {
+       "type": "integer"
+      },
+      "token_out_rate": {
+       "type": "integer"
+      }
+     },
+     "type": "object"
+    },
+    "descriptor": {
+     "type": "object"
+    },
+    "descriptor_patch": {
+     "type": "object"
+    },
+    "fallback_models": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "instructions": {
+     "type": "string"
+    },
+    "model": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "provider": {
+     "type": "string"
+    },
+    "reasoning_effort": {
+     "type": "string"
+    },
+    "voice_model": {
+     "type": "string"
+    },
+    "voice_provider": {
+     "type": "string"
+    },
+    "voice_reasoning_effort": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_get",
+  "summary": "Get a bot",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_lifecycle",
+  "summary": "start/stop/pause/resume a bot VM",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "op": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_list",
+  "summary": "List bots I own",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_message",
+  "summary": "Message a bot VM",
+  "input": {
+   "properties": {
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "history": {
+     "items": {
+      "properties": {
+       "attachments": {
+        "items": {
+         "properties": {
+          "content": {
+           "type": "string"
+          },
+          "id": {
+           "type": "string"
+          },
+          "image_data": {
+           "type": "string"
+          },
+          "image_mime": {
+           "type": "string"
+          },
+          "mime": {
+           "type": "string"
+          },
+          "name": {
+           "type": "string"
+          },
+          "size": {
+           "type": "integer"
+          },
+          "url": {
+           "type": "string"
+          }
+         },
+         "type": "object"
+        },
+        "type": "array"
+       },
+       "content": {
+        "type": "string"
+       },
+       "role": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_profile",
+  "summary": "Rich profile for an agent, miniapp or tool",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_resize",
+  "summary": "Apply new resource limits to a running bot VM",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "cpu": {
+     "type": "number"
+    },
+    "disk_mb": {
+     "type": "integer"
+    },
+    "max_runtime_sec": {
+     "type": "integer"
+    },
+    "memory_mb": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_search",
+  "summary": "Search agents and apps across the whole platform",
+  "input": {
+   "properties": {
+    "kind": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "bot_usage",
+  "summary": "Live resource usage of a bot VM",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "builtin_decillion",
+  "summary": "Install the built-in decillion agent orchestrator (idempotent)",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "chat_assistant",
+  "summary": "The built-in assistant people mention in their notes and personal chats",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "entity_get",
+  "summary": "Read a runtime entity of a bot",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "key": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "entity_list",
+  "summary": "List the runtime entities of a bot",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "frontend_get",
+  "summary": "Fetch the elpian frontend bundle of a miniapp bot",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "frontend_set",
+  "summary": "Set the elpian frontend bundle of a miniapp bot",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "frontend": {
+     "type": "string"
+    },
+    "frontend_ref": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "kv_delete",
+  "summary": "Delete bot global KV value",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "kv_get",
+  "summary": "Get bot global KV value",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "kv_list",
+  "summary": "List bot global KV entries",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "kv_set",
+  "summary": "Set bot global KV value (host function)",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    },
+    "value": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "metadata_patch",
+  "summary": "Patch bot metadata",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "patch": {
+     "items": {
+      "properties": {
+       "op": {
+        "type": "string"
+       },
+       "path": {
+        "type": "string"
+       },
+       "value": {}
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "tree": {
+     "type": "object"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "metadata_view",
+  "summary": "View a bot metadata tree",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "network_call",
+  "summary": "Bot host function: make an outbound network call",
+  "input": {
+   "properties": {
+    "addr": {
+     "type": "string"
+    },
+    "body": {
+     "type": "string"
+    },
+    "header": {
+     "type": "object"
+    },
+    "method": {
+     "type": "string"
+    },
+    "path": {
+     "type": "string"
+    },
+    "protocol": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "widget_get",
+  "summary": "Get the stored desk-widget DSL of a miniapp",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "bots",
+  "name": "widget_set",
+  "summary": "Set the desk-widget DSL a miniapp shows on room desks",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "dsl": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "finance",
+  "name": "ledger_list",
+  "summary": "List ledger entries",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "finance",
+  "name": "wallet_get",
+  "summary": "Get my wallet balance",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "greeter",
+  "name": "hello",
+  "summary": "Greet using the example adapter",
+  "input": {
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "catalog",
+  "summary": "Visible listings with bot descriptors",
+  "input": {
+   "properties": {
+    "status": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "get",
+  "summary": "Fetch a listing with its bot details",
+  "input": {
+   "properties": {
+    "listing": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "install",
+  "summary": "Install a listing into a workspace",
+  "input": {
+   "properties": {
+    "listing": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "list",
+  "summary": "Browse agents and apps in the marketplace",
+  "input": {
+   "properties": {
+    "category": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    },
+    "type": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "my_listings",
+  "summary": "List the listings I published",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "publish",
+  "summary": "Publish an agent, app, or theme to the marketplace",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "category": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string"
+    },
+    "image_ref": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "price": {
+     "type": "integer"
+    },
+    "type": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "recommend",
+  "summary": "Rank marketplace agents for a brief",
+  "input": {
+   "properties": {
+    "brief": {
+     "type": "string"
+    },
+    "max_agents": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "market",
+  "name": "unpublish",
+  "summary": "Hide a listing from the marketplace",
+  "input": {
+   "properties": {
+    "listing": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "ask",
+  "summary": "Send a request to a user or bot and wait for its response",
+  "input": {
+   "properties": {
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "history": {
+     "items": {},
+     "type": "array"
+    },
+    "payload": {
+     "type": "string"
+    },
+    "timeout_sec": {
+     "type": "integer"
+    },
+    "to": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "get",
+  "summary": "Fetch a single packet by id",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "list",
+  "summary": "List packets involving the caller",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "peer": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "requests",
+  "summary": "List unanswered asks addressed to the caller",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "respond",
+  "summary": "Answer a previously requested ask",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "correlation": {
+     "type": "string"
+    },
+    "payload": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "message",
+  "name": "send",
+  "summary": "Send a fire-and-forget packet to a user or bot",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "payload": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "leaderboard",
+  "summary": "Rank top post authors by engagement",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_comment",
+  "summary": "Comment on a post",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_comments",
+  "summary": "List the comments on a post",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_create",
+  "summary": "Publish a post (optionally into a workspace)",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "forward": {
+     "type": "string"
+    },
+    "media": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "parent": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "tags": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_delete",
+  "summary": "Delete one of my posts",
+  "input": {
+   "properties": {
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_feed",
+  "summary": "Browse the global or following feed",
+  "input": {
+   "properties": {
+    "following": {
+     "type": "boolean"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_get",
+  "summary": "Fetch a single post",
+  "input": {
+   "properties": {
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_import",
+  "summary": "Admin: publish a managed account's posts from another platform, each once (the admins space's tools, for an administrator)",
+  "input": {
+   "properties": {
+    "author": {
+     "type": "string"
+    },
+    "posts": {
+     "items": {
+      "properties": {
+       "at": {
+        "type": "string"
+       },
+       "body": {
+        "type": "string"
+       },
+       "media": {
+        "items": {
+         "properties": {
+          "data": {
+           "type": "string"
+          },
+          "mime": {
+           "type": "string"
+          },
+          "name": {
+           "type": "string"
+          }
+         },
+         "type": "object"
+        },
+        "type": "array"
+       },
+       "source": {
+        "type": "string"
+       },
+       "source_id": {
+        "type": "string"
+       },
+       "tags": {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_like",
+  "summary": "Like a post",
+  "input": {
+   "properties": {
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_report",
+  "summary": "Report a post to the node's admins",
+  "input": {
+   "properties": {
+    "note": {
+     "type": "string"
+    },
+    "post": {
+     "type": "string"
+    },
+    "reason": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_search",
+  "summary": "Search top-level posts by body text",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    },
+    "scope": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_unlike",
+  "summary": "Remove a like from a post",
+  "input": {
+   "properties": {
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_update",
+  "summary": "Edit one of my posts",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "post": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "post_user_posts",
+  "summary": "List posts authored by a user",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "user": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "posts",
+  "name": "spaces_feed",
+  "summary": "Aggregate the private posts of all workspaces I am a member of",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "create",
+  "summary": "Create a delayed or periodic routine for a room",
+  "input": {
+   "properties": {
+    "at": {
+     "type": "string"
+    },
+    "delay_sec": {
+     "type": "integer"
+    },
+    "interval_sec": {
+     "type": "integer"
+    },
+    "name": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "target": {
+     "type": "string"
+    },
+    "task": {
+     "type": "string"
+    },
+    "timezone": {
+     "type": "string"
+    },
+    "type": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "delete",
+  "summary": "Delete a routine",
+  "input": {
+   "properties": {
+    "routine": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "demo_discard",
+  "summary": "Discard a demonstration",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "demo_list",
+  "summary": "My demonstrations in a project",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "demo_save",
+  "summary": "Keep the drafted skill (as edited) as a project skill and, with a daily time, a routine",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "demo_start",
+  "summary": "Start recording me doing a task on the project computer (stops itself after ten minutes)",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "demo_stop",
+  "summary": "Stop the recording and draft a skill from it",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "get",
+  "summary": "Get a routine",
+  "input": {
+   "properties": {
+    "routine": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "list",
+  "summary": "List a room's routines",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "pause",
+  "summary": "Pause a routine",
+  "input": {
+   "properties": {
+    "routine": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "resume",
+  "summary": "Resume a paused routine",
+  "input": {
+   "properties": {
+    "routine": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "routines",
+  "name": "update",
+  "summary": "Modify a routine",
+  "input": {
+   "properties": {
+    "delay_sec": {
+     "type": "integer"
+    },
+    "interval_sec": {
+     "type": "integer"
+    },
+    "name": {
+     "type": "string"
+    },
+    "routine": {
+     "type": "string"
+    },
+    "target": {
+     "type": "string"
+    },
+    "task": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "admins_space_get",
+  "summary": "Admin: the project every platform administrator is a member of",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "admins_space_set",
+  "summary": "Admin: choose the project every platform administrator is added to",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "agent_answer",
+  "summary": "Answer an agent's question by id (posted in the room)",
+  "input": {
+   "properties": {
+    "answer": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "question_id": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "agent_hire",
+  "summary": "Add an agent published in the marketplace to the space",
+  "input": {
+   "properties": {
+    "listing": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "agent_log",
+  "summary": "Write an agent's work log entry or live status in a room",
+  "input": {
+   "properties": {
+    "raw": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "agent_questions",
+  "summary": "Questions the space's agents are waiting on",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "agent_recruit",
+  "summary": "Create a specialist agent and add it to the space",
+  "input": {
+   "properties": {
+    "description": {
+     "type": "string"
+    },
+    "instructions": {
+     "type": "string"
+    },
+    "model": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "provider": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "skills": {
+     "items": {
+      "properties": {
+       "description": {
+        "type": "string"
+       },
+       "instructions": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "tools": {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "ask",
+  "summary": "Ask a bot (agent, sandbox or miniapp) inside a space",
+  "input": {
+   "properties": {
+    "args": {},
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "history": {
+     "items": {
+      "properties": {
+       "attachments": {
+        "items": {
+         "properties": {
+          "content": {
+           "type": "string"
+          },
+          "id": {
+           "type": "string"
+          },
+          "image_data": {
+           "type": "string"
+          },
+          "image_mime": {
+           "type": "string"
+          },
+          "mime": {
+           "type": "string"
+          },
+          "name": {
+           "type": "string"
+          },
+          "size": {
+           "type": "integer"
+          },
+          "url": {
+           "type": "string"
+          }
+         },
+         "type": "object"
+        },
+        "type": "array"
+       },
+       "content": {
+        "type": "string"
+       },
+       "role": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "raw": {
+     "type": "boolean"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "temp_thread": {
+     "type": "boolean"
+    },
+    "thread": {
+     "type": "string"
+    },
+    "tool": {
+     "type": "string"
+    },
+    "via": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "bot_add",
+  "summary": "Add a bot to a space/room",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "bot_remove",
+  "summary": "Remove a bot from a space/room",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "bots_list",
+  "summary": "List the bots (agents/miniapps/tools) installed in a space",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "chat_clear",
+  "summary": "Delete a direct chat for yourself: you see only what comes after",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "chat_list",
+  "summary": "List my conversations: direct chats and project rooms, latest first",
+  "input": {
+   "properties": {
+    "kind": {
+     "type": "string"
+    },
+    "query": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "chat_pin",
+  "summary": "Pin a chat to the top of your chats, or unpin it",
+  "input": {
+   "properties": {
+    "pinned": {
+     "type": "boolean"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "computer",
+  "summary": "Read/start/stop a workspace computer",
+  "input": {
+   "properties": {
+    "operation": {
+     "type": "string"
+    },
+    "since": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "db_read",
+  "summary": "Admins space: read records from the platform database",
+  "input": {
+   "properties": {
+    "asc": {
+     "type": "boolean"
+    },
+    "equal": {
+     "type": "object"
+    },
+    "gt": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    },
+    "in": {
+     "type": "object"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "lt": {
+     "type": "object"
+    },
+    "model": {
+     "type": "string"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "order_by": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "db_tables",
+  "summary": "Admins space: list the platform database's tables",
+  "input": {
+   "properties": {
+    "model": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "decillion_ensure",
+  "summary": "Add the built-in decillion orchestrator to every workspace",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "desktop_get",
+  "summary": "A room's desk: its open card windows, pins and viewport",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "desktop_install",
+  "summary": "Start a VNC desktop on the workspace computer",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "desktop_uninstall",
+  "summary": "Stop and remove the workspace desktop",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "desktop_update",
+  "summary": "Open, move, close and pin card windows on a room's desk",
+  "input": {
+   "properties": {
+    "ops": {
+     "items": {
+      "properties": {
+       "args": {
+        "type": "object"
+       },
+       "compact": {
+        "properties": {
+         "order": {
+          "type": "integer"
+         },
+         "shape": {
+          "type": "string"
+         },
+         "size": {
+          "type": "string"
+         }
+        },
+        "type": "object"
+       },
+       "frontend": {
+        "type": "string"
+       },
+       "h": {
+        "type": "number"
+       },
+       "id": {
+        "type": "string"
+       },
+       "item": {
+        "type": "object"
+       },
+       "kind": {
+        "type": "string"
+       },
+       "microtool": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "op": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       },
+       "tool": {
+        "type": "string"
+       },
+       "w": {
+        "type": "number"
+       },
+       "x": {
+        "type": "number"
+       },
+       "y": {
+        "type": "number"
+       }
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "direct_block",
+  "summary": "Block or unblock the other side of a direct chat: neither of you can write in it",
+  "input": {
+   "properties": {
+    "blocked": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "direct_open",
+  "summary": "Open (or start) the direct conversation with a person or an agent",
+  "input": {
+   "properties": {
+    "peer": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "file_delete",
+  "summary": "Delete a space file",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "file_download",
+  "summary": "Download a space file",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "file_get",
+  "summary": "Get a space file's metadata (optionally with payload)",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    },
+    "with_data": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "file_list",
+  "summary": "List files in a space/room",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "file_upload",
+  "summary": "Upload a file to a space/room",
+  "input": {
+   "properties": {
+    "data": {
+     "type": "string"
+    },
+    "mime": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invitation_accept",
+  "summary": "Accept an invitation",
+  "input": {
+   "properties": {
+    "invitation": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invitation_decline",
+  "summary": "Decline an invitation",
+  "input": {
+   "properties": {
+    "invitation": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invitation_revoke",
+  "summary": "Revoke a pending invitation",
+  "input": {
+   "properties": {
+    "invitation": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invitations_list",
+  "summary": "List my pending invitations",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invitations_space",
+  "summary": "List a space's invitations",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "invite",
+  "summary": "Invite an account to a space",
+  "input": {
+   "properties": {
+    "invitee": {
+     "type": "string"
+    },
+    "role": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "join",
+  "summary": "Join a public workspace (or accept an invitation)",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "kv_delete",
+  "summary": "Delete a bot KV value",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "kv_get",
+  "summary": "Get a bot KV value",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "kv_list",
+  "summary": "List my KV entries in a space/room",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "kv_set",
+  "summary": "Set a bot KV value in a space/room",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "value": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "leave",
+  "summary": "Leave a workspace (owners must delete it instead)",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "live",
+  "summary": "Follow a room's live activity: who is working and the answer being written",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "seq": {
+     "type": "integer"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "member_permissions",
+  "summary": "Set a member's explicit permission grants",
+  "input": {
+   "properties": {
+    "member": {
+     "type": "string"
+    },
+    "permissions": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "member_remove",
+  "summary": "Remove a member from the space",
+  "input": {
+   "properties": {
+    "member": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "member_role",
+  "summary": "Set a member's role",
+  "input": {
+   "properties": {
+    "member": {
+     "type": "string"
+    },
+    "role": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "members_list",
+  "summary": "List space members",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_delete",
+  "summary": "Delete a message",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_edit",
+  "summary": "Change the text of a message you sent",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_edits",
+  "summary": "Earlier wording of an edited message",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_hide",
+  "summary": "Hide a room message for yourself only",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_keep",
+  "summary": "Keep files of a room message in your own storage",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_list",
+  "summary": "List messages in a room",
+  "input": {
+   "properties": {
+    "after": {
+     "type": "string"
+    },
+    "before": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "reply_to": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_react",
+  "summary": "React to a room message with an emoji (empty emoji removes yours)",
+  "input": {
+   "properties": {
+    "emoji": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_report",
+  "summary": "Report a message or a chat to the node's admins",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    },
+    "reason": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_search",
+  "summary": "Search messages across a space",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "message_send",
+  "summary": "Send a message to a room",
+  "input": {
+   "properties": {
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "mentions": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "reply_to": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "wait": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "metadata_patch",
+  "summary": "Patch space metadata",
+  "input": {
+   "properties": {
+    "patch": {
+     "items": {
+      "properties": {
+       "op": {
+        "type": "string"
+       },
+       "path": {
+        "type": "string"
+       },
+       "value": {}
+      },
+      "type": "object"
+     },
+     "type": "array"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "metadata_public",
+  "summary": "Set space public metadata paths",
+  "input": {
+   "properties": {
+    "paths": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "metadata_view",
+  "summary": "View space metadata (visibility filtered)",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "pins_get",
+  "summary": "Read ordered workspace pins",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "pins_set",
+  "summary": "Replace ordered workspace pins",
+  "input": {
+   "properties": {
+    "ids": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "proxy_create",
+  "summary": "Create a gateway proxy to a port of the space's sandbox",
+  "input": {
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "port": {
+     "type": "integer"
+    },
+    "preserve_path": {
+     "type": "boolean"
+    },
+    "room": {
+     "type": "string"
+    },
+    "show": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    },
+    "start": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string"
+    },
+    "tool": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "proxy_delete",
+  "summary": "Delete a gateway proxy",
+  "input": {
+   "properties": {
+    "proxy": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "proxy_get",
+  "summary": "Get a gateway proxy",
+  "input": {
+   "properties": {
+    "proxy": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "proxy_list",
+  "summary": "List the gateway proxies of a space",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "proxy_open",
+  "summary": "Make a preview ready to view: wake the computer and start its service again if needed",
+  "input": {
+   "properties": {
+    "proxy": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_create",
+  "summary": "Create a room in a space",
+  "input": {
+   "properties": {
+    "color": {
+     "type": "string"
+    },
+    "icon": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "purpose": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "topic": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_delete",
+  "summary": "Delete a room",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_get",
+  "summary": "Get a room",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_list",
+  "summary": "List rooms of a space",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_profile",
+  "summary": "Rich profile for a room",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "room_update",
+  "summary": "Rename a room or change its topic",
+  "input": {
+   "properties": {
+    "color": {
+     "type": "string"
+    },
+    "icon": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "purpose": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "topic": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "sandbox_exec",
+  "summary": "Run a shell command in the shared space sandbox",
+  "input": {
+   "properties": {
+    "command": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "sandbox_files",
+  "summary": "Browse and edit workspace files",
+  "input": {
+   "properties": {
+    "content": {
+     "type": "string"
+    },
+    "data_base64": {
+     "type": "string"
+    },
+    "operation": {
+     "type": "string"
+    },
+    "path": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string"
+    },
+    "wake": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "sandbox_start",
+  "summary": "Start the shared space sandbox",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "sandbox_status",
+  "summary": "Shared space sandbox status",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "sandbox_stop",
+  "summary": "Stop the shared space sandbox (kept for reuse)",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "seen_set",
+  "summary": "Record how far the caller has read a workspace's conversation",
+  "input": {
+   "properties": {
+    "at": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_create",
+  "summary": "Create a space",
+  "input": {
+   "properties": {
+    "bots": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "color": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string"
+    },
+    "icon": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "metadata": {
+     "type": "object"
+    },
+    "name": {
+     "type": "string"
+    },
+    "purpose": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_delete",
+  "summary": "Delete a space (owner only)",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_detail",
+  "summary": "Read a workspace and its rooms and metadata",
+  "input": {
+   "properties": {
+    "admin": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_get",
+  "summary": "Get a space",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_list",
+  "summary": "List spaces I belong to",
+  "input": {
+   "properties": {
+    "kind": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_profile",
+  "summary": "Rich profile for a workspace",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_search",
+  "summary": "Search spaces (projects are private: always empty)",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "space_update",
+  "summary": "Update space name/description",
+  "input": {
+   "properties": {
+    "description": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "public": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "thread_create",
+  "summary": "Open a new conversation thread in a room",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "thread_delete",
+  "summary": "Delete a conversation thread with its messages",
+  "input": {
+   "properties": {
+    "thread": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "thread_list",
+  "summary": "List a room's conversation threads",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "thread_rename",
+  "summary": "Rename a conversation thread",
+  "input": {
+   "properties": {
+    "thread": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "tools_list",
+  "summary": "List tools (miniapps + sandbox) available to agents in a space",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "turn_cancel",
+  "summary": "Cancel accepted room work",
+  "input": {
+   "properties": {
+    "turn": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "turn_list",
+  "summary": "Read accepted room work",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "turn_log",
+  "summary": "Read accepted work diagnostics",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "space": {
+     "type": "string"
+    },
+    "turn": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "turn_resume",
+  "summary": "Explicitly retry inspected interrupted work",
+  "input": {
+   "properties": {
+    "verdict": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "turn_submit",
+  "summary": "Durably submit a room turn",
+  "input": {
+   "properties": {
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "prompt": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "seeds": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "silent": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    },
+    "submission_id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "typing_set",
+  "summary": "Say you are typing in a room (or stopped)",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "typing": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "updates",
+  "summary": "Read a workspace's changes since a cursor (rooms, messages, work, live activity)",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "since": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "widget_action",
+  "summary": "Run a widget action against a miniapp backend VM (static ask)",
+  "input": {
+   "properties": {
+    "args": {
+     "type": "object"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "op": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "spaces",
+  "name": "widget_list",
+  "summary": "List the desk-widget DSLs of miniapps installed in a room",
+  "input": {
+   "properties": {
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "talent",
+  "name": "create",
+  "summary": "Fund a collaboration offer",
+  "input": {
+   "properties": {
+    "amount": {
+     "type": "integer"
+    },
+    "message": {
+     "type": "string"
+    },
+    "recipient": {
+     "type": "string"
+    },
+    "request_id": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "talent",
+  "name": "list_mine",
+  "summary": "Own offers",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "talent",
+  "name": "list_project",
+  "summary": "Project offers",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "talent",
+  "name": "respond",
+  "summary": "Accept or decline a funded offer",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "active",
+  "summary": "Get the theme currently applied to this device session",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "apply",
+  "summary": "Apply a theme pack to this device session",
+  "input": {
+   "properties": {
+    "listing": {
+     "type": "string"
+    },
+    "theme": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "create",
+  "summary": "Create a UI theme pack and optionally publish it",
+  "input": {
+   "properties": {
+    "description": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "pack": {
+     "type": "string"
+    },
+    "publish": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "edit",
+  "summary": "Update a theme pack you own",
+  "input": {
+   "properties": {
+    "description": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "pack": {
+     "type": "string"
+    },
+    "theme": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "get",
+  "summary": "Fetch a theme pack JSON by theme id",
+  "input": {
+   "properties": {
+    "theme": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "import_samples",
+  "summary": "Import sample theme packs into the marketplace (admin)",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "themes",
+  "name": "uninstall",
+  "summary": "Clear this session's applied theme and return to the builtin Sky look",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "timeline",
+  "name": "status",
+  "summary": "The spaces' timelines: whether they are kept and how far each feed has been read",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "app_rpc",
+  "summary": "A tool's app (MCP Apps) asks its server: resources/read or tools/call, as the person in the space",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "method": {
+     "type": "string"
+    },
+    "params": {
+     "type": "object"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "broker_add",
+  "summary": "Admin: add a connector broker with the node's API key and its MCP address",
+  "input": {
+   "properties": {
+    "api_key": {
+     "type": "string"
+    },
+    "broker": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "broker_presets",
+  "summary": "Admin: the connector brokers that can be added (Composio, Arcade)",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "commands_list",
+  "summary": "Discover tool commands",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "connection_set",
+  "summary": "Set a personal project connection",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "expires_at": {
+     "type": "string"
+    },
+    "grant": {
+     "type": "string"
+    },
+    "refresh_token": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "frontend_get",
+  "summary": "A tool's frontend: its static program, or mode metadata when empty/unknown",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "gadget_list",
+  "summary": "The gadgets a person can use: their app-wide ones and a space's",
+  "input": {
+   "properties": {
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "glama_attributes",
+  "summary": "The filters the MCP directory offers",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "glama_get",
+  "summary": "One MCP server of the directory, with its tools",
+  "input": {
+   "properties": {
+    "key": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "glama_search",
+  "summary": "Search the MCP directory (Glama) for remote servers",
+  "input": {
+   "properties": {
+    "after": {
+     "type": "string"
+    },
+    "attributes": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "first": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    },
+    "sort": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "glama_status",
+  "summary": "Whether the MCP directory (Glama) is set up on this node",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "invoke",
+  "summary": "Invoke a project tool as its caller",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "function": {
+     "type": "string"
+    },
+    "payload": {
+     "type": "object"
+    },
+    "room": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "via": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_connect_finish",
+  "summary": "Finish a sign-in: the node keeps the connection",
+  "input": {
+   "properties": {
+    "code": {
+     "type": "string"
+    },
+    "state": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_connect_start",
+  "summary": "Begin signing a person in to an MCP server at its own provider",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "fresh_client": {
+     "type": "boolean"
+    },
+    "reconnect": {
+     "type": "boolean"
+    },
+    "redirect_uri": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_connect_token",
+  "summary": "Connect a person to an MCP server with a key they hold",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "header": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    },
+    "username": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_delete",
+  "summary": "Delete a registered MCP server",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_directory_list",
+  "summary": "Admin: the MCP directory servers rooms have added, and who is connected to each",
+  "input": null,
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_disconnect",
+  "summary": "Forget a person's connection to an MCP server",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_install",
+  "summary": "Add an MCP server (from the directory, or by address) to a space as a plugin",
+  "input": {
+   "properties": {
+    "headers": {
+     "type": "object"
+    },
+    "key": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "room": {
+     "type": "string"
+    },
+    "source": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_oauth_get",
+  "summary": "Read the OAuth client saved for an MCP server",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_oauth_set",
+  "summary": "Save the OAuth client people sign in to an MCP server with",
+  "input": {
+   "properties": {
+    "authorization_endpoint": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "params": {
+     "type": "string"
+    },
+    "scopes": {
+     "type": "string"
+    },
+    "token_endpoint": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_register",
+  "summary": "Register a remote MCP tool",
+  "input": {
+   "properties": {
+    "auth": {
+     "type": "string"
+    },
+    "descriptor": {
+     "type": "object"
+    },
+    "headers": {
+     "type": "object"
+    },
+    "listed": {
+     "type": "boolean"
+    },
+    "name": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "mcp_update",
+  "summary": "Update remote MCP configuration",
+  "input": {
+   "properties": {
+    "auth": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "headers": {
+     "type": "object"
+    },
+    "token": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "oauth_exchange",
+  "summary": "Exchange an account-bound PKCE grant",
+  "input": {
+   "properties": {
+    "code": {
+     "type": "string"
+    },
+    "state": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "oauth_prepare",
+  "summary": "Discover OAuth and prepare a PKCE grant",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "client_id": {
+     "type": "string"
+    },
+    "client_secret": {
+     "type": "string"
+    },
+    "redirect_uri": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "tool_create",
+  "summary": "Create a tool: an external, managed or installed backend and a static frontend (or none)",
+  "input": {
+   "properties": {
+    "backend": {
+     "properties": {
+      "auth": {
+       "type": "string"
+      },
+      "headers": {
+       "type": "object"
+      },
+      "image": {
+       "type": "string"
+      },
+      "language": {
+       "type": "string"
+      },
+      "mode": {
+       "type": "string"
+      },
+      "path": {
+       "type": "string"
+      },
+      "port": {
+       "type": "integer"
+      },
+      "resources": {
+       "properties": {
+        "cpu": {
+         "type": "number"
+        },
+        "disk": {
+         "type": "integer"
+        },
+        "max_runtime_sec": {
+         "type": "integer"
+        },
+        "memory": {
+         "type": "integer"
+        }
+       },
+       "type": "object"
+      },
+      "runtime": {
+       "type": "string"
+      },
+      "source": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "description": {
+     "type": "string"
+    },
+    "frontend": {
+     "properties": {
+      "bytecode": {
+       "type": "string"
+      },
+      "language": {
+       "type": "string"
+      },
+      "mode": {
+       "type": "string"
+      },
+      "runtime": {
+       "type": "string"
+      },
+      "skill": {
+       "type": "string"
+      },
+      "source": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "listed": {
+     "type": "boolean"
+    },
+    "name": {
+     "type": "string"
+    },
+    "per_call": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "tool_delete",
+  "summary": "Delete a tool",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "tool_get",
+  "summary": "Read a tool: its backend mode, runtime, frontend and microtools",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "tool_microtools",
+  "summary": "List a tool's microtools, asking its backend",
+  "input": {
+   "properties": {
+    "bot": {
+     "type": "string"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "tools",
+  "name": "tool_update",
+  "summary": "Replace a tool's backend program or frontend",
+  "input": {
+   "properties": {
+    "auth": {
+     "type": "string"
+    },
+    "bot": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string"
+    },
+    "frontend": {
+     "properties": {
+      "bytecode": {
+       "type": "string"
+      },
+      "language": {
+       "type": "string"
+      },
+      "mode": {
+       "type": "string"
+      },
+      "runtime": {
+       "type": "string"
+      },
+      "skill": {
+       "type": "string"
+      },
+      "source": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "name": {
+     "type": "string"
+    },
+    "source": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "account_get",
+  "summary": "Public account profile",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_channel_connect",
+  "summary": "A one-time link to connect a chat app to your Decillion",
+  "input": {
+   "properties": {
+    "app": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_channel_disconnect",
+  "summary": "Disconnect a chat app from your Decillion",
+  "input": {
+   "properties": {
+    "app": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_channels",
+  "summary": "The chat apps connected to your Decillion",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_confirm",
+  "summary": "Confirm (or cancel) what your Decillion proposed to do",
+  "input": {
+   "properties": {
+    "approve": {
+     "type": "boolean"
+    },
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_job_cancel",
+  "summary": "Stop work your Decillion is doing on its computer",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_jobs",
+  "summary": "The work your Decillion is doing for you on its computer",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_memory_get",
+  "summary": "What your Decillion knows of you",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_memory_set",
+  "summary": "Change what your Decillion knows of you",
+  "input": {
+   "properties": {
+    "notes": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_reminder_cancel",
+  "summary": "Cancel one of your reminders",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_reminders",
+  "summary": "The reminders your Decillion is to deliver",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_retry",
+  "summary": "Have your Decillion take up a note it could not answer for lack of credits",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_room_set",
+  "summary": "Let your Decillion read a room of yours, or not",
+  "input": {
+   "properties": {
+    "allowed": {
+     "type": "boolean"
+    },
+    "space": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_rooms",
+  "summary": "The rooms you belong to, and which of them your Decillion may read",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_stop",
+  "summary": "Stop your Decillion writing its answer to a note",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_work",
+  "summary": "Hand work to your own workspace's team; the result is written in your Decillion chat when it is done",
+  "input": {
+   "properties": {
+    "request": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "brain_workspace",
+  "summary": "The hidden workspace your Decillion works in (empty until it has used it)",
+  "input": {
+   "properties": {
+    "create": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_accept",
+  "summary": "Answer a ringing call",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_decline",
+  "summary": "Decline a ringing call",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_end",
+  "summary": "Hang up (or cancel a call that is still ringing)",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_incoming",
+  "summary": "The call ringing for the caller, if any",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_poll",
+  "summary": "A call's state and the setup messages from the other side",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "since": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_signal",
+  "summary": "Send a call setup message (offer, answer or network candidate)",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "payload": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "call_start",
+  "summary": "Start a voice or video call to a person",
+  "input": {
+   "properties": {
+    "to": {
+     "type": "string"
+    },
+    "video": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_agent_ask",
+  "summary": "Have Decillion answer a message of yours in your notes or a personal chat",
+  "input": {
+   "properties": {
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_assistant",
+  "summary": "The assistant people mention as @decillion in their chats",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_file_upload",
+  "summary": "Upload a file to send in a direct message",
+  "input": {
+   "properties": {
+    "data": {
+     "type": "string"
+    },
+    "duration_ms": {
+     "type": "integer"
+    },
+    "mime": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string"
+    },
+    "voice": {
+     "type": "boolean"
+    },
+    "waveform": {
+     "items": {
+      "type": "integer"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_hide",
+  "summary": "Delete a message for yourself only",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_keep",
+  "summary": "Keep the files of a message you received, in your own storage",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    },
+    "message": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_list",
+  "summary": "List direct messages with a peer",
+  "input": {
+   "properties": {
+    "before": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "peer": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_react",
+  "summary": "React to a message with an emoji (empty emoji removes your reaction)",
+  "input": {
+   "properties": {
+    "emoji": {
+     "type": "string"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_report",
+  "summary": "Report a direct message or chat to the node's admins",
+  "input": {
+   "properties": {
+    "message_id": {
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    },
+    "peer": {
+     "type": "string"
+    },
+    "reason": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_send",
+  "summary": "Send a direct message to a user or bot",
+  "input": {
+   "properties": {
+    "attachments": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "body": {
+     "type": "string"
+    },
+    "reply_to": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string"
+    },
+    "voice": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "dm_threads",
+  "summary": "List my direct message conversations",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "file_delete",
+  "summary": "Delete an owned file",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "file_download",
+  "summary": "Download a file",
+  "input": {
+   "properties": {
+    "file": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "file_ingest",
+  "summary": "Download a remote image, video or audio into Decillion storage (cached by URL)",
+  "input": {
+   "properties": {
+    "url": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "file_upload",
+  "summary": "Upload a file and link it to a metadata path",
+  "input": {
+   "properties": {
+    "data": {
+     "type": "string"
+    },
+    "meta_path": {
+     "type": "string"
+    },
+    "mime": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "public": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "follow",
+  "summary": "Follow an account",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "followers_list",
+  "summary": "List an account's followers",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "following_list",
+  "summary": "List accounts an account follows",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "hireable_list",
+  "summary": "Approved people available for hire",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "host_markup",
+  "summary": "Host every remote image/video/audio in markup on Decillion and rewrite the body",
+  "input": {
+   "properties": {
+    "body": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "metadata_patch",
+  "summary": "Patch own metadata tree (add/set/remove ops)",
+  "input": {
+   "properties": {
+    "patch": {
+     "items": {
+      "properties": {
+       "op": {
+        "type": "string"
+       },
+       "path": {
+        "type": "string"
+       },
+       "value": {}
+      },
+      "type": "object"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "metadata_public",
+  "summary": "Set which metadata paths are public",
+  "input": {
+   "properties": {
+    "paths": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "metadata_replace",
+  "summary": "Replace the whole metadata tree",
+  "input": {
+   "properties": {
+    "tree": {
+     "type": "object"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "metadata_view",
+  "summary": "View an account metadata tree (visibility filtered)",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "notifications_list",
+  "summary": "List your latest notifications",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "notifications_read",
+  "summary": "Mark your notifications read",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "notify_mute",
+  "summary": "Mute or unmute a room or a chat's notifications",
+  "input": {
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "muted": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "notify_prefs",
+  "summary": "What the caller is notified about, and what they muted",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "notify_set",
+  "summary": "Turn a kind of notification on or off",
+  "input": {
+   "properties": {
+    "category": {
+     "type": "string"
+    },
+    "enabled": {
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "privacy_get",
+  "summary": "Who may call and invite the caller",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "privacy_set",
+  "summary": "Choose who may call and invite the caller",
+  "input": {
+   "properties": {
+    "calls_video": {
+     "type": "string"
+    },
+    "calls_voice": {
+     "type": "string"
+    },
+    "invites": {
+     "type": "string"
+    },
+    "messages": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "push_register",
+  "summary": "Register this device for push notifications",
+  "input": {
+   "properties": {
+    "environment": {
+     "type": "string"
+    },
+    "platform": {
+     "type": "string"
+    },
+    "token": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "push_unregister",
+  "summary": "Stop push notifications to this device",
+  "input": {
+   "properties": {
+    "token": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "search",
+  "summary": "Search accounts by handle or email",
+  "input": {
+   "properties": {
+    "limit": {
+     "type": "integer"
+    },
+    "offset": {
+     "type": "integer"
+    },
+    "query": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": true,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "storage_delete",
+  "summary": "Delete files from the caller's storage to free space",
+  "input": {
+   "properties": {
+    "files": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "kind": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "storage_files",
+  "summary": "A page of the files behind one chat or room in the caller's storage",
+  "input": {
+   "properties": {
+    "before": {
+     "type": "string"
+    },
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "storage_usage",
+  "summary": "How much storage the caller uses, by chat and by room they own",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "unfollow",
+  "summary": "Unfollow an account",
+  "input": {
+   "properties": {
+    "account": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "voice_config",
+  "summary": "Which voice models the node uses in a live voice chat",
+  "input": null,
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "voice_speak",
+  "summary": "Have the node's speech model say a piece of text aloud",
+  "input": {
+   "properties": {
+    "text": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "voice_transcribe_chunk",
+  "summary": "Turn one short piece of spoken audio into text (part of a live voice turn)",
+  "input": {
+   "properties": {
+    "audio": {
+     "type": "string"
+    },
+    "mime": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ },
+ {
+  "namespace": "users",
+  "name": "voice_turn",
+  "summary": "One live voice turn: hear, answer as Decillion, speak back",
+  "input": {
+   "properties": {
+    "audio": {
+     "type": "string"
+    },
+    "mime": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "room_agent": false,
+  "personal": true
+ }
+]

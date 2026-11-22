@@ -27,7 +27,7 @@ def main():
     if not os.path.exists(os.path.join(adapter, 'adapter_config.json')):
         sys.exit(f'no adapter at {adapter}: train first')
     status_path = os.path.join(cfg['out_dir'], 'train_status.json')
-    if os.path.exists(status_path) and not json.load(open(status_path)).get('complete'):
+    if not opt.adapter and os.path.exists(status_path) and not json.load(open(status_path)).get('complete'):
         print('WARNING: training stopped early (time budget); merging the partial adapter')
 
     parent = os.path.dirname(merged.rstrip('/')) or '.'

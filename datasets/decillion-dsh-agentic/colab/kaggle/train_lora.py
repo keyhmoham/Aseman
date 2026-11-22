@@ -300,6 +300,10 @@ def main():
 
     steps_per_epoch = math.ceil(len(train_ds) / (world * cfg['grad_accum']))
     total_steps = 2 if opt.smoke else steps_per_epoch * cfg['epochs']
+    # A checkpoint every `save_every_epoch` of an epoch (0.05 = 20 per epoch), in optimizer steps; only the newest
+    # `keep_checkpoints` stay on disk (the Trainer deletes older ones after each save).
+    save_steps = max(1, round(steps_per_epoch * cfg.get('save_every_epoch', 0.05)))
+    keep_ckpt = max(1, int(cfg.get('keep_checkpoints', 3)))
     eval_steps = max(1, cfg['eval_every'])
     args = TrainingArguments(
         output_dir=ckpt_dir,
@@ -322,8 +326,8 @@ def main():
         eval_strategy='no' if opt.smoke else 'steps',
         eval_steps=eval_steps,
         save_strategy='no' if opt.smoke else 'steps',
-        save_steps=cfg['save_every'],
-        save_total_limit=2,
+        save_steps=save_steps,
+        save_total_limit=keep_ckpt,
         prediction_loss_only=True,
         label_names=['labels'],
         remove_unused_columns=False,
@@ -378,7 +382,8 @@ def main():
 
     resume = None if opt.smoke else latest_checkpoint(ckpt_dir, cfg.get('resume_from'))
     log(f'train rows {len(train_ds)} | eval rows {len(eval_ds)} | world {world} | '
-        f'optimizer steps {total_steps} | resume from {resume}')
+        f'optimizer steps {total_steps} | checkpoint every {save_steps} steps '
+        f'({save_steps / steps_per_epoch:.3f} epoch), keeping the last {keep_ckpt} | resume from {resume}')
     t0 = time.time()
     trainer.train(resume_from_checkpoint=resume)
     took = time.time() - t0

@@ -15,6 +15,10 @@ through `<|im_end|>`, including tool calls. Qwen3.5's template keeps `<think>` r
 turns stay in the context exactly as the model sees them in production, but they are not trained, because their format
 (no `<think>` block) differs from what inference produces.
 
+**Checkpoints.** A checkpoint is written every 5% of an epoch (`SAVE_EVERY_EPOCH`), and only the newest 3
+(`KEEP_CHECKPOINTS`) stay on disk; older ones are deleted after each save. Each holds the LoRA adapter, optimizer and
+scheduler state (well under 1 GB), so the three together fit easily in `/kaggle/working`.
+
 **Time.** A Kaggle session lasts at most 12 hours. Training stops itself with a checkpoint before `TIME_BUDGET_HOURS`.
 Run the notebook again in a new session to resume, from this session's saved output (add it as an input) or from the
 Hugging Face Hub (set `HF_REPO_ID` and a Kaggle secret `HF_TOKEN`). The smoke test (cell 7) measures the real speed on

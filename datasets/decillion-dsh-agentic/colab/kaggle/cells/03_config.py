@@ -30,7 +30,8 @@ LORA_R, LORA_ALPHA, LORA_DROPOUT = 32, 64, 0.0
 LEARNING_RATE = 1e-4
 GRAD_ACCUM = 8                       # x 2 GPUs x 1 row = 16 rows per optimizer step
 WARMUP_RATIO = 0.05
-SAVE_EVERY = 10                      # optimizer steps
+SAVE_EVERY_EPOCH = 0.05              # write a checkpoint every 5% of an epoch (rounded to whole optimizer steps)
+KEEP_CHECKPOINTS = 3                 # only the newest 3 stay on disk; older ones are deleted after each save
 EVAL_EVERY = 25
 TIME_BUDGET_HOURS = 9.5              # training stops with a checkpoint after this; leaves time to merge and save
 SEED = 3407
@@ -53,7 +54,8 @@ print('resume from attached input:', RESUME_FROM)
 cfg = dict(model_id=MODEL_ID, out_dir=OUT_DIR, dist_dir=DIST_DIR, prepared_dir=PREPARED_DIR, merged_dir=MERGED_DIR,
            max_seq_len=MAX_SEQ_LEN, train_rows=TRAIN_ROWS, single_turn_share=SINGLE_TURN_SHARE, eval_rows=EVAL_ROWS,
            epochs=EPOCHS, load_in_4bit=LOAD_IN_4BIT, lora_r=LORA_R, lora_alpha=LORA_ALPHA, lora_dropout=LORA_DROPOUT,
-           learning_rate=LEARNING_RATE, grad_accum=GRAD_ACCUM, warmup_ratio=WARMUP_RATIO, save_every=SAVE_EVERY,
+           learning_rate=LEARNING_RATE, grad_accum=GRAD_ACCUM, warmup_ratio=WARMUP_RATIO, save_every_epoch=SAVE_EVERY_EPOCH,
+           keep_checkpoints=KEEP_CHECKPOINTS,
            eval_every=EVAL_EVERY, time_budget_hours=TIME_BUDGET_HOURS, seed=SEED, hf_repo_id=HF_REPO_ID,
            resume_from=RESUME_FROM, num_proc=max(1, (os.cpu_count() or 2)))
 json.dump(cfg, open(CONFIG, 'w'), indent=1)

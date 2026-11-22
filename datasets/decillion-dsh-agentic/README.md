@@ -84,6 +84,14 @@ tools=tools)` for Qwen chat templates (TRL `SFTTrainer` with assistant-only loss
 random distractors, so the model learns to choose; `--tools full` matches production exactly but makes rows
 about 30k tokens. A mix (mostly relevant, some full) is a good start for a 4B model.
 
+## Fine-tuning on Kaggle (2×T4)
+
+`colab/finetune_qwen35_kaggle.ipynb` fine-tunes Qwen3.5-4B with QLoRA on both T4s (DDP), merges the adapter and serves
+it with vLLM. It is built from `colab/kaggle/` (`prepare_data.py`, `train_lora.py`, `merge_lora.py` and `cells/`) with
+`python3 colab/build_notebook.py kaggle`, so edit those files rather than the notebook. Rendered with Qwen3.5's
+template, rows are 6.8k–18.7k tokens (the system prompt and tools are about 11k), so it trains at 16,384 tokens and
+puts loss only on the final turn's assistant tokens, computing logits only there.
+
 ## How it was made, and what is verified
 
 Nothing in the tool layer is written by hand from memory:

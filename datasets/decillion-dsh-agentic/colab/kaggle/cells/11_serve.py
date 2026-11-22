@@ -14,6 +14,8 @@ SECRETS = f'{TMP}/secrets'
 VLLM_LOG = f'{TMP}/vllm.log'
 os.makedirs(SECRETS, exist_ok=True)
 assert os.path.exists(f'{MERGED_DIR}/config.json'), f'no merged model at {MERGED_DIR}: run cell 10 first'
+if os.path.exists(f'{MERGED_DIR}/merged_from.json'):
+    print('serving the model merged from', json.load(open(f'{MERGED_DIR}/merged_from.json'))['adapter'])
 
 if not os.path.exists(f'{VENV}/bin/vllm'):
     print('installing vLLM into', VENV, '(a few minutes)…')

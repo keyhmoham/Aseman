@@ -58,7 +58,11 @@ def _efficient_kernel_works(device, dtype, head_dim):
         ok = False
         if device.type == 'cuda':
             try:
+                import warnings
                 from torch.nn.attention import SDPBackend, sdpa_kernel
+                warnings.filterwarnings('ignore', message='.*kernel not used because.*')
+                warnings.filterwarnings('ignore', message='.*has been runtime disabled.*')
+                warnings.filterwarnings('ignore', message='.*Expected query, key and value.*')
                 q, k, v = (torch.randn(1, 2, 256, head_dim, device=device, dtype=dtype, requires_grad=True)
                            for _ in range(3))
                 with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION]):
@@ -150,7 +154,8 @@ class Collator:
 
 
 def _chunk_ce(h, weight, target):
-    logits = F.linear(h, weight).float()
+    # Runs outside the Trainer's autocast (which wraps only the model's forward), so match dtypes explicitly.
+    logits = F.linear(h.to(weight.dtype), weight).float()
     return F.cross_entropy(logits, target, reduction='sum')
 
 
@@ -265,6 +270,10 @@ def main():
     world = int(os.environ.get('WORLD_SIZE', '1'))
     if cuda:
         torch.cuda.set_device(local_rank)
+    # torch.cuda.is_bf16_supported() also counts emulation and returns True on a T4: ask for real bf16 hardware.
+    native_bf16 = cuda and torch.cuda.get_device_capability()[0] >= 8
+    compute_dtype = torch.bfloat16 if native_bf16 else (torch.float16 if cuda else torch.float32)
+    log(f'precision: {compute_dtype} ({"native bf16" if native_bf16 else "fp16 with loss scaling" if cuda else "cpu"})')
 
     out_dir = cfg['out_dir']
     ckpt_dir = os.path.join(out_dir, 'smoke' if opt.smoke else 'checkpoints')
@@ -296,8 +305,8 @@ def main():
         weight_decay=0.0,
         optim='adamw_torch',
         max_grad_norm=1.0,
-        fp16=cuda and not torch.cuda.is_bf16_supported(),   # T4 has no bf16
-        bf16=cuda and torch.cuda.is_bf16_supported(),
+        fp16=cuda and not native_bf16,          # T4: fp16 (bf16 there is only emulated, and slow)
+        bf16=native_bf16,
         **checkpointing_args(),
         logging_steps=1 if opt.smoke else 5,
         logging_first_step=True,
@@ -325,11 +334,11 @@ def main():
     quant = None
     if cuda and cfg['load_in_4bit']:
         quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4',
-                                   bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.float16,
+                                   bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype,
                                    llm_int8_skip_modules=['visual', 'lm_head'])
     model = AutoModelForImageTextToText.from_pretrained(
         cfg['model_id'],
-        dtype=torch.float16 if cuda else torch.float32,
+        dtype=compute_dtype,
         quantization_config=quant,
         device_map={'': local_rank} if cuda else None,
         attn_implementation=ATTN_IMPL,

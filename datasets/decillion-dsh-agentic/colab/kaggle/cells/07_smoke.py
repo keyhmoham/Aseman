@@ -1,7 +1,8 @@
 # 7. Smoke test: two training steps per GPU on the LONGEST prepared rows. It proves that memory fits at
 # MAX_SEQ_LEN and the loss is finite, and measures the real speed, before you spend hours on the full run.
 import json
-!torchrun --standalone --nnodes=1 --nproc_per_node={NUM_GPUS} {SCRIPTS}/train_lora.py --config {CONFIG} --smoke
+run(f'torchrun --standalone --nnodes=1 --nproc_per_node={NUM_GPUS} {SCRIPTS}/train_lora.py --config {CONFIG} --smoke',
+    'smoke')
 smoke = json.load(open(f'{OUT_DIR}/smoke.json'))
 print(json.dumps(smoke, indent=1))
 need = TRAIN_ROWS * EPOCHS

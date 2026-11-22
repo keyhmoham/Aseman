@@ -5,7 +5,7 @@ torch_version = subprocess.run([sys.executable, '-c', 'import torch; print(torch
                                capture_output=True, text=True).stdout.strip()
 open('/tmp/constraints.txt', 'w').write(f'torch=={torch_version}\n')
 print('keeping torch', torch_version)
-!pip install -q -c /tmp/constraints.txt transformers==5.24.0 peft==0.22.0 accelerate==1.16.0 datasets==5.2.0 \
+!pip install -c /tmp/constraints.txt transformers==5.24.0 peft==0.22.0 accelerate==1.16.0 datasets==5.2.0 \
     bitsandbytes==0.50.2 huggingface_hub==2.4.0 safetensors==0.8.0 jsonschema openai requests psutil
 
 # Optional fast kernels for the Gated DeltaNet (linear attention) layers, 24 of the 32. Without them Transformers uses
@@ -38,4 +38,15 @@ print('fla kernels OK on', torch.cuda.get_device_name(0), f'(relative difference
     if r.returncode != 0:
         print('fast kernels unusable here: uninstalling, training will use the PyTorch reference path')
         !pip uninstall -q -y flash-linear-attention fla-core
+# Check what the training processes will actually import (pip errors are easy to miss above).
+check = ("import torch, transformers, peft, bitsandbytes, accelerate, datasets; "
+         "from transformers.models.auto.modeling_auto import MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES as M; "
+         "print('torch', torch.__version__, '| transformers', transformers.__version__, '| peft', peft.__version__, "
+         "'| bitsandbytes', bitsandbytes.__version__, '| accelerate', accelerate.__version__); "
+         "assert transformers.__version__ == '5.24.0' and 'qwen3_5' in M, 'transformers 5.24.0 is not installed'")
+r = subprocess.run([sys.executable, '-c', check], capture_output=True, text=True)
+print(r.stdout + r.stderr[-2000:])
+if r.returncode != 0:
+    raise RuntimeError('the pinned packages are not importable: read the pip output above (often a conflict with '
+                       "Kaggle's torch). Fix the pin, rerun this cell.")
 print('Restart the kernel only if pip reports that torch itself changed (it should not).')

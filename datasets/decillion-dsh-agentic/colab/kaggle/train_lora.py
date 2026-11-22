@@ -32,6 +32,97 @@ LORA_TARGETS = (r'.*language_model\.layers\.\d+\.(self_attn\.(q_proj|k_proj|v_pr
 CE_CHUNK = 512  # labelled positions per lm_head chunk
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Attention that fits a T4 at 16k tokens.
+# On Turing there is no FlashAttention, and for Qwen3.5's full-attention layers (head_dim 256, grouped-query
+# attention) PyTorch's SDPA falls back to the "math" kernel, which materializes the whole [heads, L, L] score
+# matrix in fp32: 16 x 16k x 16k x 4 B = 16 GB for a single layer. This implementation uses the memory-efficient
+# kernel when a probe on this GPU shows it can run forward AND backward at this head size, and otherwise computes
+# attention in query blocks, each recomputed in backward, so at most one block of scores (~1 GB at 16k) exists.
+# ---------------------------------------------------------------------------------------------------------------
+ATTN_IMPL = 't4_blocked'
+ATTN_BLOCK = 1024
+_EFFICIENT_OK = {}
+
+
+def _repeat_kv(x, n):
+    if n == 1:
+        return x
+    b, h, l, d = x.shape
+    return x[:, :, None].expand(b, h, n, l, d).reshape(b, h * n, l, d)
+
+
+def _efficient_kernel_works(device, dtype, head_dim):
+    key = (str(device), dtype, head_dim)
+    if key not in _EFFICIENT_OK:
+        ok = False
+        if device.type == 'cuda':
+            try:
+                from torch.nn.attention import SDPBackend, sdpa_kernel
+                q, k, v = (torch.randn(1, 2, 256, head_dim, device=device, dtype=dtype, requires_grad=True)
+                           for _ in range(3))
+                with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION]):
+                    F.scaled_dot_product_attention(q, k, v, is_causal=True).float().sum().backward()
+                ok = all(torch.isfinite(t.grad).all() for t in (q, k, v))
+            except Exception:
+                ok = False
+        _EFFICIENT_OK[key] = ok
+        log(f'attention for head_dim {head_dim} on {device}: '
+            + ('memory-efficient SDPA kernel' if ok else f'query-blocked attention ({ATTN_BLOCK} queries per block)'))
+    return _EFFICIENT_OK[key]
+
+
+def _attn_block(q, k, v, mask, q0, causal, scaling):
+    """Scores for queries [q0, q0+bq) against keys [0, kend) only (causal), softmax in fp32."""
+    bq = q.shape[2]
+    kend = min(k.shape[2], q0 + bq) if causal else k.shape[2]
+    k, v = k[:, :, :kend], v[:, :, :kend]
+    scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) * scaling
+    if mask is not None:
+        m = mask[..., q0:q0 + bq, :kend]
+        scores = scores.masked_fill(~m, float('-inf')) if m.dtype == torch.bool else scores + m.float()
+    if causal:
+        qi = torch.arange(q0, q0 + bq, device=q.device)[:, None]
+        kj = torch.arange(kend, device=q.device)[None, :]
+        scores = scores.masked_fill(kj > qi, float('-inf'))
+    probs = torch.softmax(scores, dim=-1).nan_to_num(0.0)  # fully masked rows (padding) -> 0
+    return torch.matmul(probs.to(v.dtype), v)
+
+
+def t4_attention_forward(module, query, key, value, attention_mask, dropout=0.0, scaling=None, is_causal=None,
+                         **kwargs):
+    n_rep = query.shape[1] // key.shape[1]
+    key, value = _repeat_kv(key, n_rep), _repeat_kv(value, n_rep)
+    scaling = scaling if scaling is not None else query.shape[-1] ** -0.5
+    causal = (is_causal if is_causal is not None else getattr(module, 'is_causal', True)) and query.shape[2] > 1
+    if attention_mask is not None and attention_mask.dim() == 4 and attention_mask.shape[-1] > key.shape[2]:
+        attention_mask = attention_mask[..., :key.shape[2]]
+    if _efficient_kernel_works(query.device, query.dtype, query.shape[-1]):
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+        with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION]):
+            out = F.scaled_dot_product_attention(query, key, value, attn_mask=attention_mask,
+                                                 is_causal=causal and attention_mask is None, scale=scaling)
+    else:
+        # Causal masking is applied by position inside each block, so a 4D mask is only needed for padding.
+        blocks = []
+        for q0 in range(0, query.shape[2], ATTN_BLOCK):
+            qb = query[:, :, q0:q0 + ATTN_BLOCK]
+            if torch.is_grad_enabled():
+                blocks.append(checkpoint(_attn_block, qb, key, value, attention_mask, q0, causal, scaling,
+                                         use_reentrant=False))
+            else:
+                blocks.append(_attn_block(qb, key, value, attention_mask, q0, causal, scaling))
+        out = torch.cat(blocks, dim=2)
+    return out.transpose(1, 2).contiguous(), None
+
+
+def register_t4_attention():
+    from transformers import AttentionInterface
+    from transformers.masking_utils import ALL_MASK_ATTENTION_FUNCTIONS, sdpa_mask
+    AttentionInterface.register(ATTN_IMPL, t4_attention_forward)
+    ALL_MASK_ATTENTION_FUNCTIONS.register(ATTN_IMPL, sdpa_mask)  # None when there is no padding
+
+
 def rank0():
     return int(os.environ.get('RANK', '0')) == 0
 
@@ -130,6 +221,24 @@ class NanGuard(TrainerCallback):
         return control
 
 
+def checkpointing_args():
+    """Transformers renamed gradient_checkpointing to activation_checkpointing; accept either."""
+    import dataclasses
+    names = {f.name for f in dataclasses.fields(TrainingArguments)}
+    key = 'activation_checkpointing' if 'activation_checkpointing' in names else 'gradient_checkpointing'
+    return {key: True, f'{key}_kwargs': {'use_reentrant': False}}
+
+
+def check_versions():
+    import transformers, peft
+    from transformers.models.auto.modeling_auto import MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES as M
+    log(f'torch {torch.__version__} | transformers {transformers.__version__} | peft {peft.__version__} | '
+        f'GPUs {torch.cuda.device_count()}')
+    if 'qwen3_5' not in M:
+        raise RuntimeError(f'transformers {transformers.__version__} does not know Qwen3.5: cell 2 did not install '
+                           'the pinned version. Rerun cell 2 and read its pip output (it is no longer quiet).')
+
+
 def latest_checkpoint(*dirs):
     found = []
     for d in dirs:
@@ -149,6 +258,8 @@ def main():
     ap.add_argument('--smoke', action='store_true', help='2 steps on the longest rows, then stop')
     opt = ap.parse_args()
     cfg = json.load(open(opt.config))
+    check_versions()
+    register_t4_attention()
     cuda = torch.cuda.is_available()
     local_rank = int(os.environ.get('LOCAL_RANK', '0'))
     world = int(os.environ.get('WORLD_SIZE', '1'))
@@ -187,8 +298,7 @@ def main():
         max_grad_norm=1.0,
         fp16=cuda and not torch.cuda.is_bf16_supported(),   # T4 has no bf16
         bf16=cuda and torch.cuda.is_bf16_supported(),
-        activation_checkpointing=True,         # formerly gradient_checkpointing
-        activation_checkpointing_kwargs={'use_reentrant': False},
+        **checkpointing_args(),
         logging_steps=1 if opt.smoke else 5,
         logging_first_step=True,
         eval_strategy='no' if opt.smoke else 'steps',
@@ -222,7 +332,7 @@ def main():
         dtype=torch.float16 if cuda else torch.float32,
         quantization_config=quant,
         device_map={'': local_rank} if cuda else None,
-        attn_implementation='sdpa',
+        attn_implementation=ATTN_IMPL,
     )
     model.config.use_cache = False
     if hasattr(model.config, 'text_config'):
@@ -292,4 +402,17 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException:
+        import traceback
+        rank = os.environ.get('RANK', '0')
+        msg = traceback.format_exc()
+        try:
+            cfg_path = sys.argv[sys.argv.index('--config') + 1]
+            path = os.path.join(json.load(open(cfg_path))['out_dir'], f'error_rank{rank}.txt')
+            open(path, 'w').write(msg)
+        except Exception:
+            pass
+        print(f'[rank {rank}] FAILED\n{msg}', file=sys.stderr, flush=True)
+        raise

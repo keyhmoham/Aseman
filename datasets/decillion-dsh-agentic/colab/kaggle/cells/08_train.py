@@ -12,4 +12,4 @@ if HF_REPO_ID and not glob.glob(f'{OUT_DIR}/checkpoints/checkpoint-*'):
             print('resuming from the Hub checkpoint', HF_REPO_ID)
     except Exception as exc:
         print('no checkpoint on the Hub yet:', str(exc)[:200])
-!torchrun --standalone --nnodes=1 --nproc_per_node={NUM_GPUS} {SCRIPTS}/train_lora.py --config {CONFIG}
+run(f'torchrun --standalone --nnodes=1 --nproc_per_node={NUM_GPUS} {SCRIPTS}/train_lora.py --config {CONFIG}', 'train')

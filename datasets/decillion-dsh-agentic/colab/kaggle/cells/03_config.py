@@ -58,3 +58,37 @@ cfg = dict(model_id=MODEL_ID, out_dir=OUT_DIR, dist_dir=DIST_DIR, prepared_dir=P
            resume_from=RESUME_FROM, num_proc=max(1, (os.cpu_count() or 2)))
 json.dump(cfg, open(CONFIG, 'w'), indent=1)
 print(json.dumps(cfg, indent=1))
+
+import re, subprocess, sys
+LOGS = f'{OUT_DIR}/logs'
+os.makedirs(LOGS, exist_ok=True)
+
+def run(cmd, name):
+    """Run a shell command, stream its output here and into logs/<name>.log. On failure, show the first real error
+    (the Python traceback from whichever process crashed) instead of whatever the next line trips over."""
+    log_path = f'{LOGS}/{name}.log'
+    for old in glob.glob(f'{OUT_DIR}/error_rank*.txt'):
+        os.remove(old)
+    print('$', cmd, '\n  log →', log_path, flush=True)
+    lines = []
+    with open(log_path, 'w') as log, subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                                      stderr=subprocess.STDOUT, text=True, bufsize=1) as p:
+        for line in p.stdout:
+            log.write(line)
+            lines.append(line)
+            if not re.search(r'\d+%\|', line):      # keep progress bars out of the notebook output
+                print(line, end='', flush=True)
+    if p.returncode == 0:
+        return
+    errors = sorted(glob.glob(f'{OUT_DIR}/error_rank*.txt'))
+    if errors:
+        detail = open(errors[0]).read()
+    else:
+        text = ''.join(lines)
+        start = text.find('Traceback (most recent call last)')
+        detail = text[start:start + 6000] if start >= 0 else text[-6000:]
+    print('\n' + '=' * 30 + f' {name} FAILED (exit {p.returncode}) ' + '=' * 30)
+    print(detail)
+    if 'OutOfMemoryError' in detail or 'CUDA out of memory' in detail:
+        print('Out of GPU memory: lower MAX_SEQ_LEN in cell 3 (e.g. 12288), then rerun cells 3, 6 and this one.')
+    raise RuntimeError(f'{name} failed (exit {p.returncode}); the error is printed above, full log in {log_path}')

@@ -52,28 +52,37 @@ def _repeat_kv(x, n):
     return x[:, :, None].expand(b, h, n, l, d).reshape(b, h * n, l, d)
 
 
-def _efficient_kernel_works(device, dtype, head_dim):
+def probe_attention(device, dtype, head_dim):
+    """Decide ONCE, before training, whether the memory-efficient SDPA kernel can run forward and backward here.
+
+    This must never run inside the model's forward: under activation checkpointing that forward is replayed in
+    backward, and a probe that ran only the first time changes what autograd saved (CheckpointError).
+    """
     key = (str(device), dtype, head_dim)
-    if key not in _EFFICIENT_OK:
-        ok = False
-        if device.type == 'cuda':
-            try:
-                import warnings
-                from torch.nn.attention import SDPBackend, sdpa_kernel
-                warnings.filterwarnings('ignore', message='.*kernel not used because.*')
-                warnings.filterwarnings('ignore', message='.*has been runtime disabled.*')
-                warnings.filterwarnings('ignore', message='.*Expected query, key and value.*')
+    ok = False
+    if device.type == 'cuda':
+        try:
+            import warnings
+            from torch.nn.attention import SDPBackend, sdpa_kernel
+            with warnings.catch_warnings(), torch.enable_grad():
+                warnings.simplefilter('ignore')
                 q, k, v = (torch.randn(1, 2, 256, head_dim, device=device, dtype=dtype, requires_grad=True)
                            for _ in range(3))
                 with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION]):
                     F.scaled_dot_product_attention(q, k, v, is_causal=True).float().sum().backward()
-                ok = all(torch.isfinite(t.grad).all() for t in (q, k, v))
-            except Exception:
-                ok = False
-        _EFFICIENT_OK[key] = ok
-        log(f'attention for head_dim {head_dim} on {device}: '
-            + ('memory-efficient SDPA kernel' if ok else f'query-blocked attention ({ATTN_BLOCK} queries per block)'))
-    return _EFFICIENT_OK[key]
+                ok = all(bool(torch.isfinite(t.grad).all()) for t in (q, k, v))
+            torch.cuda.synchronize(device)
+        except Exception:
+            ok = False
+    _EFFICIENT_OK[key] = ok
+    log(f'attention for head_dim {head_dim} ({dtype}) on {device}: '
+        + ('memory-efficient SDPA kernel' if ok else f'query-blocked attention ({ATTN_BLOCK} queries per block)'))
+    return ok
+
+
+def _efficient_kernel_works(device, dtype, head_dim):
+    # Lookup only (see probe_attention). Anything not probed uses the blocked path, which always works.
+    return _EFFICIENT_OK.get((str(device), dtype, head_dim), False)
 
 
 def _attn_block(q, k, v, mask, q0, causal, scaling):
@@ -347,6 +356,9 @@ def main():
     if hasattr(model.config, 'text_config'):
         model.config.text_config.use_cache = False
     model.requires_grad_(False)
+    text_cfg = getattr(model.config, 'text_config', model.config)
+    head_dim = getattr(text_cfg, 'head_dim', None) or text_cfg.hidden_size // text_cfg.num_attention_heads
+    probe_attention(torch.device('cuda', local_rank) if cuda else torch.device('cpu'), compute_dtype, head_dim)
     model = get_peft_model(model, LoraConfig(
         r=cfg['lora_r'], lora_alpha=cfg['lora_alpha'], lora_dropout=cfg['lora_dropout'],
         target_modules=LORA_TARGETS, bias='none'))

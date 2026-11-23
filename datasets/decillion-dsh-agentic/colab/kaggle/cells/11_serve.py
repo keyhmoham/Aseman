@@ -24,6 +24,40 @@ if not os.path.exists(f'{VENV}/bin/vllm'):
     !uv pip install -q --python {VENV}/bin/python {VLLM_SPEC}
 # wrapt: Kaggle's sitecustomize hook imports it in every Python process, this environment's included.
 !uv pip install -q --python {VENV}/bin/python wrapt
+
+# On CUDA, vLLM 0.34 always uses its NVIDIA-optimized Qwen3.5 code (vllm/models/qwen3_5/nvidia), which calls
+# FlashInfer RMSNorm kernels that do not build for Turing (the T4 fails a JIT "norm" compile). vLLM still ships the
+# previous generic implementation (used on ROCm and other platforms). This tiny vLLM plugin, loaded by every vLLM
+# process, registers the generic one for Qwen3.5 on GPUs older than compute capability 8.0.
+PLUGIN = f'{TMP}/vllm_t4_plugin'
+os.makedirs(f'{PLUGIN}/vllm_t4_plugin', exist_ok=True)
+open(f'{PLUGIN}/pyproject.toml', 'w').write(
+    '[project]\nname = "vllm-t4-plugin"\nversion = "0.1.0"\n'
+    '[project.entry-points."vllm.general_plugins"]\nt4_qwen35 = "vllm_t4_plugin:register"\n'
+    '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n')
+open(f'{PLUGIN}/vllm_t4_plugin/__init__.py', 'w').write('''
+# Use vLLM's generic Qwen3.5 implementation on pre-Ampere GPUs (its NVIDIA one needs FlashInfer kernels).
+GENERIC = "vllm.model_executor.models.qwen3_5"
+ARCHS = ["Qwen3_5ForConditionalGeneration", "Qwen3_5ForCausalLM",
+         "Qwen3_5MoeForConditionalGeneration", "Qwen3_5MoeForCausalLM"]
+
+
+def register():
+    from vllm import ModelRegistry
+    from vllm.logger import init_logger
+    from vllm.platforms import current_platform
+    if not current_platform.is_cuda():
+        return
+    cap = current_platform.get_device_capability()   # NVML: does not initialize CUDA in this process
+    if cap is None or cap.major >= 8:
+        return
+    for arch in ARCHS:
+        ModelRegistry.register_model(arch, GENERIC + ":" + arch)
+    init_logger(__name__).info("compute capability %s.%s: using the generic Qwen3.5 implementation",
+                               cap.major, cap.minor)
+''')
+!uv pip install -q --python {VENV}/bin/python --reinstall {PLUGIN}
+!env -u PYTHONPATH PYTHONNOUSERSITE=1 {VENV}/bin/python -c "from vllm.plugins import load_general_plugins; load_general_plugins(); from vllm import ModelRegistry; m = ModelRegistry.models['Qwen3_5ForConditionalGeneration']; print('Qwen3.5 implementation:', getattr(m, 'module_name', m))"
 !env -u PYTHONPATH PYTHONNOUSERSITE=1 {VENV}/bin/python -c "import vllm, torch; print('vllm', vllm.__version__, '| torch', torch.__version__, '| GPUs', torch.cuda.device_count())"
 
 # The tunnel publishes this port to the internet, so the API always needs a key. Set a Kaggle secret
@@ -39,7 +73,8 @@ API_KEY = API_KEY or globals().get('API_KEY') or 'sk-decillion-' + os.urandom(16
 # vLLM runs in its own environment: start it with a clean one. Kaggle's PYTHONPATH and sitecustomize hooks would
 # otherwise load into it ("Error in sitecustomize … No module named 'wrapt'") and can break its worker processes.
 env = {k: v for k, v in os.environ.items() if k not in ('PYTHONPATH', 'PYTHONSTARTUP', 'PYTHONHOME')}
-env.update(PYTHONNOUSERSITE='1', VLLM_WORKER_MULTIPROC_METHOD='spawn', TOKENIZERS_PARALLELISM='false')
+env.update(PYTHONNOUSERSITE='1', VLLM_WORKER_MULTIPROC_METHOD='spawn', TOKENIZERS_PARALLELISM='false',
+           VLLM_USE_FLASHINFER_SAMPLER='0')   # FlashInfer's sampler is JIT-compiled too: use vLLM's own on T4
 
 def vllm_cmd(tp):
     return [f'{VENV}/bin/python', '-m', 'vllm.entrypoints.openai.api_server',
